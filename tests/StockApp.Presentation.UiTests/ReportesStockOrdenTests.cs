@@ -8,6 +8,7 @@ using Avalonia.VisualTree;
 using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
 using StockApp.Domain.Enums;
+using StockApp.Presentation.UiTests.V2;
 using StockApp.Presentation.Views.Reportes;
 using Xunit;
 using static StockApp.Presentation.UiTests.GrillaStockHelpers;
@@ -55,15 +56,11 @@ public class ReportesStockOrdenTests
     [AvaloniaFact]
     public void StockCategoriaView_Ordenar_MantieneAlineadosYSinRecorteLosNumerosDeStockTotal()
     {
-        var vista = new StockCategoriaView();
-        var window = Montar(vista);
-        MarcoReporteTest.MostrarContenido(vista);
-        var grid = vista.GetVisualDescendants().OfType<DataGrid>().Single();
-
         var valores = new decimal[] { 1, 1200, 350, 900, 500, 500, 250, 800, 600, 1500, 400, 550, 1800, 2500, 300, 450, 123, 700, 1600, 3800, 900, 12, 77 };
-        grid.ItemsSource = (IReadOnlyList<StockCategoriaDto>)Stocks
-            .Select((s, i) => new StockCategoriaDto($"Categoría {i + 1}", i + 1, s, valores[i])).ToList();
-        Dispatcher.UIThread.RunJobs();
+        var vista = ReportesPrecargados.StockCategoria(Stocks
+            .Select((s, i) => new StockCategoriaDto($"Categoría {i + 1}", i + 1, s, valores[i])).ToList());
+        var window = Montar(vista);
+        var grid = vista.GetVisualDescendants().OfType<DataGrid>().Single();
 
         OrdenarYVerificar(window, grid, "STOCK TOTAL", "VALOR COSTO", "STOCK TOTAL");
     }
@@ -71,15 +68,11 @@ public class ReportesStockOrdenTests
     [AvaloniaFact]
     public void ValorizacionView_Ordenar_MantieneAlineadosYSinRecorteLosNumerosDeStock()
     {
-        var vista = new ValorizacionView();
-        var window = Montar(vista);
-        MarcoReporteTest.MostrarContenido(vista);
-        var grid = vista.GetVisualDescendants().OfType<DataGrid>().Single();
-
         var costos = new decimal[] { 1, 1200, 350, 900, 500, 500, 250, 800, 600, 1500, 400, 550, 1800, 2500, 300, 450, 123, 700, 1600, 3800, 900, 12, 77 };
-        grid.ItemsSource = (IReadOnlyList<ValorizacionItemDto>)Stocks
-            .Select((s, i) => new ValorizacionItemDto(i + 1, $"C{i + 1}", $"Producto {i + 1}", "Categoría", s, costos[i], s * costos[i])).ToList();
-        Dispatcher.UIThread.RunJobs();
+        var vista = ReportesPrecargados.Valorizacion(Stocks
+            .Select((s, i) => new ValorizacionItemDto(i + 1, $"C{i + 1}", $"Producto {i + 1}", "Categoría", s, costos[i], s * costos[i])).ToList());
+        var window = Montar(vista);
+        var grid = vista.GetVisualDescendants().OfType<DataGrid>().Single();
 
         OrdenarYVerificar(window, grid, "STOCK", "P. COSTO", "STOCK");
     }
@@ -87,20 +80,16 @@ public class ReportesStockOrdenTests
     [AvaloniaFact]
     public void HistorialPorProductoView_Ordenar_MantieneAlineadosYSinRecorteLosNumerosDeStock()
     {
-        var vista = new HistorialPorProductoView();
-        var window = Montar(vista);
-        MarcoReporteTest.MostrarContenido(vista);
-        var grid = vista.GetVisualDescendants().OfType<DataGrid>().Single();
-
         var cantidades = new decimal[] { 1, 1200, 350, 900, 500, 500, 250, 800, 600, 1500, 400, 550, 1800, 2500, 300, 450, 123, 700, 1600, 3800, 900, 12, 77 };
-        grid.ItemsSource = (IReadOnlyList<MovimientoHistorialDto>)Stocks
+        var vista = ReportesPrecargados.HistorialPorProducto(Stocks
             .Select((s, i) => new MovimientoHistorialDto(
                 MovimientoId: i + 1, ProductoId: 1, ProductoNombre: "Producto",
                 Tipo: TipoMovimiento.Entrada, Motivo: MotivoMovimiento.Compra,
                 Cantidad: cantidades[i], PrecioUnitario: 10m,
                 StockAnterior: Stocks[(i + 7) % Stocks.Length], StockNuevo: s,
-                Comentario: null, Fecha: DateTime.UtcNow, UsuarioId: 1, UsuarioNombre: "admin")).ToList();
-        Dispatcher.UIThread.RunJobs();
+                Comentario: null, Fecha: DateTime.UtcNow, UsuarioId: 1, UsuarioNombre: "admin")).ToList());
+        var window = Montar(vista);
+        var grid = vista.GetVisualDescendants().OfType<DataGrid>().Single();
 
         OrdenarYVerificar(window, grid, "STOCK NUEVO", "CANTIDAD", "STOCK ANT.", "STOCK NUEVO");
     }

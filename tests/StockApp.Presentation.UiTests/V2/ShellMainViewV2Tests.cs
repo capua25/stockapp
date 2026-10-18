@@ -151,8 +151,8 @@ public class ShellMainViewV2Tests
     [AvaloniaFact]
     public void SinAcordeones_LosItemsSeVenAunqueElGrupoEsteColapsado()
     {
-        // Spec §4.1: secciones siempre visibles. EstaExpandido sigue en el VM (Fase 9) pero la
-        // vista no lo usa.
+        // Spec §4.1: secciones siempre visibles. EstaExpandido sigue en el VM (deuda declarada)
+        // pero la vista no lo usa.
         var (ventana, vm, _) = Montar(Admin, []);
         foreach (var grupo in vm.Grupos)
         {

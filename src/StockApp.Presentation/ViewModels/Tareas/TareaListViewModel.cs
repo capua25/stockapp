@@ -168,13 +168,7 @@ public partial class TareaListViewModel : ViewModelBase
     private readonly IConfirmacionService _confirmacion;
     private readonly ConsultaVigente      _consultas = new();
 
-    [ObservableProperty] private bool _mostrarCanceladas;
-
     public ObservableCollection<TareaFila> Tareas { get; } = new();
-    public ObservableCollection<TareaFila> Pendientes { get; } = new();
-    public ObservableCollection<TareaFila> EnCurso { get; } = new();
-    public ObservableCollection<TareaFila> Terminadas { get; } = new();
-    public ObservableCollection<TareaFila> Canceladas { get; } = new();
 
     /// <summary>La colección de <see cref="Tareas"/> con el filtro de Estado aplicado: lo que ve la grilla.</summary>
     public DataGridCollectionView TareasView { get; }
@@ -245,10 +239,6 @@ public partial class TareaListViewModel : ViewModelBase
     private void VaciarListas()
     {
         Tareas.Clear();
-        Pendientes.Clear();
-        EnCurso.Clear();
-        Terminadas.Clear();
-        Canceladas.Clear();
     }
 
     /// <summary>
@@ -279,15 +269,7 @@ public partial class TareaListViewModel : ViewModelBase
 
             foreach (var tarea in tareas)
             {
-                var fila = new TareaFila(tarea, rol);
-                Tareas.Add(fila);
-                switch (tarea.Estado)
-                {
-                    case EstadoTarea.Pendiente: Pendientes.Add(fila); break;
-                    case EstadoTarea.EnCurso:   EnCurso.Add(fila); break;
-                    case EstadoTarea.Terminada: Terminadas.Add(fila); break;
-                    case EstadoTarea.Cancelada: Canceladas.Add(fila); break;
-                }
+                Tareas.Add(new TareaFila(tarea, rol));
             }
         }, MensajeSinPermisoTareas, turno);
     }

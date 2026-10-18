@@ -65,15 +65,8 @@ public class ReflexionVistaViewModelTests
         var axaml = LeerAxaml("StockApp.Presentation/Views/Tareas/TareaListView.axaml");
         var miembros = PropiedadesPublicasDeclaradas(typeof(TareaListViewModel));
 
-        // Las cuatro colecciones por estado y el tilde de canceladas se conservan en el VM (sus tests no cambian) pero la
-        // grilla v2 filtra una sola colección con el combo de Estado: sin consumidor en la vista; se borran en la Fase 9.
         var exclusiones = new HashSet<string>
         {
-            nameof(TareaListViewModel.Pendientes),
-            nameof(TareaListViewModel.EnCurso),
-            nameof(TareaListViewModel.Terminadas),
-            nameof(TareaListViewModel.Canceladas),
-            nameof(TareaListViewModel.MostrarCanceladas),
             // Lo consume NotificarPermisosActualizados del VM (vacía y marca "Sin permiso"); la vista muestra el resultado
             // por SinPermiso, no lee este gate.
             nameof(TareaListViewModel.PuedeGestionarTareas),
@@ -178,11 +171,6 @@ public class ReflexionVistaViewModelTests
             nameof(InicioViewModel.CantidadTareasProximasAVencer), // → MostrarPanelTareas
             nameof(InicioViewModel.MostrarAvisoBackup),       // → MostrarAvisoBackupProblema/Desconocido
             nameof(InicioViewModel.AvisoBackupEsDesconocido), // → idem
-            // Sin consumidor en la vista v2 (Fase 2, decisiones D4 y D5); se borran en la Fase 9 (limpieza):
-            nameof(InicioViewModel.MostrarAvisoVencimientos),
-            nameof(InicioViewModel.TextoAVencer7Dias),
-            nameof(InicioViewModel.TituloVencidas),
-            nameof(InicioViewModel.TituloProximasAVencer),
         };
         AssertTodasExpuestas(axaml, miembros, exclusiones);
     }

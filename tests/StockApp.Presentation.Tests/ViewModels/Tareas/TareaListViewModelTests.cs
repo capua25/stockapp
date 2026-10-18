@@ -46,35 +46,14 @@ public class TareaListViewModelTests
     }
 
     [Fact]
-    public async Task CargarAsync_AgrupaTareasPorEstado()
-    {
-        var ctx = Crear(new List<Tarea>
-        {
-            TareaDe(1, EstadoTarea.Pendiente),
-            TareaDe(2, EstadoTarea.EnCurso),
-            TareaDe(3, EstadoTarea.Terminada),
-            TareaDe(4, EstadoTarea.Cancelada),
-        });
-
-        await ctx.Vm.CargarAsync();
-
-        Assert.Single(ctx.Vm.Pendientes);
-        Assert.Single(ctx.Vm.EnCurso);
-        Assert.Single(ctx.Vm.Terminadas);
-        Assert.Single(ctx.Vm.Canceladas);
-        Assert.Equal(1, ctx.Vm.Pendientes[0].Id);
-        Assert.Equal(4, ctx.Vm.Canceladas[0].Id);
-    }
-
-    [Fact]
     public async Task CargarAsync_ConRolOperador_FilaNoPuedeCancelar()
     {
         var ctx = Crear(new List<Tarea> { TareaDe(1, EstadoTarea.Pendiente) }, rol: RolUsuario.Operador);
 
         await ctx.Vm.CargarAsync();
 
-        Assert.False(ctx.Vm.Pendientes[0].PuedeCancelar);
-        Assert.True(ctx.Vm.Pendientes[0].PuedeTomar);
+        Assert.False(ctx.Vm.Tareas[0].PuedeCancelar);
+        Assert.True(ctx.Vm.Tareas[0].PuedeTomar);
     }
 
     [Fact]
@@ -84,7 +63,7 @@ public class TareaListViewModelTests
 
         await ctx.Vm.CargarAsync();
 
-        Assert.True(ctx.Vm.Pendientes[0].PuedeCancelar);
+        Assert.True(ctx.Vm.Tareas[0].PuedeCancelar);
     }
 
     [Fact]
@@ -92,7 +71,7 @@ public class TareaListViewModelTests
     {
         var ctx = Crear(new List<Tarea> { TareaDe(1, EstadoTarea.Pendiente) });
         await ctx.Vm.CargarAsync();
-        var fila = ctx.Vm.Pendientes[0];
+        var fila = ctx.Vm.Tareas[0];
 
         await ctx.Vm.TomarCommand.ExecuteAsync(fila);
 
@@ -105,7 +84,7 @@ public class TareaListViewModelTests
         var ctx = Crear(new List<Tarea> { TareaDe(1, EstadoTarea.Pendiente) }, rol: RolUsuario.Admin);
         ctx.Confirm.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
         await ctx.Vm.CargarAsync();
-        var fila = ctx.Vm.Pendientes[0];
+        var fila = ctx.Vm.Tareas[0];
 
         await ctx.Vm.CancelarCommand.ExecuteAsync(fila);
 
@@ -120,7 +99,7 @@ public class TareaListViewModelTests
         // informa por modal (queda SinConexion en línea); las acciones sobre la fila sí.
         var ctx = Crear(new List<Tarea> { TareaDe(1, EstadoTarea.Pendiente) });
         await ctx.Vm.CargarAsync();
-        var fila = ctx.Vm.Pendientes[0];
+        var fila = ctx.Vm.Tareas[0];
         ctx.Svc.Setup(s => s.TomarAsync(1)).ThrowsAsync(new ServidorNoDisponibleException());
 
         await ctx.Vm.TomarCommand.ExecuteAsync(fila);
@@ -133,7 +112,7 @@ public class TareaListViewModelTests
     {
         var ctx = Crear(new List<Tarea> { TareaDe(1, EstadoTarea.Pendiente) });
         await ctx.Vm.CargarAsync();
-        var fila = ctx.Vm.Pendientes[0];
+        var fila = ctx.Vm.Tareas[0];
         ctx.Svc.Setup(s => s.TomarAsync(1)).ThrowsAsync(new UnauthorizedAccessException());
 
         await ctx.Vm.TomarCommand.ExecuteAsync(fila);
@@ -154,17 +133,13 @@ public class TareaListViewModelTests
     private static List<TareaFila> Visibles(TareaListViewModel vm) => vm.TareasView.Cast<TareaFila>().ToList();
 
     [Fact]
-    public async Task CargarAsync_LlenaTareasYTambienLasCuatroColeccionesDeAntes()
+    public async Task CargarAsync_LlenaTareas()
     {
         var ctx = Crear(LasCuatro());
 
         await ctx.Vm.CargarAsync();
 
         Assert.Equal(4, ctx.Vm.Tareas.Count);
-        Assert.Single(ctx.Vm.Pendientes);
-        Assert.Single(ctx.Vm.EnCurso);
-        Assert.Single(ctx.Vm.Terminadas);
-        Assert.Single(ctx.Vm.Canceladas);
     }
 
     [Fact]
@@ -221,7 +196,7 @@ public class TareaListViewModelTests
     {
         var ctx = Crear(LasCuatro());
         await ctx.Vm.CargarAsync();
-        ctx.Vm.FilaSeleccionada = ctx.Vm.EnCurso[0];
+        ctx.Vm.FilaSeleccionada = ctx.Vm.Tareas.First(f => f.Tarea.Estado == EstadoTarea.EnCurso);
 
         ctx.Vm.FiltroEstado = ctx.Vm.FiltrosEstado.Single(o => o.Nombre == "Pendientes");
 
@@ -233,7 +208,7 @@ public class TareaListViewModelTests
     {
         var ctx = Crear(LasCuatro());
         await ctx.Vm.CargarAsync();
-        var enCurso = ctx.Vm.EnCurso[0];
+        var enCurso = ctx.Vm.Tareas.First(f => f.Tarea.Estado == EstadoTarea.EnCurso);
         ctx.Vm.FilaSeleccionada = enCurso;
 
         ctx.Vm.FiltroEstado = ctx.Vm.FiltrosEstado.Single(o => o.Nombre == "Todas");
@@ -252,7 +227,6 @@ public class TareaListViewModelTests
 
         Assert.True(ctx.Vm.SinConexion);
         Assert.Empty(ctx.Vm.Tareas);
-        Assert.Empty(ctx.Vm.Pendientes);
         ctx.Confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
     }
 

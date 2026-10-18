@@ -11,7 +11,7 @@ namespace StockApp.Presentation.ViewModels;
 /// EsVisible es "algun hijo visible", NO un permiso propio. Eso arreglo un bug del sidebar viejo: el
 /// header "Finanzas" estaba gateado por PuedeVerFinanzas mientras su item "Maestros de finanzas" iba por
 /// PuedeGestionarMaestrosFinanzas, y un operador con ese permiso y sin VerFinanzas veia el boton sin titulo.
-/// En el sidebar v2 "Maestros de finanzas" esta en ADMINISTRACION, pero la regla sigue: un header nunca
+/// En el sidebar v2 ese item es "Catalogos" (ADMINISTRACION), pero la regla sigue: un header nunca
 /// tiene permiso propio, se muestra si y solo si su seccion tiene algun item visible.
 ///
 /// Ruling 6 (2026-08-19): ItemsVisibles y EsVisible ya no son un cálculo hecho una sola vez en el

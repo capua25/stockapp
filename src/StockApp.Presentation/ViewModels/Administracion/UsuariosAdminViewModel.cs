@@ -114,8 +114,7 @@ public partial class UsuariosAdminViewModel : ViewModelBase
     // redundante (ya lo está, y BajaLogicaAsync no rechaza la doble baja: solo ensuciaría el
     // log de auditoría de nuevo), y cambiar rol o contraseña no tiene efecto porque ese
     // usuario no puede volver a entrar. Mismo criterio que ya usa este repo en
-    // Categoría/Proveedor/Producto (CategoriaListViewModel.PuedeEditar => PuedeDarBaja: "solo
-    // se edita un ítem seleccionado y activo").
+    // Categoría/Proveedor/Producto ("solo se edita un ítem seleccionado y activo").
     private bool PuedeOperarSobreSeleccionado() => UsuarioSeleccionado is not null && UsuarioSeleccionado.Activo;
 
     [RelayCommand(CanExecute = nameof(PuedeOperarSobreSeleccionado))]

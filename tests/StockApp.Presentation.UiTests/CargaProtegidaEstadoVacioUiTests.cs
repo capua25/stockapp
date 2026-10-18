@@ -28,7 +28,7 @@ namespace StockApp.Presentation.UiTests;
 /// "pantalla muda ante un 403"). Un test de ViewModel NO alcanza para esto: sacar el binding de
 /// IsVisible/EsError del .axaml dejaría los tests de VM en verde igual (mismo gotcha que
 /// TestVmNoCustodiaGateUiTests ya documentó para otro caso). Dos vistas, dos formas de wrap
-/// distintas: FuenteFinanciamientoListView (embebida: Border "card" envuelto en un Grid nuevo) y
+/// distintas: CatalogoListadoView (embebida en Catálogos; antes FuenteFinanciamientoListView) y
 /// StockCategoriaView (DockPanel con MargenVista, ya era el root, envuelto en un Grid nuevo).
 /// </summary>
 public class CargaProtegidaEstadoVacioUiTests

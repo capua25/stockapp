@@ -11,6 +11,7 @@ using StockApp.Application.Reportes;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Views.Movimientos;
 using StockApp.Presentation.Views.Reportes;
+using StockApp.Presentation.UiTests.V2;
 using Xunit;
 using static StockApp.Presentation.UiTests.GrillaStockHelpers;
 
@@ -93,13 +94,9 @@ public class DataGridCeldaNumericaOrdenTests
     [AvaloniaFact]
     public void HistorialPorProductoView_Ordenar_NoRecortaLosNumerosDeCantidadNiPrecio()
     {
-        var vista = new HistorialPorProductoView();
+        var vista = ReportesPrecargados.HistorialPorProducto(Enumerable.Range(0, Cantidades.Length).Select(MovimientoDe).ToList());
         var window = Montar(vista);
-        MarcoReporteTest.MostrarContenido(vista);
         var grid = vista.GetVisualDescendants().OfType<DataGrid>().Single();
-
-        grid.ItemsSource = (IReadOnlyList<MovimientoHistorialDto>)Enumerable.Range(0, Cantidades.Length).Select(MovimientoDe).ToList();
-        Dispatcher.UIThread.RunJobs();
 
         OrdenarYVerificar(window, grid, "CANTIDAD", "CANTIDAD", "P. UNITARIO", "P. UNITARIO", "STOCK NUEVO");
     }
@@ -107,15 +104,11 @@ public class DataGridCeldaNumericaOrdenTests
     [AvaloniaFact]
     public void ValorizacionView_Ordenar_NoRecortaLosImportes()
     {
-        var vista = new ValorizacionView();
-        var window = Montar(vista);
-        MarcoReporteTest.MostrarContenido(vista);
-        var grid = vista.GetVisualDescendants().OfType<DataGrid>().Single();
-
-        grid.ItemsSource = (IReadOnlyList<ValorizacionItemDto>)Enumerable.Range(0, Cantidades.Length)
+        var vista = ReportesPrecargados.Valorizacion(Enumerable.Range(0, Cantidades.Length)
             .Select(i => new ValorizacionItemDto(i, $"C{i}", $"Producto {i}", "Categoría", Cantidades[i], Precios[i], Cantidades[i] * Precios[i]))
-            .ToList();
-        Dispatcher.UIThread.RunJobs();
+            .ToList());
+        var window = Montar(vista);
+        var grid = vista.GetVisualDescendants().OfType<DataGrid>().Single();
 
         OrdenarYVerificar(window, grid, "P. COSTO", "P. COSTO", "VALOR COSTO", "VALOR COSTO", "STOCK");
     }

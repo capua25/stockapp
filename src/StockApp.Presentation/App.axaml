@@ -18,7 +18,7 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceInclude Source="avares://GestionMunicipal/Themes/Tokens.axaml"/>
                 <!-- UI v2 (spec 2026-09-28): tokens GENERADOS desde docs/ui-v2/tokens.json, con
-                     prefijo V2 para convivir con los de arriba hasta la Fase 9. -->
+                     prefijo V2 para convivir con los de arriba, que siguen vivos porque la importación está en v1. -->
                 <ResourceInclude Source="avares://GestionMunicipal/Themes/V2/Tokens.axaml"/>
                 <ResourceInclude Source="avares://GestionMunicipal/Controls/Componentes.axaml"/>
                 <!-- UI v2: ControlTheme de los componentes de Controls/V2 (tipos nuevos). -->

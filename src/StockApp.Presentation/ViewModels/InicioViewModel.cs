@@ -138,25 +138,17 @@ public partial class InicioViewModel : ViewModelBase
     public string ValorTareasVencidas => FormatoEsUy.Cantidad(CantidadTareasVencidas);
     public bool HayFacturasVencidas => CantidadVencidas > 0;
 
-    [ObservableProperty] private bool _mostrarAvisoVencimientos;
-
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(TextoVencidas))]
     [NotifyPropertyChangedFor(nameof(HayFacturasVencidas))]
     private int _cantidadVencidas;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(TextoAVencer7Dias))]
     [NotifyPropertyChangedFor(nameof(ValorFacturasAVencer))]
     private int _cantidadAVencer7Dias;
 
     public string TextoVencidas =>
         CantidadVencidas == 1 ? "1 factura vencida" : $"{CantidadVencidas} facturas vencidas";
-
-    public string TextoAVencer7Dias =>
-        CantidadAVencer7Dias == 1
-            ? "1 factura por vencer esta semana"
-            : $"{CantidadAVencer7Dias} facturas por vencer esta semana";
 
     // Tercer estado (review final E1): un fallo consultando /backups/salud (API caída, 403,
     // 404 por una versión vieja del servidor sin la ruta, cambio de forma del JSON) NO es lo
@@ -199,14 +191,12 @@ public partial class InicioViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MostrarPanelTareas))]
     [NotifyPropertyChangedFor(nameof(MostrarSeccionTareasVencidas))]
-    [NotifyPropertyChangedFor(nameof(TituloVencidas))]
     [NotifyPropertyChangedFor(nameof(ValorTareasVencidas))]
     private int _cantidadTareasVencidas;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MostrarPanelTareas))]
     [NotifyPropertyChangedFor(nameof(MostrarSeccionTareasProximasAVencer))]
-    [NotifyPropertyChangedFor(nameof(TituloProximasAVencer))]
     private int _cantidadTareasProximasAVencer;
 
     /// <summary>
@@ -217,9 +207,6 @@ public partial class InicioViewModel : ViewModelBase
 
     public bool MostrarSeccionTareasVencidas => CantidadTareasVencidas > 0;
     public bool MostrarSeccionTareasProximasAVencer => CantidadTareasProximasAVencer > 0;
-
-    public string TituloVencidas => $"VENCIDAS ({CantidadTareasVencidas})";
-    public string TituloProximasAVencer => $"PRÓXIMAS A VENCER ({CantidadTareasProximasAVencer})";
 
     /// <param name="reloj">
     /// Fecha del subtítulo, días de las tareas y hora del último backup; null = TimeProvider.System, que es
@@ -268,12 +255,10 @@ public partial class InicioViewModel : ViewModelBase
                 var calendario = await _finanzasVistas.ObtenerCalendarioPagosAsync();
                 CantidadVencidas = calendario.Vencidas.Count;
                 CantidadAVencer7Dias = calendario.AVencer7Dias.Count;
-                MostrarAvisoVencimientos = CantidadVencidas > 0 || CantidadAVencer7Dias > 0;
                 FacturasAVencerSinDato = false;
             }
             catch (Exception)
             {
-                MostrarAvisoVencimientos = false;
                 // Una recarga fallida tras una exitosa no puede dejar la alerta de vencidas (ni el valor)
                 // del dato viejo junto al "—".
                 CantidadVencidas = 0;
@@ -283,7 +268,6 @@ public partial class InicioViewModel : ViewModelBase
         }
         else
         {
-            MostrarAvisoVencimientos = false;
             CantidadVencidas = 0;
             CantidadAVencer7Dias = 0;
             FacturasAVencerSinDato = true;

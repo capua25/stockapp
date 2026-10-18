@@ -107,7 +107,7 @@ public class DatosGestionTests
         var vm = new TareaListViewModel(servicio.Object, sesion.Object, Mock.Of<StockApp.Presentation.Navigation.INavigationService>(), confirmacion.Object);
         await vm.CargarAsync();
 
-        await vm.CancelarCommand.ExecuteAsync(vm.EnCurso[0]);
+        await vm.CancelarCommand.ExecuteAsync(vm.Tareas.First(f => f.Tarea.Estado == StockApp.Domain.Enums.EstadoTarea.EnCurso));
 
         confirmacion.Verify(c => c.PreguntarAsync("¿Confirma cancelar la tarea \"Poda de los plátanos de la avenida Artigas\"?"), Times.Once);
         Assert.Equal("¿Quitar el adjunto \"oficio-firmado.pdf\"?",

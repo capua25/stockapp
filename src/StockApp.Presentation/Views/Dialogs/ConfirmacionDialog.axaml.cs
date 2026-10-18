@@ -7,7 +7,7 @@ namespace StockApp.Presentation.Views.Dialogs;
 /// <summary>
 /// Diálogo modal de confirmación. Muestra un mensaje y dos botones:
 /// "Sí, continuar" (devuelve true) y "Cancelar" (devuelve false).
-/// Usá <see cref="ShowDialog{T}"/> con T=bool para obtener el resultado.
+/// Usá <c>ShowDialog&lt;bool&gt;</c> para obtener el resultado.
 /// </summary>
 public partial class ConfirmacionDialog : Window
 {

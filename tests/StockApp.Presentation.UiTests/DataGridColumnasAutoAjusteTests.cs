@@ -22,6 +22,7 @@ using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.Views.Catalogo;
 using StockApp.Presentation.Views.Movimientos;
 using StockApp.Presentation.Views.Reportes;
+using StockApp.Presentation.UiTests.V2;
 using Xunit;
 using static StockApp.Presentation.UiTests.GrillaStockHelpers;
 
@@ -91,11 +92,6 @@ public class DataGridColumnasAutoAjusteTests
 
     private static void Cargar(DataGrid grid, System.Collections.IEnumerable items)
     {
-        // Los reportes v2 muestran la grilla solo con filas (MarcoReporte.HayDatos): sin ViewModel hay que mostrarla a mano.
-        if (grid.FindAncestorOfType<StockApp.Presentation.Views.Reportes.MarcoReporte>() is not null
-            || grid.GetLogicalAncestors().OfType<StockApp.Presentation.Views.Reportes.MarcoReporte>().Any())
-            MarcoReporteTest.MostrarContenido(grid);
-
         grid.ItemsSource = new DataGridCollectionView(items);
         Dispatcher.UIThread.RunJobs();
     }
@@ -215,7 +211,7 @@ public class DataGridColumnasAutoAjusteTests
     [InlineData(1300)]
     public void Valorizacion_AlLlegarLosDatos_PCostoYValorCostoNoQuedanRecortados(double ancho)
     {
-        var (window, grid) = Montar(new ValorizacionView(), ancho);
+        var (window, grid) = Montar(ReportesPrecargados.Valorizacion(ValorizacionReal()), ancho);
         Cargar(grid, ValorizacionReal());
 
         AssertSinRecorte(grid, window, "carga", "P. COSTO", "VALOR COSTO", "CÓDIGO");
@@ -574,7 +570,7 @@ public class DataGridColumnasAutoAjusteTests
     private static (Control Vista, System.Collections.IEnumerable Datos) VistaYDatos(string nombre) => nombre switch
     {
         "Historial" => (new MovimientoHistorialView(), HistorialReal()),
-        "Valorización" => (new ValorizacionView(), ValorizacionReal()),
+        "Valorización" => (ReportesPrecargados.Valorizacion(ValorizacionReal()), ValorizacionReal()),
         _ => (new ProductoListView(), Enumerable.Range(1, 30).Select(i => Producto(i, i)).ToList()),
     };
 

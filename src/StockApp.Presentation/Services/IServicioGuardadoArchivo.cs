@@ -28,7 +28,7 @@ public interface IServicioGuardadoArchivo
     /// <param name="tipoMime">Tipo MIME asociado a <paramref name="extension"/> (ej.
     /// "application/pdf"). Se ignora si <paramref name="extension"/> es <c>null</c>.</param>
     /// <returns><c>true</c> si el usuario eligió una ubicación y el archivo se guardó; <c>false</c> si canceló el selector.</returns>
-    /// <exception cref="OperationCanceledException">Si <paramref name="ct"/> se cancela durante la copia.</exception>
+    /// <exception cref="System.OperationCanceledException">Si <paramref name="ct"/> se cancela durante la copia.</exception>
     Task<bool> GuardarBytesAsync(
         Stream contenido,
         string nombreSugerido,

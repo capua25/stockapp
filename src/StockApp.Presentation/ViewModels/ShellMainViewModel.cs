@@ -186,7 +186,7 @@ public partial class ShellMainViewModel : ViewModelBase
 
     /// <summary>
     /// Las 5 secciones del sidebar v2 (spec §4.1). El XAML v2 las muestra siempre abiertas:
-    /// <c>EstaExpandido</c> y <c>AlternarGrupo</c> quedan sin uso en la vista hasta la Fase 9 (limpieza).
+    /// <c>EstaExpandido</c> y <c>AlternarGrupo</c> quedan sin consumidor en la vista (deuda declarada: la propiedad, el comando y la persistencia siguen en el VM).
     /// </summary>
     public IReadOnlyList<GrupoNavegacion> Grupos { get; }
 

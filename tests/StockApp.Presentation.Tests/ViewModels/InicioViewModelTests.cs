@@ -206,7 +206,6 @@ public class InicioViewModelTests
 
         await vm.CargarAsync();
 
-        Assert.True(vm.MostrarAvisoVencimientos);
         Assert.Equal(1, vm.CantidadVencidas);
         Assert.Equal(0, vm.CantidadAVencer7Dias);
     }
@@ -222,7 +221,6 @@ public class InicioViewModelTests
 
         await vm.CargarAsync();
 
-        Assert.True(vm.MostrarAvisoVencimientos);
         Assert.Equal(0, vm.CantidadVencidas);
         Assert.Equal(1, vm.CantidadAVencer7Dias);
     }
@@ -235,7 +233,8 @@ public class InicioViewModelTests
 
         await vm.CargarAsync();
 
-        Assert.False(vm.MostrarAvisoVencimientos);
+        Assert.False(vm.HayFacturasVencidas);
+        Assert.Equal(0, vm.CantidadAVencer7Dias);
     }
 
     [Fact]
@@ -248,7 +247,8 @@ public class InicioViewModelTests
 
         await vm.CargarAsync();
 
-        Assert.False(vm.MostrarAvisoVencimientos);
+        Assert.False(vm.HayFacturasVencidas);
+        Assert.Equal(0, vm.CantidadAVencer7Dias);
     }
 
     // ── Aviso de salud de backup (nuevo) ─────────────────────────────────────
@@ -364,9 +364,9 @@ public class InicioViewModelTests
         Assert.False(vm.MostrarAvisoBackupProblema);
         Assert.Equal("No se pudo verificar el estado del backup.", vm.TextoAvisoBackup);
 
-        // Lo que seguía valiendo antes de este fix: el fallo de backup no afecta el aviso de
+        // Lo que seguía valiendo antes de este fix: el fallo de backup no afecta el dato de
         // vencimientos, que se resuelve en su propio try/catch, aguas arriba en CargarAsync.
-        Assert.True(vm.MostrarAvisoVencimientos);
+        Assert.True(vm.HayFacturasVencidas);
     }
 
     [Fact]
@@ -408,39 +408,6 @@ public class InicioViewModelTests
         await vm.CargarAsync();
 
         Assert.Equal("2 facturas vencidas", vm.TextoVencidas);
-    }
-
-    [Fact]
-    public async Task TextoAVencer7Dias_Singular_ConUnaFacturaPorVencer()
-    {
-        var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
-        var (vm, _, _, _, _) = Crear(usuario, new CalendarioPagosDto(
-            new List<FacturaCalendarioDto>(),
-            new List<FacturaCalendarioDto> { new(1, "Barraca X", "A-1", 500m, new DateOnly(2026, 7, 20), "PorVencer") },
-            new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
-
-        await vm.CargarAsync();
-
-        Assert.Equal("1 factura por vencer esta semana", vm.TextoAVencer7Dias);
-    }
-
-    [Fact]
-    public async Task TextoAVencer7Dias_Plural_ConVariasFacturasPorVencer()
-    {
-        var usuario = new UsuarioSesion(1, "jperez", RolUsuario.Operador, "Juan Pérez");
-        var (vm, _, _, _, _) = Crear(usuario, new CalendarioPagosDto(
-            new List<FacturaCalendarioDto>(),
-            new List<FacturaCalendarioDto>
-            {
-                new(1, "Barraca X", "A-1", 500m, new DateOnly(2026, 7, 20), "PorVencer"),
-                new(2, "Barraca Y", "A-2", 300m, new DateOnly(2026, 7, 21), "PorVencer"),
-                new(3, "Barraca Z", "A-3", 200m, new DateOnly(2026, 7, 22), "PorVencer"),
-            },
-            new List<FacturaCalendarioDto>(), new List<PagoRecienteDto>()));
-
-        await vm.CargarAsync();
-
-        Assert.Equal("3 facturas por vencer esta semana", vm.TextoAVencer7Dias);
     }
 
     // ── Panel de vencimientos de tareas (nuevo, 2026-08-06) ──────────────────
@@ -592,7 +559,7 @@ public class InicioViewModelTests
         await vm.CargarAsync();
 
         Assert.False(vm.MostrarPanelTareas);
-        Assert.True(vm.MostrarAvisoVencimientos);
+        Assert.True(vm.HayFacturasVencidas);
     }
 
     [Fact]
@@ -1005,7 +972,6 @@ public class InicioViewModelTests
         await vm.CargarAsync();
 
         finanzasMock.Verify(f => f.ObtenerCalendarioPagosAsync(null), Times.Never);
-        Assert.False(vm.MostrarAvisoVencimientos);
         Assert.Equal(0, vm.CantidadVencidas);
         Assert.Equal(0, vm.CantidadAVencer7Dias);
     }

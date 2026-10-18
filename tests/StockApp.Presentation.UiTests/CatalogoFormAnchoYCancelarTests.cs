@@ -32,7 +32,7 @@ namespace StockApp.Presentation.UiTests;
 /// El patrón de referencia (ya resuelto en el repo) es FuenteFinanciamientoFormView.axaml: el card
 /// NO lleva MaxWidth/HorizontalAlignment (queda VerticalAlignment="Top" nomás); el StackPanel
 /// INTERNO es el que lleva MaxWidth="420" HorizontalAlignment="Left". Por eso
-/// <see cref="PanelDelFormularioDe"/> mide el Child del Border.card, no el Border en sí -- es el
+/// <see cref="CardDe"/> mide el Child del Border.card, no el Border en sí -- es el
 /// contenedor "correspondiente" que el brief pide inspeccionar.
 ///
 /// A diferencia de <see cref="GuardianSistemaV2Tests"/>/<see cref="PatronHelpers.Montar"/> (que monta

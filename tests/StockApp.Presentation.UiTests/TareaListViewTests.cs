@@ -98,10 +98,7 @@ public class TareaListViewTests
         };
         var (window, vm, _) = Montar(tareas);
 
-        Assert.Single(vm.Pendientes);
-        Assert.Single(vm.EnCurso);
-        Assert.Single(vm.Terminadas);
-        Assert.Single(vm.Canceladas);
+        Assert.Equal(4, vm.Tareas.Count);
 
         // Por defecto el filtro es "Abiertas": Terminadas y Canceladas no se ven en la grilla (spec: las canceladas
         // detrás de un filtro).
@@ -121,7 +118,7 @@ public class TareaListViewTests
     public void Montar_TareaPendiente_MuestraTomarYOcultaSoltarYTerminar()
     {
         var (window, vm, _) = Montar(new List<Tarea> { TareaDe(1, "x", EstadoTarea.Pendiente) });
-        var fila = vm.Pendientes[0];
+        var fila = vm.Tareas[0];
         Seleccionar(vm, 1);
 
         Assert.True(fila.PuedeTomar);
@@ -172,8 +169,7 @@ public class TareaListViewTests
             },
             rol: RolUsuario.Operador);
 
-        Assert.False(vm.Pendientes[0].PuedeCancelar);
-        Assert.False(vm.EnCurso[0].PuedeCancelar);
+        Assert.All(vm.Tareas, f => Assert.False(f.PuedeCancelar));
         foreach (var id in new[] { 1, 2 })
         {
             Seleccionar(vm, id);
@@ -190,7 +186,7 @@ public class TareaListViewTests
 
         Seleccionar(vm, 1);
 
-        Assert.True(vm.Pendientes[0].PuedeCancelar);
+        Assert.True(vm.Tareas[0].PuedeCancelar);
         Assert.True(BotonPorTexto(window, "Cancelar tarea").IsVisible);
     }
 
@@ -205,8 +201,8 @@ public class TareaListViewTests
         var alDia = TareaDe(2, "Al dia", EstadoTarea.Pendiente, fechaLimite: DateTime.UtcNow.Date.AddDays(5));
         var (window, vm, _) = Montar(new List<Tarea> { vencida, alDia });
 
-        Assert.True(vm.Pendientes.Single(f => f.Id == 1).DiasParaVencer < 0);
-        Assert.True(vm.Pendientes.Single(f => f.Id == 2).DiasParaVencer > 0);
+        Assert.True(vm.Tareas.Single(f => f.Id == 1).DiasParaVencer < 0);
+        Assert.True(vm.Tareas.Single(f => f.Id == 2).DiasParaVencer > 0);
 
         var insignias = window.GetVisualDescendants().OfType<StockApp.Presentation.Controls.V2.Insignia>()
             .Where(i => i.Texto == "Vencida" && ArbolVisual.EsVisibleEnArbol(i)).ToList();
@@ -225,9 +221,8 @@ public class TareaListViewTests
         Clickear(window, boton);
         Dispatcher.UIThread.RunJobs();
 
-        Assert.Empty(vm.Pendientes);
-        Assert.Single(vm.EnCurso);
-        Assert.Equal(EstadoTarea.EnCurso, vm.EnCurso[0].Tarea.Estado);
+        var fila = Assert.Single(vm.Tareas);
+        Assert.Equal(EstadoTarea.EnCurso, fila.Tarea.Estado);
     }
 
     [AvaloniaFact]
@@ -242,8 +237,8 @@ public class TareaListViewTests
         Dispatcher.UIThread.RunJobs();
 
         Assert.Equal(1, servicio.LlamadasCancelar);
-        Assert.Empty(vm.Pendientes);
-        Assert.Single(vm.Canceladas.Concat(vm.Terminadas).Concat(vm.EnCurso).Concat(vm.Pendientes));
+        Assert.Single(vm.Tareas);
+        Assert.Equal(EstadoTarea.Cancelada, vm.Tareas[0].Tarea.Estado);
     }
 
     [AvaloniaFact]

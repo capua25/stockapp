@@ -268,12 +268,9 @@ public class InicioViewV2Tests : IDisposable
     public void ConFacturasPorVencer_NoMuestraElTextoDeLaSemana()
     {
         // U7 (decisión del usuario 2026-10-06, D4): "N facturas por vencer esta semana" no aparece en Inicio;
-        // lo reemplaza la métrica. Control: el VM SIGUE produciendo ese texto (se borra en la Fase 9), así que
-        // su ausencia en el árbol visual (plantillas incluidas) prueba que la vista no lo muestra. Con la vista
-        // vieja este test da rojo: la card de vencimientos lo bindeaba.
-        var (ventana, vm) = Montar(Operador, [Permisos.VerFinanzas]);
+        // lo reemplaza la métrica. Su ausencia en el árbol visual (plantillas incluidas) prueba que la vista no lo muestra.
+        var (ventana, _) = Montar(Operador, [Permisos.VerFinanzas]);
 
-        Assert.Equal("2 facturas por vencer esta semana", vm.TextoAVencer7Dias);
         var textos = ventana.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToList();
         Assert.DoesNotContain(textos, t => t.Contains("por vencer esta semana"));
         Assert.Equal("2", Nombrado<TarjetaMetrica>(ventana, "MetricaFacturasAVencer").Valor);

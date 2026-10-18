@@ -80,22 +80,33 @@ public class GrillasSinRecorteBarridoTests
 
     private static IEnumerable<T> Muchos<T>(Func<int, T> fabrica, int n = 30) => Enumerable.Range(0, n).Select(fabrica);
 
+    // Filas de los reportes: el ViewModel las recibe por su servicio (la grilla se muestra solo con filas) y el barrido las vuelve a asignar.
+    private static IEnumerable<ValorizacionItemDto> FilasValorizacion() => Muchos(i =>
+        new ValorizacionItemDto(i, $"C{i:000}", $"Producto valorizado {i}", "Ferretería",
+            StockActual: i == 0 ? -99999.5m : 10 + i, PrecioCosto: 1234567.89m + i, ValorCosto: 98765432.10m + i));
+
+    private static IEnumerable<StockCategoriaDto> FilasStockCategoria() => Muchos(i =>
+        new StockCategoriaDto("Materiales de construcción", 1234, i == 0 ? -99999.5m : 8765.25m + i, 98765432.10m + i));
+
+    private static IEnumerable<MasMovidoDto> FilasMasMovidos() => Muchos(i =>
+        new MasMovidoDto(i, $"PRD-{i:00000}", $"Producto {i}", 12345 + i, 98765.5m + i));
+
+    private static IEnumerable<AuditoriaItemDto> FilasAuditoria() => Muchos(i =>
+        new AuditoriaItemDto(new DateTime(2026, 9, 30, 15, 0, 0, DateTimeKind.Utc), "Operador de Depósito Central",
+            i % 2 == 0 ? AccionAuditada.CambioPrecio : AccionAuditada.AltaProducto, "Producto", 1234567 + i, "detalle"));
+
+    private static IEnumerable<FilaReporteTareas> FilasReporteTareas() => Muchos(i =>
+        new FilaReporteTareas("Dirección de Obras y Servicios Públicos", 12345, 12345, 12345, 12345, 49380));
+
     internal static readonly Escenario[] Escenarios =
     {
-        new("Valorización", () => new ValorizacionView(), _ => Muchos<object>(i =>
-            new ValorizacionItemDto(i, $"C{i:000}", $"Producto valorizado {i}", "Ferretería",
-                StockActual: i == 0 ? -99999.5m : 10 + i, PrecioCosto: 1234567.89m + i, ValorCosto: 98765432.10m + i))),
+        new("Valorización", () => ReportesPrecargados.Valorizacion(FilasValorizacion()), _ => FilasValorizacion().Cast<object>()),
         new("Historial de movimientos", () => new MovimientoHistorialView(), _ => Muchos<object>(i => Movimiento(i))),
-        new("Historial por producto", () => new HistorialPorProductoView(), _ => Muchos<object>(i => Movimiento(i))),
-        new("Stock por categoría", () => new StockCategoriaView(), _ => Muchos<object>(i =>
-            new StockCategoriaDto("Materiales de construcción", 1234, i == 0 ? -99999.5m : 8765.25m + i, 98765432.10m + i))),
-        new("Más movidos", () => new MasMovidosView(), _ => Muchos<object>(i =>
-            new MasMovidoDto(i, $"PRD-{i:00000}", $"Producto {i}", 12345 + i, 98765.5m + i))),
-        new("Auditoría", () => new AuditoriaLogView(), _ => Muchos<object>(i =>
-            new AuditoriaItemDto(new DateTime(2026, 9, 30, 15, 0, 0, DateTimeKind.Utc), "Operador de Depósito Central",
-                i % 2 == 0 ? AccionAuditada.CambioPrecio : AccionAuditada.AltaProducto, "Producto", 1234567 + i, "detalle"))),
-        new("Reporte de tareas", () => new ReporteTareasView(), _ => Muchos<object>(i =>
-            new FilaReporteTareas("Dirección de Obras y Servicios Públicos", 12345, 12345, 12345, 12345, 49380))),
+        new("Historial por producto", () => ReportesPrecargados.HistorialPorProducto(Muchos(i => Movimiento(i))), _ => Muchos<object>(i => Movimiento(i))),
+        new("Stock por categoría", () => ReportesPrecargados.StockCategoria(FilasStockCategoria()), _ => FilasStockCategoria().Cast<object>()),
+        new("Más movidos", () => ReportesPrecargados.MasMovidos(FilasMasMovidos()), _ => FilasMasMovidos().Cast<object>()),
+        new("Auditoría", () => ReportesPrecargados.Auditoria(FilasAuditoria()), _ => FilasAuditoria().Cast<object>()),
+        new("Reporte de tareas", () => ReportesPrecargados.Tareas(FilasReporteTareas()), _ => FilasReporteTareas().Cast<object>()),
         new("Productos", () => new ProductoListView(), _ => Muchos<object>(i => Producto(i, i == 0 ? -99999.5m : 10 + i))),
         // Una unidad más larga que el espacio de su columna: se corta con elipsis y tooltip a propósito (no es recorte).
         new("Productos (unidad que pasa el tope)", () => new ProductoListView(), _ => Muchos<object>(i =>
@@ -174,11 +185,6 @@ public class GrillasSinRecorteBarridoTests
 
     internal static void Cargar(DataGrid grid, IEnumerable<object> items)
     {
-        // Reportes v2: sin filas el marco no arma la grilla; se la muestra a mano (los datos se asignan directo al DataGrid).
-        if (grid.FindAncestorOfType<StockApp.Presentation.Views.Reportes.MarcoReporte>() is not null
-            || grid.GetLogicalAncestors().OfType<StockApp.Presentation.Views.Reportes.MarcoReporte>().Any())
-            MarcoReporteTest.MostrarContenido(grid);
-
         var tipo = items.First().GetType();
         var lista = (System.Collections.IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(tipo))!;
         foreach (var it in items) lista.Add(it);

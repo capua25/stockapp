@@ -29,9 +29,9 @@ namespace StockApp.Presentation.UiTests;
 /// hasta profundidad 3 -- alcanza para todos los patrones reales del proyecto (incluido el caso
 /// histórico de MovimientoHistorialViewModel: InicializarAsync llama CargarAsync, ninguno
 /// protegido), pero un patrón de indirección más exótico (delegates, reflection, un método de
-/// una clase base en OTRO archivo con nombre distinto) podría no ser seguido. La mutación de más
-/// abajo (<see cref="Guardian_DetectaUnPuntoDeCargaDesnudo_CuandoSeIntroduceUnoDeliberado"/>)
-/// prueba, con un caso real agregado a propósito, que el guardián SÍ falla cuando corresponde.
+/// una clase base en OTRO archivo con nombre distinto) podría no ser seguido. Que el guardián SÍ
+/// falla cuando corresponde se verifica por mutación: se introduce a propósito un punto de carga
+/// desnudo en un ViewModel y se comprueba el rojo.
 /// </summary>
 public class CargaProtegidaSinPermisoGuardianTests
 {

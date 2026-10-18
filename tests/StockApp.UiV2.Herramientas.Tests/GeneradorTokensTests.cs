@@ -68,7 +68,7 @@ public class GeneradorTokensTests
     [Fact]
     public void SinPrefijo_LasClavesQuedanSinV2()
     {
-        // Fase 9: vaciar "prefijo" en tokens.json convierte los tokens v2 en los únicos.
+        // Con "prefijo" vacío las claves salen sin V2 (la app conserva el prefijo V2: los tokens viejos siguen vivos para la importación).
         var sinPrefijo = Prueba with { Prefijo = "" };
 
         Assert.Contains("x:Key=\"AcentoBrush\"", GeneradorTokens.GenerarAxaml(sinPrefijo));

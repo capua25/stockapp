@@ -26,7 +26,7 @@ namespace StockApp.Presentation.UiTests;
 /// una celda aislada sino el invariante: TODOS los números de la columna terminan en el mismo X
 /// y ninguno queda recortado, después de cada ordenamiento.
 ///
-/// (El badge era BadgeEstado; hoy la vista usa la Insignia v2 y el guardián cuenta ambos.)
+/// (El badge es la Insignia v2.)
 ///
 /// Se monta la View real y se ordena con click real de puntero (mismo mecanismo que
 /// <see cref="DataGridSortClickTests"/>).

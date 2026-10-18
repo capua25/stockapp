@@ -65,7 +65,7 @@ public class ShellMainViewGatesTests
 
     /// <summary>
     /// Variante de <see cref="Montar"/> para el caso de revocación en caliente (Ruling 6): expone
-    /// la fake de navegación para poder disparar <see cref="INavigationService.Cambiado"/> a mano
+    /// la fake de navegación para poder disparar <c>INavigationService.Cambiado</c> a mano
     /// -- el mismo evento que dispara una navegación real -- y arma AuthServiceFake para que el
     /// "refresco desde el servidor" resultante devuelva un set de permisos distinto al que la
     /// sesión tenía al arrancar.
