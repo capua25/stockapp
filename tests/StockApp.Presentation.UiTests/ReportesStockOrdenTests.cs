@@ -57,8 +57,8 @@ public class ReportesStockOrdenTests
     {
         var vista = new StockCategoriaView();
         var window = Montar(vista);
+        MarcoReporteTest.MostrarContenido(vista);
         var grid = vista.GetVisualDescendants().OfType<DataGrid>().Single();
-        MarcoReporteTest.MostrarContenido(grid);
 
         var valores = new decimal[] { 1, 1200, 350, 900, 500, 500, 250, 800, 600, 1500, 400, 550, 1800, 2500, 300, 450, 123, 700, 1600, 3800, 900, 12, 77 };
         grid.ItemsSource = (IReadOnlyList<StockCategoriaDto>)Stocks
@@ -73,8 +73,8 @@ public class ReportesStockOrdenTests
     {
         var vista = new ValorizacionView();
         var window = Montar(vista);
+        MarcoReporteTest.MostrarContenido(vista);
         var grid = vista.GetVisualDescendants().OfType<DataGrid>().Single();
-        MarcoReporteTest.MostrarContenido(grid);
 
         var costos = new decimal[] { 1, 1200, 350, 900, 500, 500, 250, 800, 600, 1500, 400, 550, 1800, 2500, 300, 450, 123, 700, 1600, 3800, 900, 12, 77 };
         grid.ItemsSource = (IReadOnlyList<ValorizacionItemDto>)Stocks
@@ -89,8 +89,8 @@ public class ReportesStockOrdenTests
     {
         var vista = new HistorialPorProductoView();
         var window = Montar(vista);
+        MarcoReporteTest.MostrarContenido(vista);
         var grid = vista.GetVisualDescendants().OfType<DataGrid>().Single();
-        MarcoReporteTest.MostrarContenido(grid);
 
         var cantidades = new decimal[] { 1, 1200, 350, 900, 500, 500, 250, 800, 600, 1500, 400, 550, 1800, 2500, 300, 450, 123, 700, 1600, 3800, 900, 12, 77 };
         grid.ItemsSource = (IReadOnlyList<MovimientoHistorialDto>)Stocks

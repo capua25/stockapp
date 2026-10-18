@@ -138,6 +138,11 @@ public class GrillasSinRecorteBarridoTests
 
     internal static void Cargar(DataGrid grid, IEnumerable<object> items)
     {
+        // Reportes v2: sin filas el marco no arma la grilla; se la muestra a mano (los datos se asignan directo al DataGrid).
+        if (grid.FindAncestorOfType<StockApp.Presentation.Views.Reportes.MarcoReporte>() is not null
+            || grid.GetLogicalAncestors().OfType<StockApp.Presentation.Views.Reportes.MarcoReporte>().Any())
+            MarcoReporteTest.MostrarContenido(grid);
+
         var tipo = items.First().GetType();
         var lista = (System.Collections.IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(tipo))!;
         foreach (var it in items) lista.Add(it);

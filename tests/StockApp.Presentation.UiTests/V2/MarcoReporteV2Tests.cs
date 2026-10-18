@@ -112,6 +112,8 @@ public class MarcoReporteV2Tests
 
         var vacio = Parte<EstadoVacio>(m.Vista, "EstadoVacio");
         Assert.True(Visible(vacio));
+        Assert.False(Visible(Parte<EstadoCargando>(m.Vista, "IndicadorCarga")));
+        Assert.False(Visible(Parte<EstadoVacio>(m.Vista, "EstadoSinConexion")));
         Assert.Equal("No hay productos para valorizar", vacio.Titulo);
         Assert.Equal("Cuando haya productos activos, su valor aparece acá.", vacio.Mensaje);
         Assert.False(Visible(Parte<ContentControl>(m.Vista, "ZonaPie")));
@@ -160,5 +162,35 @@ public class MarcoReporteV2Tests
         Assert.DoesNotContain(m.Vista.GetVisualDescendants().OfType<Button>(), b => b.Classes.Contains("primario"));
         Assert.Contains("secundario", Parte<Button>(m.Vista, "BotonActualizar").Classes);
         Assert.Contains("secundario", Parte<Button>(m.Vista, "BotonExportarPdf").Classes);
+    }
+
+    [AvaloniaFact]
+    public void ConFilas_NoHayVacio_NiIndicador_NiSinConexion_YSiContenidoYPie()
+    {
+        var m = MontajeReportes.Valorizacion(new ReporteStockFake { Valorizacion = { Cemento } });
+
+        Assert.False(Visible(Parte<EstadoVacio>(m.Vista, "EstadoVacio")));
+        Assert.False(Visible(Parte<EstadoCargando>(m.Vista, "IndicadorCarga")));
+        Assert.False(Visible(Parte<EstadoVacio>(m.Vista, "EstadoSinConexion")));
+        Assert.True(Visible(Parte<ContentControl>(m.Vista, "ZonaContenido")));
+        Assert.True(Visible(Parte<ContentControl>(m.Vista, "ZonaPie")));
+    }
+
+    [AvaloniaFact]
+    public async Task SinConexionTrasUnaCargaBuena_VaciaLasFilas_YOcultaGrillaYPie()
+    {
+        // El marco ya no mira SinConexion para el contenido y el pie: lo garantiza el VM (AlPerderConexion vacía Items).
+        var servicio = new ReporteStockFake { Valorizacion = { Cemento } };
+        var m = MontajeReportes.Valorizacion(servicio);
+        servicio.FallaValorizacion = new ServidorNoDisponibleException();
+
+        await m.Vm.CargarAsync();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(m.Vm.SinConexion);
+        Assert.Empty(m.Vm.Items);
+        Assert.False(Visible(Parte<ContentControl>(m.Vista, "ZonaContenido")));
+        Assert.False(Visible(Parte<ContentControl>(m.Vista, "ZonaPie")));
+        Assert.True(Visible(Parte<EstadoVacio>(m.Vista, "EstadoSinConexion")));
     }
 }

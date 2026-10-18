@@ -92,7 +92,8 @@ public class DataGridColumnasAutoAjusteTests
     private static void Cargar(DataGrid grid, System.Collections.IEnumerable items)
     {
         // Los reportes v2 muestran la grilla solo con filas (MarcoReporte.HayDatos): sin ViewModel hay que mostrarla a mano.
-        if (grid.FindAncestorOfType<StockApp.Presentation.Views.Reportes.MarcoReporte>() is not null)
+        if (grid.FindAncestorOfType<StockApp.Presentation.Views.Reportes.MarcoReporte>() is not null
+            || grid.GetLogicalAncestors().OfType<StockApp.Presentation.Views.Reportes.MarcoReporte>().Any())
             MarcoReporteTest.MostrarContenido(grid);
 
         grid.ItemsSource = new DataGridCollectionView(items);

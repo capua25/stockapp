@@ -1,4 +1,6 @@
+using System.Linq;
 using Avalonia.Controls;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Presentation.Views.Reportes;
@@ -14,7 +16,9 @@ internal static class MarcoReporteTest
 {
     public static void MostrarContenido(Control desde)
     {
-        var marco = desde.FindAncestorOfType<MarcoReporte>() ?? throw new System.InvalidOperationException("La vista no está dentro de un MarcoReporte.");
+        // Sin filas el marco no arma la grilla (ZonaContenido oculta): se la muestra desde la vista (o desde un control de adentro).
+        var marco = desde as MarcoReporte ?? desde.FindAncestorOfType<MarcoReporte>() ?? desde.GetLogicalAncestors().OfType<MarcoReporte>().FirstOrDefault() ?? desde.GetVisualDescendants().OfType<MarcoReporte>().FirstOrDefault()
+            ?? throw new System.InvalidOperationException("La vista no tiene un MarcoReporte.");
         marco.HayDatos = true;
         Dispatcher.UIThread.RunJobs();
     }

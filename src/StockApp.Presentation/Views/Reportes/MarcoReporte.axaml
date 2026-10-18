@@ -37,15 +37,11 @@
                            Texto="{Binding $parent[r:MarcoReporte].MensajeError}"
                            IsVisible="{Binding $parent[r:MarcoReporte].MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
+                <!-- Pie y contenido solo con filas. Sin conexión no hace falta mirar SinConexion: los seis VMs vacían Items en
+                     AlPerderConexion (HayDatos pasa a false). Y el vacío no mira SinPermiso: la Tarjeta ya queda oculta. -->
                 <ContentControl x:Name="ZonaPie" DockPanel.Dock="Bottom" Margin="0,12,0,0"
-                                Content="{Binding $parent[r:MarcoReporte].Pie}">
-                    <ContentControl.IsVisible>
-                        <MultiBinding Converter="{x:Static BoolConverters.And}">
-                            <Binding Path="$parent[r:MarcoReporte].HayDatos" />
-                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
-                        </MultiBinding>
-                    </ContentControl.IsVisible>
-                </ContentControl>
+                                Content="{Binding $parent[r:MarcoReporte].Pie}"
+                                IsVisible="{Binding $parent[r:MarcoReporte].HayDatos}" />
 
                 <v2:EstadoCargando x:Name="IndicadorCarga" DockPanel.Dock="Top" Texto="Cargando reporte…">
                     <v2:EstadoCargando.IsVisible>
@@ -69,21 +65,14 @@
                     <v2:EstadoVacio.IsVisible>
                         <MultiBinding Converter="{x:Static BoolConverters.And}">
                             <Binding Path="Cargando" Converter="{x:Static BoolConverters.Not}" />
-                            <Binding Path="SinPermiso" Converter="{x:Static BoolConverters.Not}" />
                             <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
                             <Binding Path="$parent[r:MarcoReporte].HayDatos" Converter="{x:Static BoolConverters.Not}" />
                         </MultiBinding>
                     </v2:EstadoVacio.IsVisible>
                 </v2:EstadoVacio>
 
-                <ContentControl x:Name="ZonaContenido" Content="{Binding $parent[r:MarcoReporte].Contenido}">
-                    <ContentControl.IsVisible>
-                        <MultiBinding Converter="{x:Static BoolConverters.And}">
-                            <Binding Path="$parent[r:MarcoReporte].HayDatos" />
-                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
-                        </MultiBinding>
-                    </ContentControl.IsVisible>
-                </ContentControl>
+                <ContentControl x:Name="ZonaContenido" Content="{Binding $parent[r:MarcoReporte].Contenido}"
+                                IsVisible="{Binding $parent[r:MarcoReporte].HayDatos}" />
             </DockPanel>
         </v2:TarjetaContenido>
     </DockPanel>
