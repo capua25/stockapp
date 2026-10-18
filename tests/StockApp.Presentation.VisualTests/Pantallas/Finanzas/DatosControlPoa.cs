@@ -41,8 +41,10 @@ public static class DatosControlPoa
         var sesion = new Mock<ICurrentSession>();
         sesion.Setup(s => s.RolActual).Returns(DatosProductos.UsuarioAdmin.Rol);
         sesion.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+        // Debounce en cero: con los 300 ms reales, un cambio de filtro dispara una carga diferida que compite por el turno con la carga explícita y el resultado depende de cuánto tarde la máquina.
         return new ControlPoaViewModel(servicio.Object, Mock.Of<INavigationService>(), Mock.Of<IServicioGuardadoArchivo>(), Mock.Of<IConfirmacionService>(), Mock.Of<IPdfExporter>(),
-            Mock.Of<IServicioAperturaArchivo>(), sesion.Object, Reloj);
+            Mock.Of<IServicioAperturaArchivo>(), sesion.Object, Reloj)
+        { EsperaDebounce = TimeSpan.Zero };
     }
 
     private static ShellMainViewModel EnShell(ControlPoaViewModel vm) =>

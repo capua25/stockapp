@@ -73,7 +73,9 @@ public static class DatosProductos
         var servicio = new Mock<IProductoService>();
         servicio.Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>())).ReturnsAsync(productos);
         servicio.Setup(s => s.BuscarPorTextoAsync(It.IsAny<string?>())).ReturnsAsync(productos);
-        return new ProductoListViewModel(servicio.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>(), Mock.Of<StockApp.Application.Interfaces.ICurrentSession>(s => s.RolActual == StockApp.Domain.Enums.RolUsuario.Admin));
+        // Debounce en cero: con los 300 ms reales, un cambio de filtro dispara una carga diferida que compite por el turno con la carga explícita y el resultado depende de cuánto tarde la máquina.
+        return new ProductoListViewModel(servicio.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>(), Mock.Of<StockApp.Application.Interfaces.ICurrentSession>(s => s.RolActual == StockApp.Domain.Enums.RolUsuario.Admin))
+        { EsperaDebounce = TimeSpan.Zero };
     }
 
     /// <summary>Unidad más larga que el tope de las columnas medidas (240): se corta con elipsis.</summary>
@@ -90,7 +92,9 @@ public static class DatosProductos
         // Nunca se completa, a propósito: el estado "cargando" queda congelado para la comparación con el mockup.
         servicio.Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .Returns(new TaskCompletionSource<IReadOnlyList<ProductoDto>>().Task);
-        return new ProductoListViewModel(servicio.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>(), Mock.Of<StockApp.Application.Interfaces.ICurrentSession>(s => s.RolActual == StockApp.Domain.Enums.RolUsuario.Admin));
+        // Debounce en cero: con los 300 ms reales, un cambio de filtro dispara una carga diferida que compite por el turno con la carga explícita y el resultado depende de cuánto tarde la máquina.
+        return new ProductoListViewModel(servicio.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>(), Mock.Of<StockApp.Application.Interfaces.ICurrentSession>(s => s.RolActual == StockApp.Domain.Enums.RolUsuario.Admin))
+        { EsperaDebounce = TimeSpan.Zero };
     }
 
     /// <summary>La carga responde 403 (UnauthorizedAccessException, como ApiErrores).</summary>
@@ -99,7 +103,9 @@ public static class DatosProductos
         var servicio = new Mock<IProductoService>();
         servicio.Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
             .ThrowsAsync(new UnauthorizedAccessException("403"));
-        return new ProductoListViewModel(servicio.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>(), Mock.Of<StockApp.Application.Interfaces.ICurrentSession>(s => s.RolActual == StockApp.Domain.Enums.RolUsuario.Admin));
+        // Debounce en cero: con los 300 ms reales, un cambio de filtro dispara una carga diferida que compite por el turno con la carga explícita y el resultado depende de cuánto tarde la máquina.
+        return new ProductoListViewModel(servicio.Object, Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>(), Mock.Of<StockApp.Application.Interfaces.ICurrentSession>(s => s.RolActual == StockApp.Domain.Enums.RolUsuario.Admin))
+        { EsperaDebounce = TimeSpan.Zero };
     }
 
     /// <summary>sinPermiso: la carga de unidades responde 403 (UnauthorizedAccessException), como ApiErrores.</summary>

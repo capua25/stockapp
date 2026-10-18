@@ -121,9 +121,11 @@ public static class DatosGastos
         var servicio = new Mock<IGastoService>();
         servicio.Setup(s => s.ListarAsync(It.IsAny<GastoFiltro>())).Returns(responder);
         var (proveedores, fuentes, rubros, lineas) = Maestros();
+        // Debounce en cero: con los 300 ms reales, un cambio de filtro dispara una carga diferida que compite por el turno con la carga explícita y el resultado depende de cuánto tarde la máquina.
         return new GastosViewModel(servicio.Object, Sesion(soloLectura), proveedores, fuentes, rubros, lineas,
             Mock.Of<INavigationService>(), confirmacion ?? Mock.Of<IConfirmacionService>(), Mock.Of<IServicioGuardadoArchivo>(),
-            Mock.Of<IPdfExporter>(), Mock.Of<IServicioAperturaArchivo>());
+            Mock.Of<IPdfExporter>(), Mock.Of<IServicioAperturaArchivo>())
+        { EsperaDebounce = TimeSpan.Zero };
     }
 
     /// <summary>Formulario con los cuatro combos, el adjunto de la factura A-0004521 y la fecha del alta fija.</summary>
