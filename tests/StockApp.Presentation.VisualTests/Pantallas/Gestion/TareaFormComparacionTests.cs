@@ -16,9 +16,22 @@ namespace StockApp.Presentation.VisualTests.Pantallas.Gestion;
 [Trait("Categoria", "ComparacionVisual")]
 public class TareaFormComparacionTests
 {
-    private static void Comparar(ShellMainViewModel vm, string mockup, TamanoLienzo? tamano = null, Action<Control>? preparar = null) =>
-        ComparacionVisual.CompararConMockup(new ShellMainView(), vm, mockup, tamano: tamano,
+    private static void Comparar(ShellMainViewModel vm, string mockup, TamanoLienzo? tamano = null, Action<Control>? preparar = null,
+        UmbralAprobado? aprobado = null) =>
+        ComparacionVisual.CompararConMockup(new ShellMainView(), vm, mockup, tamano: tamano, aprobado: aprobado,
             ocultarEnMockup: [".v2-sidebar"], prepararApp: preparar ?? ProductosComparacionTests.OcultarSidebar);
+
+    // Aprobación puntual de Martin (2026-10-17), no sube el umbral global: antialias de Chromium contra Skia en texto de cuerpo
+    // y en negrita. Verificado en cada pantalla: ninguna tesela fuera del texto, ninguna línea con desvío mayor a 1 px, línea base
+    // igual y sin deriva entre líneas, sin teselas desplazadas salvo el texto de "Volver" (1 px: el texto de Skia es más angosto).
+    // Tope = medido.
+    private static UmbralAprobado AprobacionAntialias(int teselas, string? mutacionPalida = null) => new(
+        teselas, "Martin", "2026-10-17",
+        "Antialias Chromium vs Skia en texto de cuerpo y en negrita; layout alineado (cajas de texto a 1 px, misma línea base), teselas solo sobre el texto. Tope = medido.",
+        mutacionPalida);
+
+    private const string MutacionAgregarNota = "BotonAgregarNota sin Classes=secundario (relleno equivocado): ";
+
 
     /// <summary>Contenido scrolleado hasta el final: se ve el pie fijo pegado al borde con la card terminada arriba.</summary>
     private static void OcultarSidebarYScrollearAlFinal(Control vista)
@@ -31,11 +44,11 @@ public class TareaFormComparacionTests
     }
 
     /// <summary>El área cliente se saca del Window y pierde su DataContext: se le pasa el mismo ViewModel a la comparación.</summary>
-    private static void CompararDialogo(TamanoLienzo? tamano = null)
+    private static void CompararDialogo(UmbralAprobado aprobado, TamanoLienzo? tamano = null)
     {
         var vm = DatosTareas.Reclasificar();
         ComparacionVisual.CompararConMockup(ContenidoDeDialogo.Extraer(new ReclasificarTareaDialog { DataContext = vm }), vm,
-            "gestion/reclasificar-tarea.html", tamano: tamano);
+            "gestion/reclasificar-tarea.html", tamano: tamano, aprobado: aprobado);
     }
 
     [AvaloniaFact] public void TareaNueva_IgualAlMockup() =>
@@ -47,15 +60,18 @@ public class TareaFormComparacionTests
     [AvaloniaFact] public void TareaNuevaErrorCampo_IgualAlMockup_1366x768() =>
         Comparar(DatosTareas.NuevaConErrorDeCampo(), "gestion/tarea-nueva-error-campo.html", TamanoLienzo.Municipio, OcultarSidebarYScrollearAlFinal);
     [AvaloniaFact] public void TareaDetalle_IgualAlMockup() =>
-        Comparar(DatosTareas.Detalle(), "gestion/tarea-detalle.html", preparar: OcultarSidebarYScrollearAlFinal);
+        Comparar(DatosTareas.Detalle(), "gestion/tarea-detalle.html", preparar: OcultarSidebarYScrollearAlFinal,
+            aprobado: AprobacionAntialias(31, MutacionAgregarNota + "162 teselas"));
     [AvaloniaFact] public void TareaDetalle_IgualAlMockup_1366x768() =>
-        Comparar(DatosTareas.Detalle(), "gestion/tarea-detalle.html", TamanoLienzo.Municipio, OcultarSidebarYScrollearAlFinal);
+        Comparar(DatosTareas.Detalle(), "gestion/tarea-detalle.html", TamanoLienzo.Municipio, OcultarSidebarYScrollearAlFinal,
+            AprobacionAntialias(17, MutacionAgregarNota + "115 teselas"));
     [AvaloniaFact] public void TareaDetalleOperador_IgualAlMockup() =>
-        Comparar(DatosTareas.DetalleOperador(), "gestion/tarea-detalle-operador.html", preparar: OcultarSidebarYScrollearAlFinal);
+        Comparar(DatosTareas.DetalleOperador(), "gestion/tarea-detalle-operador.html", preparar: OcultarSidebarYScrollearAlFinal,
+            aprobado: AprobacionAntialias(42, MutacionAgregarNota + "165 teselas"));
     [AvaloniaFact] public void TareaDetalleOperador_IgualAlMockup_1366x768() =>
         Comparar(DatosTareas.DetalleOperador(), "gestion/tarea-detalle-operador.html", TamanoLienzo.Municipio, OcultarSidebarYScrollearAlFinal);
     [AvaloniaFact] public void ReclasificarTarea_IgualAlMockup() =>
-        CompararDialogo();
+        CompararDialogo(AprobacionAntialias(13));
     [AvaloniaFact] public void ReclasificarTarea_IgualAlMockup_1366x768() =>
-        CompararDialogo(TamanoLienzo.Municipio);
+        CompararDialogo(AprobacionAntialias(13), TamanoLienzo.Municipio);
 }

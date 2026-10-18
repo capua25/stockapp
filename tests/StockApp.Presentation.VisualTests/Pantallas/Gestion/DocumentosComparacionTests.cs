@@ -26,10 +26,21 @@ public class DocumentosComparacionTests
     ];
 
     private static void Comparar(ShellMainViewModel vm, string mockup, TamanoLienzo? tamano = null, Action<Control>? preparar = null,
-        string[]? recortesPermitidos = null) =>
-        ComparacionVisual.CompararConMockup(new ShellMainView(), vm, mockup, tamano: tamano,
+        string[]? recortesPermitidos = null, UmbralAprobado? aprobado = null) =>
+        ComparacionVisual.CompararConMockup(new ShellMainView(), vm, mockup, tamano: tamano, aprobado: aprobado,
             ocultarEnMockup: [".v2-sidebar"], prepararApp: preparar ?? ProductosComparacionTests.OcultarSidebar,
             recortesPermitidos: recortesPermitidos);
+
+    // Aprobación puntual de Martin (2026-10-17), no sube el umbral global: antialias de Chromium contra Skia en texto de cuerpo
+    // y en negrita. Verificado en cada pantalla: ninguna tesela fuera del texto, ninguna línea con desvío mayor a 1 px, línea base
+    // igual y sin deriva entre líneas, sin teselas desplazadas salvo el texto de "Volver" (1 px: el texto de Skia es más angosto).
+    // Tope = medido.
+    private static UmbralAprobado AprobacionAntialias(int teselas, string? mutacionPalida = null) => new(
+        teselas, "Martin", "2026-10-17",
+        "Antialias Chromium vs Skia en títulos en negrita; layout alineado (cajas de texto a 1 px, misma línea base), teselas solo sobre el texto. Tope = medido.",
+        mutacionPalida);
+
+
 
     private static Action<Control> SeleccionandoActivo(int id) => vista =>
     {
@@ -66,7 +77,7 @@ public class DocumentosComparacionTests
     [AvaloniaFact] public void DocumentosSinPermiso_IgualAlMockup() => Comparar(DatosDocumentos.SinPermiso(), "gestion/documentos-sin-permiso.html");
     [AvaloniaFact] public void DocumentosSinPermiso_IgualAlMockup_1366x768() => Comparar(DatosDocumentos.SinPermiso(), "gestion/documentos-sin-permiso.html", TamanoLienzo.Municipio);
     [AvaloniaFact] public void DocumentosVacio_IgualAlMockup() => Comparar(DatosDocumentos.SinDocumentos(), "gestion/documentos-vacio.html");
-    [AvaloniaFact] public void DocumentosVacio_IgualAlMockup_1366x768() => Comparar(DatosDocumentos.SinDocumentos(), "gestion/documentos-vacio.html", TamanoLienzo.Municipio);
-    [AvaloniaFact] public void DocumentosSinResultados_IgualAlMockup() => Comparar(DatosDocumentos.SinResultados(), "gestion/documentos-sin-resultados.html");
+    [AvaloniaFact] public void DocumentosVacio_IgualAlMockup_1366x768() => Comparar(DatosDocumentos.SinDocumentos(), "gestion/documentos-vacio.html", TamanoLienzo.Municipio, aprobado: AprobacionAntialias(12));
+    [AvaloniaFact] public void DocumentosSinResultados_IgualAlMockup() => Comparar(DatosDocumentos.SinResultados(), "gestion/documentos-sin-resultados.html", aprobado: AprobacionAntialias(13));
     [AvaloniaFact] public void DocumentosSinResultados_IgualAlMockup_1366x768() => Comparar(DatosDocumentos.SinResultados(), "gestion/documentos-sin-resultados.html", TamanoLienzo.Municipio);
 }
