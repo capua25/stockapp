@@ -13,6 +13,10 @@
   .pagina > .v2-tarjeta { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
   .pagina .v2-grilla { flex: 1 1 0; min-height: 0; }
   .pie { margin-top: 12px; }
+  /* Barra con buscador y filtro: BarraFiltros pone los hijos en fila con separación 8; los controles van alineados
+     con el borde inferior (el combo lleva su etiqueta arriba y es más alto que el buscador). */
+  .v2-barra-filtros { align-items: flex-end; }
+  .ancho-160 { width: 160px; }
   /* Celda de Stock: Grid con la insignia a la izquierda y el número a la derecha (no es .v2-num: lleva
      dos elementos); cifras tabulares y ancho del número redondeado hacia arriba como un TextBlock. */
   .celda-stock { font-variant-numeric: tabular-nums; }
@@ -75,6 +79,7 @@
         <div class="v2-barra-filtros">
           <div class="v2-input v2-busqueda"><span class="v2-input-placeholder">Nombre, SKU o código de barras</span></div>
           <span class="v2-boton v2-boton--secundario">Buscar</span>
+          <div class="v2-campo ancho-160"><div class="v2-campo-etiqueta"><span>Estado</span></div><div><div class="v2-input"><span>Activos</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
         </div>
         <div class="v2-vacio">
           <div class="v2-vacio-titulo">No hay productos para mostrar</div>

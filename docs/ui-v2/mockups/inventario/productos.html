@@ -13,18 +13,20 @@
   .pagina > .v2-tarjeta { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
   .pagina .v2-grilla { flex: 1 1 0; min-height: 0; }
   .pie { margin-top: 12px; }
+  /* Barra con buscador y filtro: BarraFiltros pone los hijos en fila con separación 8; los controles van alineados
+     con el borde inferior (el combo lleva su etiqueta arriba y es más alto que el buscador). */
+  .v2-barra-filtros { align-items: flex-end; }
+  .ancho-160 { width: 160px; }
   /* Anchos medidos en headless con el tema v2, estos datos y las columnas que miden su contenido (CÓDIGO, COSTO,
-     UNIDAD); STOCK y ESTADO fijos; NOMBRE y CATEGORÍA proporcionales. Iguales a 1280 y a 1366: CÓDIGO crece de
+     UNIDAD); STOCK fijo; NOMBRE y CATEGORÍA proporcionales. Iguales a 1280 y a 1366: CÓDIGO crece de
      81 a 85 por la reserva de la flecha de orden, COSTO queda en su mínimo
-     de 100 y CATEGORÍA en el piso de 160 de las columnas *; NOMBRE (2*) se lleva el resto (208 a 1280, 294 a 1366,
-     con ESTADO en 78). */
+     de 100 y CATEGORÍA en el piso de 160 de las columnas *; NOMBRE (2*) se lleva el resto (286 a 1280, 372 a 1366). */
   .col-codigo { flex: 0 0 85px; }
   .col-nombre { flex: 2 1 0; min-width: 0; }
   .col-costo { flex: 0 0 100px; }
   .col-stock { flex: 0 0 220px; }
   .col-unidad { flex: 0 0 97px; }
   .col-categoria { flex: 0 0 160px; }
-  .col-estado { flex: 0 0 78px; }
   /* Celda de Stock: Grid con la insignia a la izquierda y el número a la derecha (no es .v2-num: lleva
      dos elementos); cifras tabulares y ancho del número redondeado hacia arriba como un TextBlock. */
   .celda-stock { font-variant-numeric: tabular-nums; }
@@ -32,7 +34,7 @@
 </style>
 </head>
 <body>
-<!-- Datos: DatosProductos.ConProductos(). Ninguna fila seleccionada: Editar y Eliminar deshabilitados.
+<!-- Datos: DatosProductos.ConProductos(). Filtro Estado en "Activos" (valor por defecto): las 11 filas activas del fixture de 12; la inactiva (HER-0560) no se ve. Ninguna fila seleccionada: Editar y Eliminar deshabilitados.
      El sidebar está para aprobar la pantalla entera; la comparación lo oculta (tiene la suya). -->
 <div class="v2-ventana">
   <aside class="v2-sidebar">
@@ -88,6 +90,7 @@
         <div class="v2-barra-filtros">
           <div class="v2-input v2-busqueda"><span class="v2-input-placeholder">Nombre, SKU o código de barras</span></div>
           <span class="v2-boton v2-boton--secundario">Buscar</span>
+          <div class="v2-campo ancho-160"><div class="v2-campo-etiqueta"><span>Estado</span></div><div><div class="v2-input"><span>Activos</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
         </div>
         <div class="v2-grilla">
           <div class="v2-grilla-header">
@@ -97,7 +100,6 @@
             <div class="v2-grilla-celda col-stock">STOCK</div>
             <div class="v2-grilla-celda col-unidad">UNIDAD</div>
             <div class="v2-grilla-celda col-categoria">CATEGORÍA</div>
-            <div class="v2-grilla-celda col-estado">ESTADO</div>
           </div>
           <div class="v2-grilla-fila">
             <div class="v2-grilla-celda col-codigo">MAT-0142</div>
@@ -106,7 +108,6 @@
             <div class="v2-grilla-celda col-stock celda-stock"><span class="valor">320</span></div>
             <div class="v2-grilla-celda col-unidad">Bolsa</div>
             <div class="v2-grilla-celda col-categoria">Construcción</div>
-            <div class="v2-grilla-celda col-estado"></div>
           </div>
           <div class="v2-grilla-fila">
             <div class="v2-grilla-celda col-codigo">MAT-0198</div>
@@ -115,7 +116,6 @@
             <div class="v2-grilla-celda col-stock celda-stock"><span class="valor">45</span></div>
             <div class="v2-grilla-celda col-unidad">Metro cúbico</div>
             <div class="v2-grilla-celda col-categoria">Construcción</div>
-            <div class="v2-grilla-celda col-estado"></div>
           </div>
           <div class="v2-grilla-fila">
             <div class="v2-grilla-celda col-codigo">PLO-0231</div>
@@ -124,7 +124,6 @@
             <div class="v2-grilla-celda col-stock celda-stock"><span class="valor">12</span></div>
             <div class="v2-grilla-celda col-unidad">Unidad</div>
             <div class="v2-grilla-celda col-categoria">Plomería</div>
-            <div class="v2-grilla-celda col-estado"></div>
           </div>
           <div class="v2-grilla-fila">
             <div class="v2-grilla-celda col-codigo">PIN-0305</div>
@@ -133,7 +132,6 @@
             <div class="v2-grilla-celda col-stock celda-stock"><span class="valor">6</span></div>
             <div class="v2-grilla-celda col-unidad">Balde</div>
             <div class="v2-grilla-celda col-categoria">Pintura</div>
-            <div class="v2-grilla-celda col-estado"></div>
           </div>
           <div class="v2-grilla-fila">
             <div class="v2-grilla-celda col-codigo">SEG-0356</div>
@@ -142,7 +140,6 @@
             <div class="v2-grilla-celda col-stock celda-stock"><span class="valor">180</span></div>
             <div class="v2-grilla-celda col-unidad">Par</div>
             <div class="v2-grilla-celda col-categoria">Seguridad</div>
-            <div class="v2-grilla-celda col-estado"></div>
           </div>
           <div class="v2-grilla-fila">
             <div class="v2-grilla-celda col-codigo">ELE-0402</div>
@@ -151,7 +148,6 @@
             <div class="v2-grilla-celda col-stock celda-stock"><span class="valor">8</span></div>
             <div class="v2-grilla-celda col-unidad">Unidad</div>
             <div class="v2-grilla-celda col-categoria">Electricidad</div>
-            <div class="v2-grilla-celda col-estado"></div>
           </div>
           <div class="v2-grilla-fila">
             <div class="v2-grilla-celda col-codigo">ELE-0418</div>
@@ -160,7 +156,6 @@
             <div class="v2-grilla-celda col-stock celda-stock"><span class="valor">1.250</span></div>
             <div class="v2-grilla-celda col-unidad">Metro</div>
             <div class="v2-grilla-celda col-categoria">Electricidad</div>
-            <div class="v2-grilla-celda col-estado"></div>
           </div>
           <div class="v2-grilla-fila">
             <div class="v2-grilla-celda col-codigo">LIM-0455</div>
@@ -169,7 +164,6 @@
             <div class="v2-grilla-celda col-stock celda-stock"><span class="v2-insignia v2-insignia--peligro">Stock negativo</span><span class="valor v2-texto-peligro">-3</span></div>
             <div class="v2-grilla-celda col-unidad">Bidón</div>
             <div class="v2-grilla-celda col-categoria">Limpieza</div>
-            <div class="v2-grilla-celda col-estado"></div>
           </div>
           <div class="v2-grilla-fila">
             <div class="v2-grilla-celda col-codigo">LIM-0470</div>
@@ -178,7 +172,6 @@
             <div class="v2-grilla-celda col-stock celda-stock"><span class="valor">60</span></div>
             <div class="v2-grilla-celda col-unidad">Paquete</div>
             <div class="v2-grilla-celda col-categoria">Limpieza</div>
-            <div class="v2-grilla-celda col-estado"></div>
           </div>
           <div class="v2-grilla-fila">
             <div class="v2-grilla-celda col-codigo">HER-0512</div>
@@ -187,7 +180,6 @@
             <div class="v2-grilla-celda col-stock celda-stock"><span class="valor">14</span></div>
             <div class="v2-grilla-celda col-unidad">Unidad</div>
             <div class="v2-grilla-celda col-categoria">—</div>
-            <div class="v2-grilla-celda col-estado"></div>
           </div>
           <div class="v2-grilla-fila">
             <div class="v2-grilla-celda col-codigo">VIA-0533</div>
@@ -196,19 +188,9 @@
             <div class="v2-grilla-celda col-stock celda-stock"><span class="valor">22,5</span></div>
             <div class="v2-grilla-celda col-unidad">Lata</div>
             <div class="v2-grilla-celda col-categoria">Pintura</div>
-            <div class="v2-grilla-celda col-estado"></div>
-          </div>
-          <div class="v2-grilla-fila v2-grilla-fila--inactiva">
-            <div class="v2-grilla-celda col-codigo">HER-0560</div>
-            <div class="v2-grilla-celda col-nombre">Carretilla reforzada</div>
-            <div class="v2-grilla-celda col-costo v2-num"><span>$ 3.200,00</span></div>
-            <div class="v2-grilla-celda col-stock celda-stock"><span class="valor">0</span></div>
-            <div class="v2-grilla-celda col-unidad">Unidad</div>
-            <div class="v2-grilla-celda col-categoria">Herramientas</div>
-            <div class="v2-grilla-celda col-estado"><span class="v2-insignia">Inactivo</span></div>
           </div>
         </div>
-        <div class="v2-pie-conteo pie">12 productos</div>
+        <div class="v2-pie-conteo pie">11 productos</div>
       </div>
     </div>
   </div>
