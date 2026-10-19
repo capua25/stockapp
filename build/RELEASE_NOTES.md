@@ -1,24 +1,28 @@
 severity: normal
 
-# Gestión Municipal 0.2.0
+# Gestión Municipal 0.5.0
 
 Novedades:
-- Rediseño visual completo de la aplicación: nueva paleta de colores, tipografía y un estilo homogéneo en todas las pantallas.
-- La aplicación pasa a llamarse **Gestión Municipal**.
-- Nuevo módulo de Finanzas: gastos, pagos, ingresos de caja, presupuesto (POA), libro de caja, fuentes de financiamiento y rubros, con importación de planillas y adjuntos de comprobantes.
-- Nuevo módulo de Documentos administrativos: alta, seguimiento, adjuntos e historial de documentos.
-- Nuevo módulo de Tareas: gestión de tareas con vencimientos, prioridades y notas.
-- Nueva pantalla de administración de usuarios: alta de usuarios, cambio de rol y permisos configurables por operador.
-- Ingreso de stock por factura: la carga de artículos se hace ahora en campos arriba de la tabla, con un botón que valida los datos antes de agregar la fila.
-- Nuevo configurador de conexión: un programa aparte para configurar la dirección y el puerto del servidor.
-- Nueva sección en Mantenimiento: backup manual con un botón y aviso configurable si un backup falla.
+- Nuevo diseño de toda la aplicación (versión 2): pantallas más claras y ordenadas, con el mismo estilo en Inicio, Productos, Movimientos, Finanzas, Reportes, Documentos, Tareas, Usuarios, Catálogos y Mantenimiento.
+- Las actualizaciones ahora se descargan del servidor del municipio. La aplicación busca versiones nuevas cada una hora, sin interrumpir lo que estés haciendo.
+- Si aparece una actualización crítica mientras trabajás, se muestra un aviso rojo fijo en la parte de arriba que no tapa el contenido.
+- Reportes: nueva pantalla de entrada que reúne los seis reportes, y el Log de auditoría ahora muestra la acción en un texto entendible.
+- Libro de caja: se puede ver y exportar a PDF el año completo, con el saldo inicial y final del año y el nombre de cada mes.
+- Catálogos: ahora hay una única sección con todos los catálogos, con búsqueda y acceso directo a cada uno.
 
 Mejoras:
-- Las pantallas avisan cuando no se tiene permiso para algo, en vez de quedar vacías.
-- Mejor contraste y legibilidad en los textos de toda la aplicación.
-- El stock y los saldos negativos ahora también se indican con la palabra "negativo", no solo con color.
-- Los 4 campos del panel de nuevo usuario ahora tienen etiqueta.
-- Las contraseñas nuevas requieren al menos 8 caracteres, con una letra y un número.
+- Todas las pantallas indican cuando se está cargando, cuando no hay conexión con el servidor (con botón Reintentar) y cuando falta permiso, en vez de mostrar "No hay datos".
+- En Gastos, Ingresos de caja y Calendario de pagos, los filtros se aplican solos al cambiar; ya no hace falta apretar Filtrar.
+- Los formularios de gastos, ingresos y pagos marcan el error en cada campo y no dejan guardar hasta corregirlo.
+- Un gasto anulado queda en solo lectura: no se pueden agregarle adjuntos ni modificarlo, y no se puede anular dos veces.
+- Al quitar un adjunto, la aplicación pide confirmación.
+- Registrar entrada y salida: el precio solo es obligatorio en las compras y se oculta en uso o consumo; en una salida nunca se pide.
+- No se puede dar de baja una categoría que tiene productos activos.
+- Las columnas de las tablas se ajustan al contenido y los textos largos muestran el detalle al pasar el mouse.
+- Inicio: las métricas indican cuando no hay dato, y el panel de tareas muestra hasta 4 filas con acceso a Ver todas.
+- Si cambian tus permisos, los botones y el menú lateral se actualizan sin tener que reabrir las pantallas.
+- Los códigos de rubro y los ejercicios del POA ahora se ordenan por número y no como texto.
+- En Documentos, el historial muestra el estado en palabras (por ejemplo, "En proceso").
 
 ---
 <!-- INSTRUCCIONES PARA EL PUBLICADOR — leer antes de empaquetar:
