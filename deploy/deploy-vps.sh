@@ -31,9 +31,9 @@ set -euo pipefail
 #
 # --dry-run corre SOLO el paso 0 y el paso 1 (ambos de solo lectura) y termina ahí.
 
-VPS_HOST="${VPS_HOST:-194.163.142.86}"
-VPS_USER="${VPS_USER:?Definí VPS_USER (usuario SSH del VPS)}"
-VPS_SSH_PORT="${VPS_SSH_PORT:-34377}"
+# VPS_HOST / VPS_USER / VPS_SSH_PORT son OBLIGATORIAS y se exigen más abajo, DESPUÉS de cargar
+# deploy/.env (pueden venir de ahí o del entorno). A propósito NO hay default: un deploy sin
+# configuración explícita tiene que fallar, nunca caer en un VPS que quedó horneado en el script.
 # El "~" queda literal a propósito (bash NO lo expande dentro de comillas dobles, ni siquiera
 # como default de ${VAR:-~/x}) -- se expande recién donde se USA (ssh_vps sin comillas, scp por
 # el propio sftp-server), contra el $HOME del usuario REMOTO, que no tiene por qué coincidir con
@@ -139,6 +139,12 @@ if [[ -f "$ENV_LOCAL" ]]; then
     source "$ENV_LOCAL"
     set +a
 fi
+
+# Mismo criterio que build/publicar-release.sh. Falla ANTES de cualquier ssh/scp (también en
+# --dry-run, cuyo pre-vuelo ya usa ssh).
+VPS_HOST="${VPS_HOST:?Definí VPS_HOST (host del VPS) en deploy/.env o en el entorno}"
+VPS_USER="${VPS_USER:?Definí VPS_USER (usuario SSH del VPS) en deploy/.env o en el entorno}"
+VPS_SSH_PORT="${VPS_SSH_PORT:?Definí VPS_SSH_PORT (puerto SSH del VPS) en deploy/.env o en el entorno}"
 
 POSTGRES_USER="${POSTGRES_USER:-stockapp}"
 POSTGRES_DB="${POSTGRES_DB:-stockapp}"

@@ -215,7 +215,7 @@ if [[ "$API_BIND" != "127.0.0.1" ]]; then
     echo "  en HTTP PLANO (credenciales de login y JWT viajan sin cifrar). Esto EXIGE firewall" >&2
     echo "  activo en este VPS. Como mínimo, antes de que termine este script, corré (en este" >&2
     echo "  orden, el SSH primero -- ver deploy/DEPLOY.md, sección Firewall):" >&2
-    echo "    sudo ufw allow 34377/tcp        # SSH -- sin esto PERDÉS EL ACCESO AL VPS" >&2
+    echo "    sudo ufw allow <puerto-SSH>/tcp     # SSH -- sin esto PERDÉS EL ACCESO AL VPS" >&2
     echo "    sudo ufw allow ${API_PORT}/tcp   # API (modo expuesto)" >&2
     echo "    sudo ufw enable" >&2
     echo >&2

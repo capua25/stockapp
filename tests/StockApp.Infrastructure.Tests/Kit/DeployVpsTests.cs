@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Runtime.CompilerServices;
 using StockApp.Tests.Compartido;
 using Xunit;
@@ -158,7 +159,7 @@ public class DeployVpsTests
                 ;;
             *"systemctl is-active stockapp-api"*)
                 {{(simularFalloConectividadEstadoServicio
-                    ? "echo 'ssh: connect to host 194.163.142.86 port 34377: Connection refused (simulado)' >&2; exit 255"
+                    ? "echo 'ssh: connect to host vps.test.invalid port 2222: Connection refused (simulado)' >&2; exit 255"
                     : "echo active; exit 0")}}
                 ;;
             *"install.sh"*)
@@ -278,10 +279,18 @@ public class DeployVpsTests
         return root;
     }
 
+    /// <summary>
+    /// "export VAR=valor" o, con valor null, "unset VAR": una variable que el test quiere AUSENTE
+    /// tiene que estar ausente de verdad aunque el entorno de quien corre la suite la tenga.
+    /// </summary>
+    private static string ExportODesetear(string nombre, string? valor) =>
+        valor is null ? $"unset {nombre}\n" : $"export {nombre}=\"{valor}\"\n";
+
     /// <summary>Corre deploy/deploy-vps.sh del repo falso con ssh/scp stubeados por PATH.</summary>
     private static (int ExitCode, string Stdout, string Stderr, string RastroSsh, string RastroScp, string RastroPublish) Correr(
         string repoFixture, string argumentos, bool simularDuplicados = false,
-        string scpTamanoBytes = "2048", string vpsUser = "operador",
+        string scpTamanoBytes = "2048", string? vpsUser = "operador",
+        string? vpsHost = "vps.test.invalid", string? vpsSshPort = "2222",
         bool simularBackupViejoPrimero = false, bool simularFalloConsulta = false,
         bool simularFalloConsultaPaso6 = false, bool simularRespuestaNoNumericaPaso6 = false,
         bool simularFalloPolling = false, bool simularFalloConectividadEstadoServicio = false)
@@ -301,7 +310,9 @@ public class DeployVpsTests
                 $"export RASTRO_SCP=\"{rastroScp}\"\n" +
                 $"export RASTRO_PUBLISH=\"{rastroPublish}\"\n" +
                 $"export SCP_TAMANO_BYTES=\"{scpTamanoBytes}\"\n" +
-                $"export VPS_USER=\"{vpsUser}\"\n" +
+                ExportODesetear("VPS_USER", vpsUser) +
+                ExportODesetear("VPS_HOST", vpsHost) +
+                ExportODesetear("VPS_SSH_PORT", vpsSshPort) +
                 (simularBackupViejoPrimero ? "export SIMULAR_BACKUP_VIEJO_PRIMERO=1\n" : "") +
                 $"bash \"{repoFixture}/deploy/deploy-vps.sh\" {argumentos}";
             var (exitCode, stdout, stderr) = EjecutorBash.Ejecutar(script);
@@ -319,7 +330,50 @@ public class DeployVpsTests
         }
     }
 
+    // ---------- Regla: VPS_HOST / VPS_USER / VPS_SSH_PORT son OBLIGATORIAS, sin default ----------
+    // El VPS de testing está compartido con otra app ("pinar"): un deploy sin config explícita
+    // NO puede caer ahí por un default horneado. Falla ANTES de cualquier ssh/scp, también en
+    // --dry-run (que sí usa ssh en el pre-vuelo).
+
+    [Theory]
+    [InlineData("VPS_HOST", "")]
+    [InlineData("VPS_HOST", "--dry-run")]
+    [InlineData("VPS_USER", "")]
+    [InlineData("VPS_USER", "--dry-run")]
+    [InlineData("VPS_SSH_PORT", "")]
+    [InlineData("VPS_SSH_PORT", "--dry-run")]
+    public void SinVariableDeConexion_FallaNombrandolaYSinTocarNiSshNiScp(string variable, string flags)
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            var (exitCode, stdout, stderr, rastroSsh, rastroScp, rastroPublish) = Correr(
+                repo, $"1.0.0 {flags}",
+                vpsUser: variable == "VPS_USER" ? null : "operador",
+                vpsHost: variable == "VPS_HOST" ? null : "vps.test.invalid",
+                vpsSshPort: variable == "VPS_SSH_PORT" ? null : "2222");
+
+            Assert.NotEqual(0, exitCode);
+            Assert.Contains(variable, stdout + stderr);
+            Assert.Equal("", rastroSsh);
+            Assert.Equal("", rastroScp);
+            Assert.Equal("", rastroPublish);
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    [Fact]
+    public void ElScript_NoTieneDefaultsParaHostNiPuertoSsh()
+    {
+        var texto = File.ReadAllText(RutaScriptReal());
+
+        Assert.DoesNotMatch(new Regex(@"VPS_HOST:-"), texto);
+        Assert.DoesNotMatch(new Regex(@"VPS_SSH_PORT:-"), texto);
+        Assert.DoesNotMatch(new Regex(@"VPS_USER:-"), texto);
+    }
+
     // ---------- Regla: sin <version> ----------
+
 
     [Fact]
     public void SinVersion_MuestraUsoYAborta()
@@ -597,7 +651,7 @@ public class DeployVpsTests
             var script =
                 $"export PATH=\"{testbin}:$PATH\"\n" +
                 $"export RASTRO_DOCKER=\"{rastroDocker}\"\n" +
-                "export VPS_USER=\"operador\"\n" +
+                "export VPS_USER=\"operador\" VPS_HOST=\"vps.test.invalid\" VPS_SSH_PORT=\"2222\"\n" +
                 $"bash \"{repo}/deploy/deploy-vps.sh\" 1.0.0 --dry-run";
             var (exitCode, stdout, stderr) = EjecutorBash.Ejecutar(script);
             var docker = File.Exists(rastroDocker) ? File.ReadAllText(rastroDocker) : "";
@@ -668,7 +722,7 @@ public class DeployVpsTests
                 $"export PATH=\"{testbin}:$PATH\"\n" +
                 $"export RASTRO_DOCKER=\"{rastroDocker}\"\n" +
                 $"export VPS_DIR=\"{vpsDir}\"\n" +
-                "export VPS_USER=\"operador\"\n" +
+                "export VPS_USER=\"operador\" VPS_HOST=\"vps.test.invalid\" VPS_SSH_PORT=\"2222\"\n" +
                 $"bash \"{repo}/deploy/deploy-vps.sh\" 1.0.0";
             var (exitCode, stdout, stderr) = EjecutorBash.Ejecutar(script);
             var docker = File.Exists(rastroDocker) ? File.ReadAllText(rastroDocker) : "";
@@ -770,7 +824,7 @@ public class DeployVpsTests
                 $"export RASTRO_DOCKER=\"{rastroDocker}\"\n" +
                 $"export RASTRO_SCP=\"{rastroScp}\"\n" +
                 $"export HOME=\"{homeSimulado}\"\n" +
-                "export VPS_USER=\"operador\"\n" +
+                "export VPS_USER=\"operador\" VPS_HOST=\"vps.test.invalid\" VPS_SSH_PORT=\"2222\"\n" +
                 $"bash \"{repo}/deploy/deploy-vps.sh\" 1.0.0";
             var (exitCode, stdout, stderr) = EjecutorBash.Ejecutar(script);
             var docker = File.Exists(rastroDocker) ? File.ReadAllText(rastroDocker) : "";
@@ -793,7 +847,7 @@ public class DeployVpsTests
             // mismo "~/stockapp-deploy" -- no lo tocamos, y coincide con dónde el cd remoto
             // encontró install.sh. (el "~" viaja escapado como "\~" en el trace por el %q del
             // stub de scp, que a propósito registra el argv tal cual bash lo ve)
-            Assert.Contains(@"194.163.142.86:\~/stockapp-deploy/", scp);
+            Assert.Contains(@"vps.test.invalid:\~/stockapp-deploy/", scp);
         }
         finally
         {
@@ -991,7 +1045,7 @@ public class DeployVpsTests
     [Fact]
     public void ApiSchemeHttps_LosCurlContraLaApiResuelvenElHostnameYNuncaUsanInsecure()
     {
-        var repo = CrearRepoFixture(apiScheme: "https", apiHostname: "stockapp.capuanomartin.dev");
+        var repo = CrearRepoFixture(apiScheme: "https", apiHostname: "api.test.invalid");
         try
         {
             var (exitCode, stdout, stderr, rastroSsh, _, _) = Correr(repo, "1.2.3");
@@ -999,14 +1053,14 @@ public class DeployVpsTests
             Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}");
 
             // Las URLs pasan a usar el HOSTNAME (nunca 127.0.0.1 en plano) con esquema https.
-            Assert.Contains("https://stockapp.capuanomartin.dev:5080/auth/login", rastroSsh);
-            Assert.Contains("https://stockapp.capuanomartin.dev:5080/backups", rastroSsh);
-            Assert.Contains("https://stockapp.capuanomartin.dev:5080/licencia/estado", rastroSsh);
+            Assert.Contains("https://api.test.invalid:5080/auth/login", rastroSsh);
+            Assert.Contains("https://api.test.invalid:5080/backups", rastroSsh);
+            Assert.Contains("https://api.test.invalid:5080/licencia/estado", rastroSsh);
 
             // --resolve fuerza la conexión física a 127.0.0.1 sin romper la validación de
             // hostname del certificado real (que sigue viendo API_HOSTNAME en la URL).
             Assert.Contains("--resolve", rastroSsh);
-            Assert.Contains("stockapp.capuanomartin.dev:5080:127.0.0.1", rastroSsh);
+            Assert.Contains("api.test.invalid:5080:127.0.0.1", rastroSsh);
 
             // NUNCA -k/--insecure -- eso anularía el sentido de tener TLS (pedido explícito del
             // runbook, Paso 0).

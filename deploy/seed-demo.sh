@@ -8,7 +8,7 @@
 # Ejemplos:
 #   deploy/seed-demo.sh                                          # http://127.0.0.1:5080 + .env
 #   deploy/seed-demo.sh http://127.0.0.1:5080 deploy/.env         # corriendo EN el VPS
-#   deploy/seed-demo.sh http://194.163.142.86:5080 deploy/.env    # corriendo desde afuera
+#   deploy/seed-demo.sh http://<IP-del-VPS>:5080 deploy/.env    # corriendo desde afuera
 #
 # Es tolerante a reintentos: si una entidad ya existe (409), la cuenta como "ya existía"
 # y sigue. Las credenciales de admin se leen de BOOTSTRAP_ADMIN_USER / BOOTSTRAP_PASSWORD

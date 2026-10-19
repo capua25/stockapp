@@ -6,7 +6,7 @@
 #
 #   --api-base-url <URL>   OBLIGATORIO. URL completa (con esquema) del servidor al que va a
 #                           apuntar el artefacto publicado, ej:
-#                           https://stockapp.capuanomartin.dev:8080
+#                           https://<dominio-del-servidor>:8080
 #                           Sin este parámetro el script ABORTA (exit != 0). No hay default:
 #                           un default acá es exactamente cómo se despacha un zip apuntando a
 #                           donde no corresponde (localhost, un VPS viejo, etc).

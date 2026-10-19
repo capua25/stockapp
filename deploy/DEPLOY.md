@@ -5,11 +5,11 @@ Asume el entorno relevado para este despliegue:
 
 - Ubuntu 24.04 LTS, `docker compose` v2 disponible, **.NET NO instalado** (no hace falta:
   publicamos self-contained).
-- **SSH en el puerto 34377**, no en el 22.
+- **SSH en un puerto propio (`VPS_SSH_PORT`)**; no asumas el 22: confirmalo con el proveedor/operador del VPS.
 - El VPS ya corre **"pinar"** (otro proyecto, en Docker: nginx en `0.0.0.0:80`/`:443`, web,
   api, postgres, redis). **Este runbook nunca lo toca.**
 - **`ufw` está ACTIVO** (verificado en el VPS real, 2026-08-17), con reglas para
-  `80/tcp`, `443/tcp`, `34377/tcp` (SSH) y `5080/tcp` (StockApp API, abierto actualmente
+  `80/tcp`, `443/tcp`, `<puerto-SSH>/tcp` (SSH) y `5080/tcp` (StockApp API, abierto actualmente
   como prueba temporal). Ver la sección "Firewall" al final para el detalle completo y la
   secuencia segura si hace falta tocar `ufw` de nuevo (por ejemplo, al preparar un VPS
   nuevo desde cero).
@@ -75,7 +75,7 @@ pueden mantener un túnel abierto).
 En tu máquina de trabajo (NO en el VPS):
 
 - .NET 10 SDK (para `dotnet publish`).
-- Acceso SSH al VPS: `ssh -p 34377 usuario@<ip-del-vps>`.
+- Acceso SSH al VPS: `ssh -p <puerto-SSH> usuario@<ip-del-vps>`.
 - El repo clonado, en la rama que vayas a desplegar.
 - Decidido el modo de acceso (`API_BIND` en `deploy/.env` — ver "Modos de acceso" arriba):
   `127.0.0.1` (default, loopback + túnel) o `0.0.0.0` (expuesto, requiere firewall).
@@ -83,7 +83,7 @@ En tu máquina de trabajo (NO en el VPS):
 En el VPS, antes de tocar nada, verificá que no vas a pisar "pinar":
 
 ```bash
-ssh -p 34377 usuario@<ip-del-vps>
+ssh -p <puerto-SSH> usuario@<ip-del-vps>
 docker ps                      # confirmá que ves los contenedores de pinar (nginx, web, api, postgres, redis)
 sudo ss -ltnp | grep -E ':80|:443|:5432|:5433|:5080'   # confirmá qué puertos están realmente ocupados
 ```
@@ -171,7 +171,7 @@ Copiá `deploy/.env` y `deploy/docker-compose.postgres.yml` al VPS (por ejemplo 
 `~/stockapp-deploy/`):
 
 ```bash
-scp -P 34377 deploy/.env deploy/docker-compose.postgres.yml usuario@<ip-del-vps>:~/stockapp-deploy/
+scp -P <puerto-SSH> deploy/.env deploy/docker-compose.postgres.yml usuario@<ip-del-vps>:~/stockapp-deploy/
 ```
 
 En el VPS:
@@ -200,10 +200,10 @@ docker exec -e PGPASSWORD=<POSTGRES_PASSWORD> stockapp-pg \
 
 **Camino automatizado (recomendado):** `deploy/deploy-vps.sh <version>` hace todo lo de
 esta sección (más un pre-vuelo de migraciones y un backup de la versión vieja, ver Fase 6
-del plan de deploy) en un solo comando. Necesita `VPS_USER` definida en el entorno:
+del plan de deploy) en un solo comando. Necesita `VPS_HOST`, `VPS_USER` y `VPS_SSH_PORT` (sin default: si falta alguna, aborta antes de tocar nada), en `deploy/.env` o en el entorno:
 
 ```bash
-VPS_USER=usuario deploy/deploy-vps.sh 1.5.0
+VPS_HOST=<IP-del-VPS> VPS_USER=usuario VPS_SSH_PORT=<puerto-SSH> deploy/deploy-vps.sh 1.5.0
 ```
 
 Probalo primero con `--dry-run` (corre solo el pre-vuelo de migraciones, de solo lectura,
@@ -228,7 +228,7 @@ nombre exacto:
 
 ```bash
 TARBALL="stockapp-api-<version>-linux-x64.tar.gz"   # el que imprimió el comando anterior
-scp -P 34377 \
+scp -P <puerto-SSH> \
   "deploy/dist/${TARBALL}" \
   deploy/install.sh deploy/stockapp-api.service deploy/wait-for-postgres.sh \
   usuario@<ip-del-vps>:~/stockapp-deploy/
@@ -308,7 +308,7 @@ principio de este documento).
 Desde la máquina del puesto de trabajo (Windows/Linux con el cliente OpenSSH):
 
 ```bash
-ssh -p 34377 -N -L 5080:127.0.0.1:5080 usuario@<ip-del-vps>
+ssh -p <puerto-SSH> -N -L 5080:127.0.0.1:5080 usuario@<ip-del-vps>
 ```
 
 Dejá esa terminal abierta (o corré el comando como servicio/tarea en segundo plano — en
@@ -584,7 +584,7 @@ backup de la versión vieja, en un solo comando (ver sección 3 y Fase 6 del pla
 deploy):
 
 ```bash
-VPS_USER=usuario deploy/deploy-vps.sh 1.5.0
+VPS_HOST=<IP-del-VPS> VPS_USER=usuario VPS_SSH_PORT=<puerto-SSH> deploy/deploy-vps.sh 1.5.0
 ```
 
 Camino manual:
@@ -592,7 +592,7 @@ Camino manual:
 ```bash
 # En tu máquina
 deploy/publish-api.sh 1.5.0          # o el número/tag que corresponda
-scp -P 34377 deploy/dist/stockapp-api-1.5.0-linux-x64.tar.gz usuario@<ip-del-vps>:~/stockapp-deploy/
+scp -P <puerto-SSH> deploy/dist/stockapp-api-1.5.0-linux-x64.tar.gz usuario@<ip-del-vps>:~/stockapp-deploy/
 
 # En el VPS — mismo comando que la instalación inicial, install.sh detecta que ya hay
 # una instalación y la actualiza (respaldando la anterior automáticamente)
@@ -615,8 +615,8 @@ Dos formas, de más a menos preferida:
 una actualización, solo que "hacia atrás"):
 
 ```bash
-scp -P 34377 deploy/dist/stockapp-api-<version-anterior>-linux-x64.tar.gz usuario@<ip-del-vps>:~/stockapp-deploy/
-ssh -p 34377 usuario@<ip-del-vps>
+scp -P <puerto-SSH> deploy/dist/stockapp-api-<version-anterior>-linux-x64.tar.gz usuario@<ip-del-vps>:~/stockapp-deploy/
+ssh -p <puerto-SSH> usuario@<ip-del-vps>
 cd ~/stockapp-deploy
 sudo ./install.sh stockapp-api-<version-anterior>-linux-x64.tar.gz .env
 ```
@@ -649,7 +649,7 @@ está ACTIVO**, con estas reglas (+ las mismas 4 en IPv6):
 ```
 [ 1] 80/tcp        ALLOW IN  Anywhere
 [ 2] 443/tcp       ALLOW IN  Anywhere
-[ 3] 34377/tcp     ALLOW IN  Anywhere   # SSH custom port
+[ 3] <puerto-SSH>/tcp ALLOW IN  Anywhere   # SSH custom port
 [ 4] 5080/tcp      ALLOW IN  Anywhere   # StockApp API - prueba temporal
 ```
 
@@ -671,7 +671,7 @@ StockApp: el único "perímetro" real de StockApp.Api es que escucha exclusivame
 uno ajeno a StockApp), hacelo en este orden exacto, ANTES de poner `ufw enable`:
 
 ```bash
-sudo ufw allow 34377/tcp     # SSH -- este VPS NO usa el 22. Sin esto, PERDÉS EL ACCESO AL VPS.
+sudo ufw allow <puerto-SSH>/tcp   # SSH -- si tu VPS no usa el 22, este es SU puerto. Sin esto, PERDÉS EL ACCESO AL VPS.
 sudo ufw allow 80/tcp        # pinar (nginx)
 sudo ufw allow 443/tcp       # pinar (nginx)
 sudo ufw enable
@@ -693,7 +693,7 @@ responsabilidad tuya, ANTES de considerar la instalación terminada.
 Mismo orden exacto que en el modo default, agregando el puerto de la API:
 
 ```bash
-sudo ufw allow 34377/tcp     # SSH -- este VPS NO usa el 22. Sin esto, PERDÉS EL ACCESO AL VPS.
+sudo ufw allow <puerto-SSH>/tcp   # SSH -- si tu VPS no usa el 22, este es SU puerto. Sin esto, PERDÉS EL ACCESO AL VPS.
 sudo ufw allow 80/tcp        # pinar (nginx)
 sudo ufw allow 443/tcp       # pinar (nginx)
 sudo ufw allow 5080/tcp      # StockApp.Api (modo expuesto -- ajustá el puerto si usaste otro API_PORT)
@@ -709,7 +709,7 @@ llegue a tocar PCs de usuarios reales.
 
 ### En ambos modos
 
-Si te salteás el primer `allow` (34377) antes de `ufw enable`, y no tenés una consola de
+Si te salteás el primer `allow` (el del SSH) antes de `ufw enable`, y no tenés una consola de
 emergencia (KVM/VNC del proveedor del VPS), **te quedás afuera del servidor** — y de paso,
 sin el `allow 80/443`, tirás la producción de "pinar" con el mismo error. Verificá las
 reglas con `sudo ufw status verbose` antes de confirmar `enable`, no después.
