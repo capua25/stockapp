@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using StockApp.Application.Actualizaciones;
 using StockApp.Presentation.ViewModels;
@@ -15,6 +17,17 @@ public sealed class CoordinadorActualizacion
 {
     private readonly IUpdateService          _updateService;
     private readonly PoliticaUxActualizacion _politica;
+
+    /// <summary>Cada cuánto se repite la búsqueda con la app abierta.</summary>
+    public static readonly TimeSpan IntervaloChequeoHorario = TimeSpan.FromHours(1);
+
+    // Un único cerrojo para arranque, chequeo horario y aplicar: nunca dos BuscarAsync/DescargarAsync
+    // a la vez (el UltimoFeed de la fuente es compartido). Todo acceso a _notificadas y
+    // _ultimaVersionBuscada ocurre con el cerrojo tomado.
+    private readonly SemaphoreSlim      _cerrojo = new(1, 1);
+    private readonly HashSet<string>    _notificadas = new(StringComparer.Ordinal);
+    private string?                     _ultimaVersionBuscada;
+    private volatile bool               _aplicacionSolicitada;
 
     /// <summary>
     /// Resultado de la evaluación: qué modo de UI debe mostrarse.
@@ -54,29 +67,80 @@ public sealed class CoordinadorActualizacion
     /// </summary>
     public async Task EvaluarEnArranqueAsync()
     {
-        var resultado = await _updateService.BuscarAsync();
-
-        if (!resultado.HayUpdate)
+        await _cerrojo.WaitAsync();
+        try
         {
-            // AccionUxActual ya es Ninguno; no hay nada que hacer.
-            return;
+            var resultado = await _updateService.BuscarAsync();
+
+            if (!resultado.HayUpdate)
+            {
+                // AccionUxActual ya es Ninguno; no hay nada que hacer.
+                return;
+            }
+
+            RegistrarNotificada(resultado.Version);
+
+            bool descargaPosible = true;
+
+            if (resultado.Severity == UpdateSeverity.Critical)
+            {
+                try
+                {
+                    await _updateService.DescargarAsync();
+                }
+                catch
+                {
+                    descargaPosible = false;
+                }
+            }
+
+            AccionUxActual = _politica.Decidir(resultado, descargaPosible);
         }
-
-        bool descargaPosible = true;
-
-        if (resultado.Severity == UpdateSeverity.Critical)
+        finally
         {
+            _cerrojo.Release();
+        }
+    }
+
+    /// <summary>
+    /// Chequeo horario con la app abierta. Devuelve la acción a mostrar, o <c>null</c> si no
+    /// hay nada que mostrar: ya se pidió aplicar, hay otra operación en curso (ese tick se
+    /// saltea), la búsqueda falló (en silencio), no hay update o esa versión ya se notificó.
+    /// </summary>
+    public async Task<AccionUx?> EvaluarEnSesionAsync()
+    {
+        if (_aplicacionSolicitada) return null;
+
+        if (!await _cerrojo.WaitAsync(0)) return null;
+        try
+        {
+            UpdateCheckResult resultado;
             try
             {
-                await _updateService.DescargarAsync();
+                resultado = await _updateService.BuscarAsync();
             }
             catch
             {
-                descargaPosible = false;
+                return null;
             }
-        }
 
-        AccionUxActual = _politica.Decidir(resultado, descargaPosible);
+            if (!resultado.HayUpdate) return null;
+
+            if (!RegistrarNotificada(resultado.Version)) return null;
+
+            return _politica.DecidirEnSesion(resultado);
+        }
+        finally
+        {
+            _cerrojo.Release();
+        }
+    }
+
+    // Debe llamarse con el cerrojo tomado. Devuelve false si la versión ya estaba notificada.
+    private bool RegistrarNotificada(string? version)
+    {
+        _ultimaVersionBuscada = version;
+        return version is null || _notificadas.Add(version);
     }
 
     /// <summary>
@@ -92,6 +156,8 @@ public sealed class CoordinadorActualizacion
     /// <returns><c>true</c> si el flujo se ejecutó sin errores; <c>false</c> si falló.</returns>
     public async Task<bool> AplicarActualizacionAsync()
     {
+        _aplicacionSolicitada = true;
+        await _cerrojo.WaitAsync();
         try
         {
             await _updateService.DescargarAsync();
@@ -100,7 +166,14 @@ public sealed class CoordinadorActualizacion
         }
         catch
         {
+            // La versión vuelve a ser notificable y el chequeo horario vuelve a correr.
+            if (_ultimaVersionBuscada is not null) _notificadas.Remove(_ultimaVersionBuscada);
+            _aplicacionSolicitada = false;
             return false;
+        }
+        finally
+        {
+            _cerrojo.Release();
         }
     }
 }

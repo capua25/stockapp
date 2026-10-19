@@ -151,4 +151,135 @@ public class CoordinadorActualizacionTests
 
         Assert.False(resultado);
     }
+
+    // ── evaluación en sesión (chequeo horario) ────────────────────────────────
+
+    private static UpdateCheckResult Hay(string version, UpdateSeverity severity) =>
+        new(HayUpdate: true, Version: version, Severity: severity, NotasMarkdown: "notas");
+
+    private static Mock<IUpdateService> ConBusqueda(UpdateCheckResult resultado)
+    {
+        var updateMock = new Mock<IUpdateService>();
+        updateMock.Setup(s => s.BuscarAsync(default)).ReturnsAsync(resultado);
+        return updateMock;
+    }
+
+    [Fact]
+    public async Task EvaluarEnSesion_MismaVersionDosVeces_NotificaUnaSola()
+    {
+        var coordinador = Crear(ConBusqueda(Hay("0.5.0", UpdateSeverity.Important)));
+
+        var primera = await coordinador.EvaluarEnSesionAsync();
+        var segunda = await coordinador.EvaluarEnSesionAsync();
+
+        Assert.NotNull(primera);
+        Assert.Equal(ModoUx.BannerDiscreto, primera!.Modo);
+        Assert.Null(segunda);
+    }
+
+    [Fact]
+    public async Task EvaluarEnSesion_VersionMostradaEnElArranque_NoSeRepite()
+    {
+        var coordinador = Crear(ConBusqueda(Hay("0.5.0", UpdateSeverity.Important)));
+
+        await coordinador.EvaluarEnArranqueAsync();
+        var enSesion = await coordinador.EvaluarEnSesionAsync();
+
+        Assert.Null(enSesion);
+    }
+
+    [Fact]
+    public async Task EvaluarEnSesion_BuscarTira_DevuelveNullSinPropagar()
+    {
+        var updateMock = new Mock<IUpdateService>();
+        updateMock.Setup(s => s.BuscarAsync(default))
+            .ThrowsAsync(new HttpRequestException("sin red"));
+        var coordinador = Crear(updateMock);
+
+        var accion = await coordinador.EvaluarEnSesionAsync();
+
+        Assert.Null(accion);
+    }
+
+    [Fact]
+    public async Task EvaluarEnSesion_ConArranqueEnCurso_SalteaElTickSinBuscar()
+    {
+        var gate = new TaskCompletionSource<UpdateCheckResult>();
+        var updateMock = new Mock<IUpdateService>();
+        updateMock.Setup(s => s.BuscarAsync(default)).Returns(gate.Task);
+        var coordinador = Crear(updateMock);
+
+        var arranque = coordinador.EvaluarEnArranqueAsync();   // toma el cerrojo y queda en BuscarAsync
+
+        var accion = await coordinador.EvaluarEnSesionAsync();
+
+        Assert.Null(accion);
+        updateMock.Verify(s => s.BuscarAsync(default), Times.Once);
+
+        gate.SetResult(UpdateCheckResult.SinUpdate);
+        await arranque;
+    }
+
+    [Fact]
+    public async Task EvaluarEnSesion_ConAplicacionEnCurso_NoBusca()
+    {
+        var gate = new TaskCompletionSource();
+        var updateMock = ConBusqueda(Hay("0.5.0", UpdateSeverity.Important));
+        updateMock.Setup(s => s.DescargarAsync(null, default)).Returns(gate.Task);
+        var coordinador = Crear(updateMock);
+
+        var aplicar = coordinador.AplicarActualizacionAsync();   // queda en DescargarAsync
+
+        var accion = await coordinador.EvaluarEnSesionAsync();
+
+        Assert.Null(accion);
+        updateMock.Verify(s => s.BuscarAsync(default), Times.Never);
+
+        gate.SetResult();
+        Assert.True(await aplicar);
+    }
+
+    [Fact]
+    public async Task EvaluarEnSesion_TrasAplicarExitoso_NoVuelveABuscar()
+    {
+        var updateMock = ConBusqueda(Hay("0.5.0", UpdateSeverity.Important));
+        updateMock.Setup(s => s.DescargarAsync(null, default)).Returns(Task.CompletedTask);
+        var coordinador = Crear(updateMock);
+
+        Assert.True(await coordinador.AplicarActualizacionAsync());
+        var accion = await coordinador.EvaluarEnSesionAsync();
+
+        Assert.Null(accion);
+        updateMock.Verify(s => s.BuscarAsync(default), Times.Never);
+    }
+
+    [Fact]
+    public async Task EvaluarEnSesion_TrasAplicarFallido_LaVersionSePuedeVolverANotificar()
+    {
+        var updateMock = ConBusqueda(Hay("0.5.0", UpdateSeverity.Important));
+        updateMock.Setup(s => s.DescargarAsync(null, default))
+            .ThrowsAsync(new IOException("disco lleno"));
+        var coordinador = Crear(updateMock);
+
+        var primera = await coordinador.EvaluarEnSesionAsync();
+        Assert.NotNull(primera);
+        Assert.Null(await coordinador.EvaluarEnSesionAsync());
+
+        Assert.False(await coordinador.AplicarActualizacionAsync());
+        var tras = await coordinador.EvaluarEnSesionAsync();
+
+        Assert.NotNull(tras);
+        Assert.Equal("0.5.0", tras!.Version);
+    }
+
+    [Fact]
+    public async Task EvaluarEnSesion_Critica_DevuelveAvisoCriticoEnSesion()
+    {
+        var coordinador = Crear(ConBusqueda(Hay("0.5.0", UpdateSeverity.Critical)));
+
+        var accion = await coordinador.EvaluarEnSesionAsync();
+
+        Assert.NotNull(accion);
+        Assert.Equal(ModoUx.AvisoCriticoEnSesion, accion!.Modo);
+    }
 }
