@@ -164,7 +164,7 @@ Reglas:
 - Cada ítem conserva su gate actual (`Puede*` / `EsAdmin`), incluidos los AND compuestos y los ítems estructuralmente Admin-only.
 - El header de una sección se oculta si no tiene ningún ítem visible.
 - La revocación de permisos en caliente se mantiene: al perder un permiso el ítem desaparece sin reiniciar.
-- **Importación:** sigue apagada con `ImportacionHabilitada=false`; el ítem existe pero queda oculto.
+- **Importación:** sigue apagada con `ImportacionHabilitada=false`; el ítem existe pero queda oculto. Su rediseño (Fase 8) fue descartado por decisión del usuario: la importación queda en v1, custodiada por capturas de referencia.
 
 **Pie del sidebar:** avatar con iniciales, nombre y rol del usuario (nuevo: hoy no se muestra), cerrar sesión (con la confirmación actual) y versión.
 
@@ -387,6 +387,7 @@ Ciclo de cada fase: mockups de sus pantallas → aprobación del usuario → XAM
 | 5 Gestión | Tareas (listado, formulario, clasificación, diálogo de reclasificar), Documentos (listado, formulario, adjuntos) (implementada; GATE 2 integrado aprobado el 2026-10-18) |
 | 6 Reportes | hub + los 6 reportes (implementada; GATE 2 integrado aprobado el 2026-10-18) |
 | 7 Administración | Catálogos master-detail con los 10 catálogos, Usuarios, Mantenimiento (implementada; GATE 2 integrado aprobado el 2026-10-18) |
+| 8 Importación | **Descartada por decisión del usuario (2026-10-17): no se hace.** La importación queda en v1, custodiada por capturas de referencia (ver Fase 9) |
 | 9 Limpieza | borrar estilos y componentes viejos, reemplazar `GuardianDePatronTests` por el guardián del sistema nuevo, auditoría de residuos (aprobada el 2026-10-18; la importación queda en v1) |
 
 **Estado de la Fase 1 (aprobada el 2026-10-05).** El usuario aprobó la Fase 1 tras probar flujos reales a 1366×768: crear y editar artículo, entrada y salida, anular documento, baja de categoría y cerrar sesión. Arreglos surgidos de esa prueba: placeholder de precio de entrada (`2a5e661`, main), motivo Venta pasa a Uso o consumo (`ff91f33`, main), baja de categoría bloqueada con productos activos (`ee461b8`, main), la salida nunca muestra precio (`d858221`, main), y el hueco a la derecha en celdas y headers de las 22 grillas del tema viejo (`c808334`, feat/ui-v2; el `961dc7e` previo no tenía efecto porque el contenido no está dentro de `.ui2`).
@@ -1022,5 +1023,5 @@ Revisado y aprobado por el usuario el 2026-10-11 (decisiones del GATE, rulings y
 - Stock bajo / `StockMinimo`.
 - Unificar ViewModels.
 - Cambiar la navegación a back-stack.
-- Reactivar Importación.
+- Rediseñar (Fase 8, descartada) o reactivar Importación: queda en v1.
 - Cambios de API, salvo lo necesario para los KPIs de Inicio (los datos ya existen).

@@ -523,3 +523,6 @@ deploy/kit-dist/
 
 # Mockups de brainstorming (superpowers)
 .superpowers/
+
+# Índice local de CodeGraph
+.codegraph/
