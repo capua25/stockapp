@@ -46,7 +46,24 @@ public partial class ShellViewModel : ViewModelBase, IDisposable
     /// tras completar la evaluación en background.
     /// </summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(AvisoCriticoEnSesion))]
+    [NotifyPropertyChangedFor(nameof(OverlayFlotanteActualizacion))]
     private ViewModelBase? _overlayActualizacion;
+
+    /// <summary>
+    /// La franja crítica en sesión, o null si el overlay actual es otro. MainWindow la dibuja en
+    /// su PROPIA fila arriba del contenido (lo empuja hacia abajo en vez de taparlo): decisión de
+    /// Martin, 2026-10-19.
+    /// </summary>
+    public ActualizacionAvisoCriticoViewModel? AvisoCriticoEnSesion
+        => OverlayActualizacion as ActualizacionAvisoCriticoViewModel;
+
+    /// <summary>
+    /// El overlay que sigue flotando sobre el contenido (banner, modal, bloqueo, degradado):
+    /// todo menos la franja crítica, que tiene su propia fila.
+    /// </summary>
+    public ViewModelBase? OverlayFlotanteActualizacion
+        => OverlayActualizacion is ActualizacionAvisoCriticoViewModel ? null : OverlayActualizacion;
 
     public ShellViewModel(
         IAuthService             authService,

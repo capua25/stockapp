@@ -11,19 +11,28 @@
         MinWidth="400"
         MinHeight="300">
 
-    <Grid>
-        <!-- Capa base: contenido principal de la app (login, catálogo, etc.) -->
-        <ContentControl Content="{Binding CurrentViewModel}" />
+    <Grid RowDefinitions="Auto,*">
+        <!-- Fila propia de la franja crítica en sesión (no cerrable). Auto: mide 0 mientras no hay
+             franja y 56 cuando la hay, así el contenido de la fila 1 se achica exactamente ese alto
+             y nada queda tapado. Decisión de Martin, 2026-10-19: supera al overlay en la misma capa. -->
+        <ContentControl Grid.Row="0"
+                        Content="{Binding AvisoCriticoEnSesion}"
+                        IsVisible="{Binding AvisoCriticoEnSesion, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
-        <!-- Capa superior: overlay de actualización (banner, modal o bloqueo).
-             Cuando OverlayActualizacion es null, el ContentControl no renderiza nada.
-             HorizontalContentAlignment/VerticalContentAlignment en Stretch: cada overlay
-             define su propia alineación (el banner se ancla arriba, el modal/bloqueo se
-             centran) mediante el HorizontalAlignment/VerticalAlignment de su Border raíz. -->
-        <ContentControl Content="{Binding OverlayActualizacion}"
-                        IsVisible="{Binding OverlayActualizacion, Converter={x:Static ObjectConverters.IsNotNull}}"
-                        HorizontalContentAlignment="Stretch"
-                        VerticalContentAlignment="Stretch" />
+        <Grid Grid.Row="1">
+            <!-- Capa base: contenido principal de la app (login, catálogo, etc.) -->
+            <ContentControl Content="{Binding CurrentViewModel}" />
+
+            <!-- Capa superior: overlay de actualización flotante (banner, modal o bloqueo).
+                 Cuando OverlayFlotanteActualizacion es null, el ContentControl no renderiza nada.
+                 HorizontalContentAlignment/VerticalContentAlignment en Stretch: cada overlay
+                 define su propia alineación (el banner se ancla arriba, el modal/bloqueo se
+                 centran) mediante el HorizontalAlignment/VerticalAlignment de su Border raíz. -->
+            <ContentControl Content="{Binding OverlayFlotanteActualizacion}"
+                            IsVisible="{Binding OverlayFlotanteActualizacion, Converter={x:Static ObjectConverters.IsNotNull}}"
+                            HorizontalContentAlignment="Stretch"
+                            VerticalContentAlignment="Stretch" />
+        </Grid>
     </Grid>
 
 </Window>
