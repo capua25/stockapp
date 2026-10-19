@@ -316,6 +316,9 @@ fi
 mkdir -p "$STOCKAPP_HOME"
 chown stockapp:stockapp "$STOCKAPP_HOME"
 chmod 750 "$STOCKAPP_HOME"
+# Carpeta del feed de actualizaciones que la API sirve en /updates. Incondicional e idempotente
+# (instalación desde cero o re-instalación): crea la carpeta si falta y NO toca su contenido.
+install -d -o stockapp -g stockapp -m 750 "${STOCKAPP_HOME}/updates"
 
 # CRÍTICO (verificado empíricamente, no es una suposición): .NET en Linux resuelve
 # Environment.SpecialFolder.LocalApplicationData a "$HOME/.local/share" SOLO SI ese

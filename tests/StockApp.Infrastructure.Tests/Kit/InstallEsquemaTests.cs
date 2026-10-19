@@ -153,9 +153,9 @@ public class InstallEsquemaTests
     /// (marcador EXIT=), su salida combinada, el contenido de la unit generada (o "" si nunca
     /// se llegó a escribir) y el rastro de invocaciones de curl.
     /// </summary>
-    private static (int ExitCode, string Salida, string Unit, string RastroCurl, string ApiEnv) EjecutarInstall(
+    private static (int ExitCode, string Salida, string Unit, string RastroCurl, string ApiEnv, string Updates) EjecutarInstall(
         string envContent, string tarball, bool conTestbin, bool conSudo = false,
-        int? permisosFullchain = null, int? permisosPrivkey = null)
+        int? permisosFullchain = null, int? permisosPrivkey = null, bool conFeedPrevio = false)
     {
         var dirDeploy = RutaDeploy();
         var ubuntu = VersionUbuntuDelKit();
@@ -185,10 +185,13 @@ public class InstallEsquemaTests
             }
 
             var pathExport = conTestbin ? "export PATH=\"/testbin:$PATH\"\n" : "";
+            var previoFeed = conFeedPrevio
+                ? "mkdir -p /var/lib/stockapp/updates && echo previo > /var/lib/stockapp/updates/previo.nupkg\n"
+                : "";
             var entrypoint = $"""
                 #!/usr/bin/env bash
                 set -u
-                {pathExport}bash /deploy/install.sh /tarball.tar.gz /env/.env > /tmp/salida 2>&1
+                {previoFeed}{pathExport}bash /deploy/install.sh /tarball.tar.gz /env/.env > /tmp/salida 2>&1
                 echo "EXIT=$?" >> /tmp/salida
                 cat /tmp/salida
                 echo "---UNIT---"
@@ -197,6 +200,9 @@ public class InstallEsquemaTests
                 cat /tmp/curl-rastro 2>/dev/null || echo AUSENTE
                 echo "---API-ENV---"
                 cat /etc/stockapp-api/api.env 2>/dev/null || echo AUSENTE
+                echo "---UPDATES---"
+                stat -c '%U:%G %a' /var/lib/stockapp/updates 2>/dev/null || echo AUSENTE
+                ls -1 /var/lib/stockapp/updates 2>/dev/null || true
 
                 """;
             File.WriteAllText(Path.Combine(dirEntrypoint, "run.sh"), entrypoint);
@@ -216,9 +222,10 @@ public class InstallEsquemaTests
 
             var unit = Seccion(stdout, "---UNIT---", "---CURL-RASTRO---");
             var rastroCurl = Seccion(stdout, "---CURL-RASTRO---", "---API-ENV---");
-            var apiEnv = Seccion(stdout, "---API-ENV---", null);
+            var apiEnv = Seccion(stdout, "---API-ENV---", "---UPDATES---");
+            var updates = Seccion(stdout, "---UPDATES---", null);
 
-            return (exitCode, stdout, unit, rastroCurl, apiEnv);
+            return (exitCode, stdout, unit, rastroCurl, apiEnv, updates);
         }
         finally
         {
@@ -246,7 +253,7 @@ public class InstallEsquemaTests
     [Fact]
     public void SinApiPortNiApiScheme_UsaLosDefaults8080YHttp()
     {
-        var (_, salida, _, _, _) = EjecutarInstall(EnvBase, CrearTarballDummy(), conTestbin: false);
+        var (_, salida, _, _, _, _) = EjecutarInstall(EnvBase, CrearTarballDummy(), conTestbin: false);
 
         Assert.Contains("OK. API_PORT=8080", salida);
         Assert.Contains("OK. API_SCHEME=http", salida);
@@ -261,7 +268,7 @@ public class InstallEsquemaTests
     public void ApiSchemeInvalido_AbortaConExitDistintoDeCero(string valorInvalido)
     {
         var env = EnvBase + $"\nAPI_SCHEME={valorInvalido}\n";
-        var (exitCode, salida, _, _, _) = EjecutarInstall(env, CrearTarballDummy(), conTestbin: false);
+        var (exitCode, salida, _, _, _, _) = EjecutarInstall(env, CrearTarballDummy(), conTestbin: false);
 
         Assert.NotEqual(0, exitCode);
         Assert.Contains("API_SCHEME", salida);
@@ -280,7 +287,7 @@ public class InstallEsquemaTests
     public void ApiSchemeVacio_AbortaConExitDistintoDeCero()
     {
         var env = EnvBase + "\nAPI_SCHEME=\n";
-        var (exitCode, salida, _, _, _) = EjecutarInstall(env, CrearTarballDummy(), conTestbin: false);
+        var (exitCode, salida, _, _, _, _) = EjecutarInstall(env, CrearTarballDummy(), conTestbin: false);
 
         Assert.NotEqual(0, exitCode);
         Assert.Contains("API_SCHEME", salida);
@@ -298,7 +305,7 @@ public class InstallEsquemaTests
             API_HOSTNAME=stockapp.test.local
             Kestrel__Certificates__Default__KeyPath=/certs/privkey.pem
             """;
-        var (exitCode, salida, _, _, _) = EjecutarInstall(env, CrearTarballDummy(), conTestbin: false,
+        var (exitCode, salida, _, _, _, _) = EjecutarInstall(env, CrearTarballDummy(), conTestbin: false,
             permisosPrivkey: 0b110_100_100);
 
         Assert.NotEqual(0, exitCode);
@@ -314,7 +321,7 @@ public class InstallEsquemaTests
             API_HOSTNAME=stockapp.test.local
             Kestrel__Certificates__Default__Path=/certs/fullchain.pem
             """;
-        var (exitCode, salida, _, _, _) = EjecutarInstall(env, CrearTarballDummy(), conTestbin: false,
+        var (exitCode, salida, _, _, _, _) = EjecutarInstall(env, CrearTarballDummy(), conTestbin: false,
             permisosFullchain: 0b110_100_100);
 
         Assert.NotEqual(0, exitCode);
@@ -330,7 +337,7 @@ public class InstallEsquemaTests
             Kestrel__Certificates__Default__Path=/certs/fullchain.pem
             Kestrel__Certificates__Default__KeyPath=/certs/privkey.pem
             """;
-        var (exitCode, salida, _, _, _) = EjecutarInstall(env, CrearTarballDummy(), conTestbin: false,
+        var (exitCode, salida, _, _, _, _) = EjecutarInstall(env, CrearTarballDummy(), conTestbin: false,
             permisosFullchain: 0b110_100_100, permisosPrivkey: 0b110_100_100);
 
         Assert.NotEqual(0, exitCode);
@@ -349,7 +356,7 @@ public class InstallEsquemaTests
             Kestrel__Certificates__Default__Path=/certs/fullchain.pem
             Kestrel__Certificates__Default__KeyPath=/certs/privkey.pem
             """;
-        var (exitCode, salida, _, _, _) = EjecutarInstall(env, CrearTarballDummy(), conTestbin: false);
+        var (exitCode, salida, _, _, _, _) = EjecutarInstall(env, CrearTarballDummy(), conTestbin: false);
 
         Assert.NotEqual(0, exitCode);
         Assert.Contains("no existe", salida);
@@ -378,7 +385,7 @@ public class InstallEsquemaTests
             Kestrel__Certificates__Default__Path=/certs/fullchain.pem
             Kestrel__Certificates__Default__KeyPath=/certs/privkey.pem
             """;
-        var (exitCode, salida, _, _, _) = EjecutarInstall(env, CrearTarballValido(), conTestbin: true, conSudo: true,
+        var (exitCode, salida, _, _, _, _) = EjecutarInstall(env, CrearTarballValido(), conTestbin: true, conSudo: true,
             permisosFullchain: 0b110_100_100, permisosPrivkey: 0b000_000_000);
 
         Assert.True(exitCode == 0, $"Esperaba exit 0 (advertencia no bloqueante). Salida:\n{salida}");
@@ -393,7 +400,7 @@ public class InstallEsquemaTests
     public void CaminoFeliz_ApiSchemeHttp_LaUnitDeclaraHttpYElHealthcheckNoUsaResolve()
     {
         var env = EnvBase + "\nAPI_SCHEME=http\nAPI_PORT=8080\n";
-        var (exitCode, salida, unit, rastroCurl, _) = EjecutarInstall(
+        var (exitCode, salida, unit, rastroCurl, _, _) = EjecutarInstall(
             env, CrearTarballValido(), conTestbin: true);
 
         Assert.True(exitCode == 0, $"Esperaba exit 0. Salida:\n{salida}");
@@ -413,7 +420,7 @@ public class InstallEsquemaTests
             Kestrel__Certificates__Default__Path=/certs/fullchain.pem
             Kestrel__Certificates__Default__KeyPath=/certs/privkey.pem
             """;
-        var (exitCode, salida, unit, rastroCurl, apiEnv) = EjecutarInstall(
+        var (exitCode, salida, unit, rastroCurl, apiEnv, _) = EjecutarInstall(
             env, CrearTarballValido(), conTestbin: true, conSudo: true,
             permisosFullchain: 0b110_100_100, permisosPrivkey: 0b110_100_100);
 
@@ -428,5 +435,30 @@ public class InstallEsquemaTests
         // install.sh acaba de validar.
         Assert.Contains("Kestrel__Certificates__Default__Path=/certs/fullchain.pem", apiEnv);
         Assert.Contains("Kestrel__Certificates__Default__KeyPath=/certs/privkey.pem", apiEnv);
+    }
+
+    // ---------- Carpeta del feed de actualizaciones (/updates de la API) ----------
+
+    [Fact]
+    public void CaminoFeliz_CreaLaCarpetaDelFeedConDuenoYPermisosDelServicio()
+    {
+        var env = EnvBase + "\nAPI_SCHEME=http\nAPI_PORT=8080\n";
+        var (exitCode, salida, _, _, _, updates) = EjecutarInstall(
+            env, CrearTarballValido(), conTestbin: true);
+
+        Assert.True(exitCode == 0, $"Esperaba exit 0. Salida:\n{salida}");
+        Assert.StartsWith("stockapp:stockapp 750", updates);
+    }
+
+    [Fact]
+    public void CarpetaDelFeedExistente_NoSeTocaSuContenido()
+    {
+        var env = EnvBase + "\nAPI_SCHEME=http\nAPI_PORT=8080\n";
+        var (exitCode, salida, _, _, _, updates) = EjecutarInstall(
+            env, CrearTarballValido(), conTestbin: true, conFeedPrevio: true);
+
+        Assert.True(exitCode == 0, $"Esperaba exit 0. Salida:\n{salida}");
+        Assert.StartsWith("stockapp:stockapp 750", updates);
+        Assert.Contains("previo.nupkg", updates);
     }
 }
