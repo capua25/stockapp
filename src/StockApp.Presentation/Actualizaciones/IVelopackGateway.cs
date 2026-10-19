@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Velopack;
@@ -18,7 +19,17 @@ public interface IVelopackGateway
     bool EstaInstalado { get; }
 
     /// <summary>
-    /// Consulta la fuente encadenada. Devuelve <c>null</c> si no hay update disponible
+    /// Versión instalada, o <c>null</c> si la app no está instalada vía Velopack.
+    /// </summary>
+    SemanticVersion? VersionInstalada { get; }
+
+    /// <summary>
+    /// Assets del último feed que devolvió la fuente (vacío antes de la primera consulta).
+    /// </summary>
+    IReadOnlyList<VelopackAsset> UltimoFeed { get; }
+
+    /// <summary>
+    /// Consulta el feed propio. Devuelve <c>null</c> si no hay update disponible
     /// o si la app no está instalada (NotInstalledException se absorbe aquí, no se propaga).
     /// </summary>
     Task<UpdateInfo?> BuscarUpdateAsync(CancellationToken ct = default);

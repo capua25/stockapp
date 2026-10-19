@@ -11,7 +11,8 @@ namespace StockApp.Presentation.Actualizaciones;
 /// usando <see cref="IVelopackGateway"/> como abstracción sobre Velopack.
 /// Responsabilidades:
 ///   - Cortocircuita si la app no está instalada (dev/test).
-///   - Lee <c>NotesMarkdown</c> del <see cref="VelopackAsset"/> y delega a <see cref="SeverityParser"/>.
+///   - Lee <c>NotesMarkdown</c> del <see cref="VelopackAsset"/> y delega a <see cref="SeverityParser"/>;
+///     la severidad efectiva es el máximo entre las releases posteriores a la instalada y el destino.
 ///   - Guarda el <see cref="UpdateInfo"/> encontrado para las operaciones DescargarAsync/AplicarYReiniciar.
 /// </summary>
 public sealed class VelopackUpdateService : IUpdateService
@@ -40,7 +41,7 @@ public sealed class VelopackUpdateService : IUpdateService
         _updatePendiente = updateInfo;
 
         var asset = updateInfo.TargetFullRelease;
-        var severity = _severityParser.Parse(asset.NotesMarkdown);
+        var severity = SeveridadEfectiva(asset);
         var version = asset.Version?.ToString();
 
         return new UpdateCheckResult(
@@ -48,6 +49,33 @@ public sealed class VelopackUpdateService : IUpdateService
             Version: version,
             Severity: severity,
             NotasMarkdown: asset.NotesMarkdown);
+    }
+
+    /// <summary>
+    /// Máximo de severidad entre el destino y toda release posterior a la instalada hasta el destino
+    /// (una intermedia crítica no se pierde aunque el destino sea normal). Sin versión instalada
+    /// o sin feed registrado, cuenta solo el destino.
+    /// </summary>
+    private UpdateSeverity SeveridadEfectiva(VelopackAsset destino)
+    {
+        var severidad = _severityParser.Parse(destino.NotesMarkdown);
+        var instalada = _gateway.VersionInstalada;
+        if (instalada is null || destino.Version is null)
+            return severidad;
+
+        foreach (var release in _gateway.UltimoFeed ?? Array.Empty<VelopackAsset>())
+        {
+            if (release.Version is null
+                || release.Version <= instalada
+                || release.Version > destino.Version)
+                continue;
+
+            var s = _severityParser.Parse(release.NotesMarkdown);
+            if (s > severidad)
+                severidad = s;
+        }
+
+        return severidad;
     }
 
     /// <inheritdoc />

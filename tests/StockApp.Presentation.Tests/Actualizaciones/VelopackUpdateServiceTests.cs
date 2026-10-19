@@ -137,6 +137,59 @@ public class VelopackUpdateServiceTests
         Assert.Equal(UpdateCheckResult.SinUpdate, resultado);
     }
 
+    // ── BuscarAsync: severidad efectiva (máximo entre la instalada y el destino) ──
+
+    private static Mock<IVelopackGateway> GatewayConFeed(
+        string? instalada, VelopackAsset destino, IReadOnlyList<VelopackAsset>? feed)
+    {
+        var gateway = new Mock<IVelopackGateway>();
+        gateway.Setup(g => g.EstaInstalado).Returns(true);
+        gateway.Setup(g => g.VersionInstalada)
+               .Returns(instalada is null ? null : SemanticVersion.Parse(instalada));
+        gateway.Setup(g => g.UltimoFeed).Returns(feed!);
+        gateway.Setup(g => g.BuscarUpdateAsync(It.IsAny<CancellationToken>()))
+               .ReturnsAsync(BuildUpdateInfo(destino));
+        return gateway;
+    }
+
+    [Fact]
+    public async Task BuscarAsync_IntermediaCriticaYDestinoNormal_SeveridadCritica()
+    {
+        var critica = BuildAsset("0.4.0", "severity: critical\n## Parche urgente");
+        var destino = BuildAsset("0.5.0", "severity: normal\n## Mejoras");
+        var gateway = GatewayConFeed("0.3.0", destino, new[] { critica, destino });
+
+        var resultado = await new VelopackUpdateService(gateway.Object).BuscarAsync();
+
+        Assert.True(resultado.HayUpdate);
+        Assert.Equal(UpdateSeverity.Critical, resultado.Severity);
+        Assert.Equal("0.5.0", resultado.Version);
+        Assert.Equal(destino.NotesMarkdown, resultado.NotasMarkdown);
+    }
+
+    [Fact]
+    public async Task BuscarAsync_ReleaseNoPosteriorALaInstalada_NoCuenta()
+    {
+        var yaInstalada = BuildAsset("0.4.0", "severity: critical\n## Parche urgente");
+        var destino = BuildAsset("0.5.0", "severity: normal\n## Mejoras");
+        var gateway = GatewayConFeed("0.4.0", destino, new[] { yaInstalada, destino });
+
+        var resultado = await new VelopackUpdateService(gateway.Object).BuscarAsync();
+
+        Assert.Equal(UpdateSeverity.Normal, resultado.Severity);
+    }
+
+    [Fact]
+    public async Task BuscarAsync_SinVersionInstalada_UsaSoloLaSeveridadDelDestino()
+    {
+        var destino = BuildAsset("0.5.0", "severity: important\n## Cambios");
+        var gateway = GatewayConFeed(null, destino, null);
+
+        var resultado = await new VelopackUpdateService(gateway.Object).BuscarAsync();
+
+        Assert.Equal(UpdateSeverity.Important, resultado.Severity);
+    }
+
     // ── DescargarAsync ───────────────────────────────────────────────────────
 
     [Fact]
