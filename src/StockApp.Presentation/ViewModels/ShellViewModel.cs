@@ -1,6 +1,8 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using StockApp.Application.Actualizaciones;
 using StockApp.Application.Auth;
 using StockApp.Application.Licenciamiento;
 using StockApp.Presentation.Actualizaciones;
@@ -14,7 +16,7 @@ namespace StockApp.Presentation.ViewModels;
 /// Shell de navegación. Decide qué pantalla mostrar en función del estado de la app:
 /// licencia (Inc 7 Fase B) → login → contenido principal (ShellMainViewModel con menú lateral).
 /// </summary>
-public partial class ShellViewModel : ViewModelBase
+public partial class ShellViewModel : ViewModelBase, IDisposable
 {
     private readonly IAuthService            _authService;
     private readonly ILicenciaService        _licenciaService;
@@ -23,6 +25,8 @@ public partial class ShellViewModel : ViewModelBase
     private readonly CoordinadorActualizacion _coordinadorActualizacion;
     private readonly IUiDispatcher           _uiDispatcher;
     private readonly IInfoApp                _infoApp;
+    private readonly IEsperaChequeo          _esperaChequeo;
+    private readonly CancellationTokenSource _cts = new();
 
     /// <summary>
     /// Factory de MantenimientoViewModel (FIX 1, re-review final E1): resuelve una instancia
@@ -52,7 +56,8 @@ public partial class ShellViewModel : ViewModelBase
         CoordinadorActualizacion coordinadorActualizacion,
         IUiDispatcher            uiDispatcher,
         IInfoApp                 infoApp,
-        Func<MantenimientoViewModel>? mantenimientoFactory = null)
+        Func<MantenimientoViewModel>? mantenimientoFactory = null,
+        IEsperaChequeo?          esperaChequeo = null)
     {
         _authService              = authService;
         _licenciaService          = licenciaService;
@@ -62,6 +67,7 @@ public partial class ShellViewModel : ViewModelBase
         _uiDispatcher             = uiDispatcher;
         _infoApp                  = infoApp;
         _mantenimientoFactory     = mantenimientoFactory;
+        _esperaChequeo            = esperaChequeo ?? new EsperaChequeoReal();
     }
 
     /// <summary>
@@ -128,7 +134,76 @@ public partial class ShellViewModel : ViewModelBase
         SuscribirEventosOverlay(overlay);
 
         _uiDispatcher.Post(() => OverlayActualizacion = overlay);
+
+        // El chequeo horario arranca siempre, también si el de arranque falló o no halló nada.
+        _tareaChequeoHorario = Task.Run(() => BucleChequeoHorarioAsync(_cts.Token));
     }
+
+    /// <summary>
+    /// Tarea del bucle horario. Internal para que los tests verifiquen que termina al
+    /// disponer el ViewModel.
+    /// </summary>
+    internal Task _tareaChequeoHorario = Task.CompletedTask;
+
+    /// <summary>
+    /// Busca actualizaciones cada <see cref="CoordinadorActualizacion.IntervaloChequeoHorario"/>
+    /// mientras la app está abierta. Falla en silencio: un tick con error nunca mata los
+    /// siguientes ni interrumpe la sesión.
+    /// </summary>
+    private async Task BucleChequeoHorarioAsync(CancellationToken ct)
+    {
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                await _esperaChequeo.EsperarAsync(CoordinadorActualizacion.IntervaloChequeoHorario, ct);
+
+                var accion = await _coordinadorActualizacion.EvaluarEnSesionAsync();
+                if (accion is null)
+                    continue;
+
+                // El VM se crea y se suscribe en el UI thread, y solo si el overlay realmente
+                // se reemplaza: no queda un VM suscripto sin usar.
+                _uiDispatcher.Post(() =>
+                {
+                    if (!DebeReemplazarOverlay(OverlayActualizacion, accion.Modo))
+                        return;
+
+                    var overlay = CoordinadorActualizacion.ResolverOverlayViewModel(accion);
+                    if (overlay is null)
+                        return;
+
+                    SuscribirEventosOverlay(overlay);
+                    OverlayActualizacion = overlay;
+                });
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception)
+            {
+                // Silencio: sin modo degradado a mitad de sesión; el próximo tick reintenta.
+            }
+        }
+    }
+
+    /// <summary>
+    /// Decide si un overlay hallado por el chequeo horario puede reemplazar al actual.
+    /// Nunca se pisa un bloqueo (o degradado) ni se interrumpe un modal abierto; el aviso
+    /// crítico sí reemplaza a un banner o a nada, pero no a otro aviso crítico.
+    /// </summary>
+    internal static bool DebeReemplazarOverlay(ViewModelBase? actual, ModoUx nuevo)
+    {
+        if (actual is ActualizacionBloqueoViewModel) return false;
+        if (nuevo == ModoUx.AvisoCriticoEnSesion) return true;
+        if (actual is ActualizacionAvisoCriticoViewModel) return false;
+        if (actual is ActualizacionModalViewModel) return false;
+        return true;
+    }
+
+    /// <summary>Cancela el bucle del chequeo horario (el contenedor lo dispone al salir).</summary>
+    public void Dispose() => _cts.Cancel();
 
     /// <summary>
     /// Conecta los eventos de "aplicar actualización" y "posponer" del overlay resuelto al
@@ -141,7 +216,8 @@ public partial class ShellViewModel : ViewModelBase
         switch (overlay)
         {
             case ActualizacionBannerViewModel banner:
-                banner.ActualizarAlReiniciarSolicitado += () => DispararAplicarActualizacion(banner);
+                banner.ActualizarAlReiniciarSolicitado += () =>
+                    DispararAplicarActualizacion(v => banner.OperacionEnCurso = v);
                 banner.PosponerSolicitado += CerrarOverlayActualizacion;
                 break;
 
@@ -152,6 +228,11 @@ public partial class ShellViewModel : ViewModelBase
 
             case ActualizacionBloqueoViewModel bloqueo:
                 bloqueo.AplicarYReiniciarSolicitado += () => DispararAplicarActualizacion(null);
+                break;
+
+            case ActualizacionAvisoCriticoViewModel aviso:
+                aviso.ActualizarAhoraSolicitado += () =>
+                    DispararAplicarActualizacion(v => aviso.OperacionEnCurso = v);
                 break;
         }
     }
@@ -169,15 +250,14 @@ public partial class ShellViewModel : ViewModelBase
 
     /// <summary>
     /// Dispara el flujo real de aplicar la actualización (descarga + reinicio) en background,
-    /// sin bloquear el UI thread. Si <paramref name="banner"/> no es null (overlay banner),
-    /// marca <see cref="ActualizacionBannerViewModel.OperacionEnCurso"/> para deshabilitar el
-    /// botón mientras dura la operación, y lo despeja si el flujo falla (si tiene éxito, la app
-    /// se reinicia y el flag deja de importar).
+    /// sin bloquear el UI thread. Si <paramref name="marcarEnCurso"/> no es null (banner o aviso
+    /// crítico), lo invoca con true para deshabilitar el botón mientras dura la operación, y con
+    /// false si el flujo falla (si tiene éxito, la app se reinicia y el flag deja de importar).
     /// </summary>
-    private void DispararAplicarActualizacion(ActualizacionBannerViewModel? banner)
+    private void DispararAplicarActualizacion(Action<bool>? marcarEnCurso)
     {
-        if (banner is not null)
-            _uiDispatcher.Post(() => banner.OperacionEnCurso = true);
+        if (marcarEnCurso is not null)
+            _uiDispatcher.Post(() => marcarEnCurso(true));
 
         _tareaAplicarActualizacion = Task.Run(async () =>
         {
@@ -193,8 +273,8 @@ public partial class ShellViewModel : ViewModelBase
                 // defensivo por si algo inesperado escapa del flujo.
             }
 
-            if (banner is not null && !exito)
-                _uiDispatcher.Post(() => banner.OperacionEnCurso = false);
+            if (marcarEnCurso is not null && !exito)
+                _uiDispatcher.Post(() => marcarEnCurso(false));
         });
     }
 

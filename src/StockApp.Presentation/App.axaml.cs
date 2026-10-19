@@ -439,6 +439,7 @@ public partial class App : AvaloniaApp
 
         // CoordinadorActualizacion: singleton — orquesta chequeo→política en background al arranque.
         services.AddSingleton<CoordinadorActualizacion>();
+        services.AddSingleton<IEsperaChequeo, EsperaChequeoReal>();
 
         return services.BuildServiceProvider();
     }
