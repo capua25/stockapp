@@ -57,7 +57,7 @@ Si `vpk` no aparece en el PATH después de `dotnet tool install -g vpk`, agregar
 | V11 | Fallback de fuente | ➖ Sin objeto (ya no existe fallback: el feed propio es la única fuente) |
 | V12 | Feed propio y chequeo horario end-to-end en Windows real | 🔲 PENDIENTE (requiere Windows real) |
 
-**Resumen: 6 validables ahora, 1 parcial, 4 pendientes por entorno (V4, V6, V12 y los que requieren Windows real), 1 sin objeto (V11).**
+**Resumen: 6 validables ahora, 1 parcial, 3 pendientes por entorno (V4, V6, V12), 1 sin objeto (V11).**
 
 ---
 
