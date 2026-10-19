@@ -53,4 +53,13 @@ public class OverlayViewModelFactoryTests
         var resultado = CoordinadorActualizacion.ResolverOverlayViewModel(accion);
         Assert.IsType<ActualizacionBloqueoViewModel>(resultado);
     }
+
+    [Fact]
+    public void AvisoCriticoEnSesion_DevuelveAvisoCriticoSinPosponer()
+    {
+        var accion = Accion(ModoUx.AvisoCriticoEnSesion);
+        var resultado = CoordinadorActualizacion.ResolverOverlayViewModel(accion);
+        Assert.IsType<ActualizacionAvisoCriticoViewModel>(resultado);
+        Assert.Null(typeof(ActualizacionAvisoCriticoViewModel).GetProperty("PosponerCommand"));
+    }
 }

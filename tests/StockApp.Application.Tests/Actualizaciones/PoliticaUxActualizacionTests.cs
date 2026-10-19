@@ -88,4 +88,29 @@ public class PoliticaUxActualizacionTests
         Assert.True(important.ReintentaEnArranque);
         Assert.True(critical.ReintentaEnArranque);
     }
+
+    [Theory]
+    [InlineData(UpdateSeverity.Normal, ModoUx.BannerDiscreto, true)]
+    [InlineData(UpdateSeverity.Important, ModoUx.BannerDiscreto, true)]
+    [InlineData(UpdateSeverity.Critical, ModoUx.AvisoCriticoEnSesion, false)]
+    public void DecidirEnSesion_MapeaSeveridad(UpdateSeverity severidad, ModoUx modoEsperado, bool posponible)
+    {
+        var accion = _sut.DecidirEnSesion(ResultadoCon(true, severidad, "Notas"));
+
+        Assert.Equal(modoEsperado, accion.Modo);
+        Assert.Equal(posponible, accion.Posponible);
+        Assert.True(accion.ReintentaEnArranque);
+        Assert.Equal("1.2.0", accion.Version);
+        Assert.Equal("Notas", accion.TextoMarkdown);
+    }
+
+    [Fact]
+    public void DecidirEnSesion_SinUpdate_Ninguno()
+    {
+        var accion = _sut.DecidirEnSesion(ResultadoCon(false));
+
+        Assert.Equal(ModoUx.Ninguno, accion.Modo);
+        Assert.False(accion.Posponible);
+        Assert.False(accion.ReintentaEnArranque);
+    }
 }

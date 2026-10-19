@@ -43,6 +43,7 @@ public sealed class CoordinadorActualizacion
             ModoUx.ModalPosponible  => new ActualizacionModalViewModel(accion),
             ModoUx.BloqueoCritico   => new ActualizacionBloqueoViewModel(accion),
             ModoUx.ModoDegradado    => new ActualizacionBloqueoViewModel(accion),
+            ModoUx.AvisoCriticoEnSesion => new ActualizacionAvisoCriticoViewModel(accion),
             _                       => null,
         };
 

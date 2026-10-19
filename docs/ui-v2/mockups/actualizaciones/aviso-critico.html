@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Actualización: aviso crítico en sesión (UI v2)</title>
+<link rel="stylesheet" href="../_base/tokens.css">
+<link rel="stylesheet" href="../_base/base.css">
+<style>
+  /* ActualizacionAvisoCriticoView: franja de 56 arriba (misma banda que el banner), fondo error,
+     borde inferior 1, padding 0 24. Fija: sin "Más tarde", sin cerrar. */
+  .aviso {
+    position: absolute; left: 0; right: 0; top: 0; height: 56px; padding: 0 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--v2-color-alerta-error-fondo); border-bottom: 1px solid var(--v2-color-alerta-error-borde);
+  }
+  .aviso-texto {
+    font-size: var(--v2-fuente-subtitulo-formulario-tamano); line-height: var(--v2-fuente-subtitulo-formulario-alto-linea);
+    font-weight: var(--v2-fuente-subtitulo-formulario-peso); color: var(--v2-color-alerta-error-texto);
+  }
+</style>
+</head>
+<body>
+<!-- Datos: DatosActualizaciones.AvisoCritico() (Parte B). Texto real: ActualizacionAvisoCriticoViewModel.Mensaje. -->
+<div class="v2-ventana">
+  <div class="aviso">
+    <span class="aviso-texto">Hay una actualización crítica. Guardá lo que estés haciendo y tocá Actualizar ahora.</span>
+    <div class="acciones">
+      <span class="v2-boton v2-boton--primario">Actualizar ahora</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

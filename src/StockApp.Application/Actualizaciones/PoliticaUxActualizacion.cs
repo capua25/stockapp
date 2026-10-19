@@ -30,4 +30,24 @@ public class PoliticaUxActualizacion
             _ => new AccionUx(ModoUx.Ninguno, null, false, false, resultado.Version),
         };
     }
+
+    /// <summary>Decide la acción para un update hallado con la app ya abierta (chequeo horario).
+    /// Normal e Important → banner discreto, sin modal; Critical → franja roja fija no cerrable
+    /// (el bloqueo duro llega recién en el próximo arranque, vía <see cref="Decidir"/>).</summary>
+    public AccionUx DecidirEnSesion(UpdateCheckResult resultado)
+    {
+        if (!resultado.HayUpdate)
+            return new AccionUx(ModoUx.Ninguno, null, false, false, resultado.Version);
+
+        return resultado.Severity switch
+        {
+            UpdateSeverity.Critical => new AccionUx(
+                ModoUx.AvisoCriticoEnSesion, resultado.NotasMarkdown,
+                Posponible: false, ReintentaEnArranque: true, Version: resultado.Version),
+
+            _ => new AccionUx(
+                ModoUx.BannerDiscreto, resultado.NotasMarkdown,
+                Posponible: true, ReintentaEnArranque: true, Version: resultado.Version),
+        };
+    }
 }

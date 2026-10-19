@@ -21,7 +21,8 @@ public enum ModoUx
     BannerDiscreto,  // normal
     ModalPosponible, // important
     BloqueoCritico,  // critical, descarga posible
-    ModoDegradado    // critical, descarga falló → app usable con banner rojo no-cerrable
+    ModoDegradado,   // critical, descarga falló → app usable con banner rojo no-cerrable
+    AvisoCriticoEnSesion // critical hallada a mitad de sesión → franja roja fija con "Actualizar ahora"
 }
 
 /// <summary>Acción de UI resultante de la política (severity + estado de descarga).</summary>

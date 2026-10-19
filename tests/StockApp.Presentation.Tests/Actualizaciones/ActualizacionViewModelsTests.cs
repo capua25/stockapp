@@ -116,3 +116,21 @@ public class ActualizacionBloqueoViewModelTests
         Assert.True(vm.EsModoDegradado);
     }
 }
+
+public class ActualizacionAvisoCriticoViewModelTests
+{
+    [Fact]
+    public void AvisoCritico_ActualizarAhoraCommand_DisparaElEvento()
+    {
+        var accion = new AccionUx(ModoUx.AvisoCriticoEnSesion, "notas", Posponible: false, ReintentaEnArranque: true, Version: "0.5.0");
+        var vm = new ActualizacionAvisoCriticoViewModel(accion);
+        var disparos = 0;
+        vm.ActualizarAhoraSolicitado += () => disparos++;
+
+        vm.ActualizarAhoraCommand.Execute(null);
+
+        Assert.Equal(1, disparos);
+        Assert.Equal("0.5.0", vm.Version);
+        Assert.False(vm.OperacionEnCurso);
+    }
+}
