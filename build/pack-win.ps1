@@ -163,5 +163,6 @@ Write-Host "  GestionMunicipal-$Version-full.nupkg -> paquete completo"
 Write-Host "  GestionMunicipal-$Version-delta.nupkg -> paquete delta (si habia release previa)"
 Write-Host "  releases.win.json       -> feed de updates para Velopack"
 Write-Host ""
-Write-Host "Siguiente paso: subir el contenido de $OutputDir a un GitHub Release." -ForegroundColor Yellow
+Write-Host "Siguiente paso: publicar en el VPS con build/publicar-release.sh $Version" -ForegroundColor Yellow
+Write-Host "  (si empaquetaste en otro checkout: --origen <carpeta con $OutputDir>)."
 Write-Host "  Ver build\README-empaquetado.md para el flujo completo."

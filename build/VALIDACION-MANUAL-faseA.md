@@ -48,7 +48,7 @@ Si `vpk` no aparece en el PATH después de `dotnet tool install -g vpk`, agregar
 | V2 | Empaquetado Linux | 🟡 Parcial (solo smoke-test en WSL, no oficial) |
 | V3 | Instalación limpia Windows | ✅ Validable |
 | V4 | Instalación limpia Linux | 🔲 Pendiente (sin Linux limpio) |
-| V5 | Update end-to-end Windows | ✅ Validable (requiere publicar releases reales en GitHub) |
+| V5 | Update end-to-end Windows | ✅ Validable (requiere publicar releases reales en el feed del VPS) |
 | V6 | Update end-to-end Linux | 🔲 Pendiente (sin Linux limpio) |
 | V7 | Severity UX por modo | ✅ Validable |
 | V8 | Modo degradado (critical sin red) | ✅ Validable |
@@ -135,15 +135,15 @@ Si `vpk` no aparece en el PATH después de `dotnet tool install -g vpk`, agregar
 ### V5. Update end-to-end Windows
 
 - **Aplica a**: Windows
-- **Estado en esta ronda**: ✅ Validable ahora — requiere publicar releases reales en GitHub (repo `capua25/stockapp`).
-- **Precondición**: V1 y V3 hechos (v0.1.0 instalada en la máquina destino). Fuente de updates configurada: GitHub Releases (feed propio deshabilitado en Fase A).
+- **Estado en esta ronda**: ✅ Validable ahora — requiere publicar releases reales en el feed del VPS (`build/publicar-release.sh`).
+- **Precondición**: V1 y V3 hechos (v0.1.0 instalada en la máquina destino). Fuente de updates configurada: feed propio (`<Api:BaseUrl>/updates`).
 - **Pasos**:
-  1. Publicar la v0.1.0 en un GitHub Release (ver sección "Flujo del ciclo de update" más abajo).
+  1. Publicar la v0.1.0 con `build/publicar-release.sh` (ver sección "Flujo del ciclo de update" más abajo).
   2. Confirmar que v0.1.0 quedó instalada y funcionando en la máquina destino.
   3. En la máquina de empaquetado: bump `<Version>` en el csproj a `0.2.0`.
   4. Editar `build/RELEASE_NOTES.md` con la nueva versión y `severity` elegida.
   5. Re-correr `.\build\pack-win.ps1` (con `releases/win/` de la v0.1.0 todavía presente, para que genere el `-delta.nupkg`).
-  6. Publicar la v0.2.0 en un nuevo GitHub Release.
+  6. Publicar la v0.2.0 con `build/publicar-release.sh`.
   7. Reabrir la app instalada (o esperar el chequeo automático en background).
 - **Resultado esperado**:
   - Se genera `StockApp-0.2.0-delta.nupkg` en `releases/win/` (prueba de que el delta funciona).
@@ -238,8 +238,8 @@ Si `vpk` no aparece en el PATH después de `dotnet tool install -g vpk`, agregar
 
 - **Aplica a**: N/A en Fase A
 - **Estado en esta ronda**: 🔲 Diferido a Fase B
-- **Motivo**: `FeedPropioUrl = null` en `App.axaml.cs` — el feed propio todavía no existe. El orden configurado es `GitHubPrimero`, pero solo hay una fuente real habilitada (GitHub Releases), así que no hay fallback que ejercitar todavía.
-- **Acción**: no hacer nada en esta ronda. Retomar cuando Fase B habilite el feed propio.
+- **Motivo**: ya no existe fallback de fuente: la app usa solo el feed propio (`<Api:BaseUrl>/updates`, servido por StockApp.Api); GitHub Releases dejó de ser fuente. No hay nada que ejercitar.
+- **Acción**: ninguna.
 - **Resultado**: N/A
 
 ---
@@ -277,10 +277,11 @@ Usar este flujo para V5, V6 y V7. Comandos concretos:
    ./build/pack-linux.sh
    ```
 
-4. **Publicar en GitHub Releases** (repo `capua25/stockapp`):
-   - Ir a "Releases" → "Draft a new release".
-   - Tag con la versión (ej: `v0.2.0`).
-   - Subir **todo el contenido** de `releases/win/` (o `releases/linux/`, según el OS empaquetado), incluido `releases.<channel>.json` — es el archivo que la app descarga para detectar updates.
+4. **Publicar en el VPS** (feed propio, `/updates`):
+   ```bash
+   build/publicar-release.sh 0.2.0 [--origen <carpeta con releases/win>]
+   ```
+   Sube los paquetes y, al final y con rename atómico, `releases.win.json` (es el archivo que la app descarga para detectar updates). Ver `build/README-empaquetado.md`, sección "Publicar en el VPS".
 
 5. **Importante**: conservar el contenido de `releases/` entre versiones (no borrar la carpeta entre corridas). Es lo que le permite a `vpk` generar el `-delta.nupkg` en vez de forzar siempre descarga full.
 

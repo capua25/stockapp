@@ -1,6 +1,6 @@
 # Flujo de empaquetado y publicacion — Gestión Municipal
 
-> Este documento cubre el flujo **manual** de empaquetado por OS, publicacion en GitHub Releases,
+> Este documento cubre el flujo **manual** de empaquetado por OS, publicacion en el feed propio del VPS,
 > y la convencion de versionado y severidades. No hay CI/CD en esta fase (Incremento 7 Fase A).
 
 ---
@@ -118,7 +118,7 @@ Pasos para una nueva release:
 1. Editar `<Version>` con la nueva version SemVer2 (ej: `0.2.0`, `1.0.0`, `1.1.0-beta.1`).
 2. Editar `build/RELEASE_NOTES.md` (ver seccion siguiente).
 3. Ejecutar el script de empaquetado del OS.
-4. Publicar en GitHub Releases.
+4. Publicar en el VPS con `build/publicar-release.sh <version>` (ver "Publicar en el VPS").
 
 **No editar la version en ningun otro archivo.** Los scripts la leen del csproj automaticamente.
 
@@ -167,7 +167,7 @@ Reglas:
 | `GestionMunicipal-X.Y.Z-delta.nupkg` | Paquete diferencial. Solo se genera cuando ya hay una release previa en `releases/win/`; no aparece en una corrida limpia. |
 | `releases.win.json` | Feed de updates que la app consulta al arrancar. |
 | `assets.win.json` | Metadata de los assets del feed (hashes, tamaños). |
-| `RELEASES` | Indice de releases en formato Squirrel/Velopack, usado por el cliente de updates. |
+| `RELEASES` | Indice de releases en formato Squirrel/Velopack. **El cliente NO lo usa**: Velopack 1.2.0 pide solo `releases.win.json` y los `.nupkg`. |
 
 ### Linux (`releases/linux/`)
 
@@ -183,20 +183,50 @@ Conservar el contenido de `releases/` entre versiones para aprovechar los deltas
 
 ---
 
-## Publicar en GitHub Releases
+## Publicar en el VPS
 
-La fuente de updates configurada en la app es GitHub Releases (fuente primaria real en Fase A).
+La app consulta el feed propio que sirve `StockApp.Api` en `/updates` (carpeta del servidor
+`/var/lib/stockapp/updates`, dueño `stockapp:stockapp`, modo 750). Ya no se usa GitHub Releases.
 
-Pasos:
+```bash
+build/publicar-release.sh 0.2.0                      # usa <repo>/releases/win
+build/publicar-release.sh 0.2.0 --origen /ruta/win   # pack-win.ps1 corrio en otro checkout (p. ej. Windows)
+```
 
-1. Ir al repositorio en GitHub → "Releases" → "Draft a new release".
-2. Crear un tag con la version (ej: `v0.2.0`).
-3. Subir **todo el contenido** de `releases/win/` (para la release de Windows).
-4. Repetir subiendo el contenido de `releases/linux/` en la misma release (o en una separada por canal).
-5. El `releases.<channel>.json` debe estar incluido: es el archivo que la app descarga para detectar updates.
+Configuracion: `deploy/.env` local o entorno. `VPS_HOST`, `VPS_USER` y `VPS_SSH_PORT` son
+**obligatorios y no tienen default** (un default subiria el feed al servidor equivocado en
+silencio). Opcionales: `VPS_DIR` (staging del usuario SSH, default `~/stockapp-deploy`),
+`API_SCHEME`/`API_HOSTNAME`/`API_PORT` (como `deploy/deploy-vps.sh`). Hace falta `jq` local y
+`sudo` sin contrasena para el usuario SSH. El script publica solo el canal Windows
+(`releases.win.json`).
 
-Cuando exista el feed propio, los mismos assets se publican tambien ahi. El orden de fuentes
-(feed propio primero, GitHub como fallback) se configura en `UpdaterOptions` sin tocar codigo.
+Orden que sigue el script (el feed va **ultimo**, asi nunca apunta a paquetes que todavia no estan):
+
+1. Valida local: `<version>` es el `Full` de mayor version del `releases.win.json`; cada `.nupkg`
+   existe en el origen con el `Size` del feed y un nombre seguro.
+2. Releva el servidor (nombres y tamanos). Si no puede relevar, aborta sin subir nada.
+3. Sube por `scp` a un staging (`<VPS_DIR>/updates-staging`) solo los paquetes que el servidor no
+   tiene con ese tamano, mas el JSON. El staging se borra siempre al terminar.
+4. Instala los paquetes con `sudo install` en la carpeta del feed.
+5. Re-releva y verifica que **todos** los paquetes del feed nuevo estan con su tamano. Si no, aborta
+   y el feed vigente queda intacto.
+6. Publica `releases.win.json` con rename atomico (`install` a `.tmp` + `mv -f`).
+7. Verifica por HTTP (`curl` en el VPS, y desde la maquina del operador si `API_SCHEME=https`) que el
+   feed servido contiene la version y que el full responde 200 con el `Content-Length` correcto.
+   La API no se reinicia.
+
+Reglas:
+
+- **Conservar `releases/win` entre versiones.** Sin esa carpeta la proxima version sale solo con
+  `full` (~53 MB por cliente en vez de un delta) y el script exige que todos los paquetes del feed
+  existan en el origen.
+- **Retirar una version mala = publicar la ultima buena con un numero MAYOR.** Velopack no hace
+  downgrade: re-empaquetar el codigo bueno con una version nueva (ej. la mala es 0.3.0, la buena es
+  0.2.0 -> publicar 0.3.1) y correr el script.
+- **El feed es publico** (`/updates` no pide autenticacion): no subir nada que no pueda leer cualquiera.
+- Los `.nupkg` ya publicados con el mismo tamano no se vuelven a subir: republicar la misma version
+  es seguro.
+- No usar prerelease (`-beta`) como version a publicar: la comparacion de "mayor version" es `sort -V`.
 
 ---
 
@@ -271,7 +301,7 @@ Estas verificaciones NO son automatizables con xUnit. Deben hacerse en un entorn
 
 ### Ciclo de actualizacion end-to-end
 
-- [ ] Publicar v1 (ej: 0.1.0) en GitHub Release → instalar en maquina limpia.
+- [ ] Publicar v1 (ej: 0.1.0) con `build/publicar-release.sh` → instalar en maquina limpia.
 - [ ] Publicar v2 (ej: 0.2.0) con `severity: normal` → abrir la app →
       el banner discreto aparece en la barra de la app.
 - [ ] Repetir con `severity: important` → el modal posponible aparece al arrancar.
@@ -293,7 +323,7 @@ Estas verificaciones NO son automatizables con xUnit. Deben hacerse en un entorn
 - [ ] `dotnet run --project src/StockApp.Presentation` → `NotInstalledException` se traga
       internamente → la app arranca normalmente sin mensajes de error relacionados a updates.
 
-### Fallback de fuente (cuando exista el feed propio)
+### Servidor sin feed
 
-- [ ] Con `FeedPropioUrl` configurado y el servidor caido → el actualizador cae a GitHub
-      sin errores visibles para el usuario (aplica cuando se configure el feed propio).
+- [ ] Con la API caida o `/updates` vacio → el actualizador no muestra errores al usuario
+      (no hay fuente de respaldo: el feed propio es la unica fuente).

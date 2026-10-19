@@ -53,7 +53,7 @@ FLUJO DE USO:
   3. Ejecutar el script de empaquetado del OS:
      Windows: .\build\pack-win.ps1
      Linux:   ./build/pack-linux.sh
-  4. Subir los artefactos de releases/win o releases/linux a un GitHub Release.
+  4. Publicar con build/publicar-release.sh <version> (sube releases/win al feed del VPS).
 
 Ver build/README-empaquetado.md para el flujo completo.
 -->
