@@ -7,8 +7,8 @@ namespace StockApp.Api.Licenciamiento;
 /// identificación del servicio), /licencia/*, /auth/reset-admin/* (los flujos pre-login de
 /// activación y recuperación), /auth/login, /backups (fix del review final de Entrega 1),
 /// /logs (desde Entrega 2 Task 7) y /configuracion/alertas (fix del review final del canal de
-/// alerta). El estado se lee del singleton EstadoLicencia — costo cero por request cuando la
-/// licencia está activa.
+/// alerta) y /updates (feed de actualizaciones). El estado se lee del singleton EstadoLicencia —
+/// costo cero por request cuando la licencia está activa.
 ///
 /// POR QUÉ la raíz: es el banner anónimo que usa el Configurador (ProbadorConexion) para
 /// verificar conectividad ANTES de que exista una licencia activada -- en una instalación
@@ -28,6 +28,11 @@ namespace StockApp.Api.Licenciamiento;
 /// exención el GET devolvía 423, el cliente lo mostraba como "sin URL / deshabilitado" y un
 /// Guardar desde ese estado APAGABA el canal. Acotado a /configuracion/alertas a propósito:
 /// NO se exime /configuracion entero.
+///
+/// POR QUÉ /updates: con la licencia bloqueada, el arreglo de un problema de licencia tiene que
+/// poder llegar por actualización -- si el feed también devolviera 423, un cliente con la
+/// licencia vencida o rota no podría recibir la versión que lo corrige. `StartsWithSegments`
+/// no matchea "/updatesX": la exención cubre solo el feed.
 ///
 /// Acotado a propósito: este middleware corre ANTES de UseAuthentication/UseAuthorization
 /// (ver Program.cs), así que exime por RUTA, no por identidad -- un token válido obtenido acá
@@ -78,7 +83,8 @@ public sealed class BloqueoLicenciaMiddleware
         || path.StartsWithSegments("/auth/login")
         || path.StartsWithSegments("/backups")
         || path.StartsWithSegments("/logs")
-        || path.StartsWithSegments("/configuracion/alertas");
+        || path.StartsWithSegments("/configuracion/alertas")
+        || path.StartsWithSegments("/updates");
 
     // La raíz es el banner anónimo de identificación del servicio: permite al Configurador
     // verificar conectividad antes de que exista una licencia. Igualdad exacta a propósito:

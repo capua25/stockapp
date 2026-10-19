@@ -12,6 +12,7 @@ using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.Events;
 using Serilog.Formatting.Display;
+using StockApp.Api.Actualizaciones;
 using StockApp.Api.Auth;
 using StockApp.Api.Backups;
 using StockApp.Api.Endpoints;
@@ -645,6 +646,12 @@ if (licenciamientoHabilitado)
 {
     app.UseMiddleware<BloqueoLicenciaMiddleware>();
 }
+
+// Feed de actualizaciones (/updates). Va DESPUÉS del bloqueo por licencia: la exención no
+// depende del orden sino de la lista explícita y testeable de BloqueoLicenciaMiddleware.
+// Va ANTES de la autenticación: el feed es anónimo (SimpleWebSource de Velopack usa su propio
+// HttpClient, sin AuthTokenHandler, así que no manda token).
+FeedActualizaciones.Montar(app);
 
 app.UseAuthentication();
 app.UseAuthorization();

@@ -40,11 +40,21 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     private readonly string _directorioLogsTemporal =
         Path.Combine(Path.GetTempPath(), "StockAppApiTestsLogs_" + Guid.NewGuid());
 
+    // Carpeta del feed de actualizaciones (/updates). FeedActualizaciones.Montar la crea al
+    // arrancar el host; los tests de FeedActualizacionesTests escriben sus archivos acá.
+    private readonly string _directorioFeedTemporal =
+        Path.Combine(Path.GetTempPath(), "StockAppApiTestsFeed_" + Guid.NewGuid());
+
+    /// <summary>Carpeta que la API sirve como feed en /updates durante los tests.</summary>
+    public string DirectorioFeed => _directorioFeedTemporal;
+
     // Ver LockInicializacionContenedores: se retiene desde que arranca el contenedor
     // hasta que se dispone, para que este proceso (Api.Tests) y StockApp.Infrastructure.Tests
     // -- que corre como proceso `dotnet test` separado cuando se invoca `dotnet test
     // StockApp.sln` -- nunca tengan contenedores/Ryuk vivos a la vez.
     private IDisposable? _lockContenedores;
+
+    public ApiFactory() => Directory.CreateDirectory(_directorioFeedTemporal);
 
     public async Task InitializeAsync()
     {
@@ -86,6 +96,16 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         {
             // Ignorado a propósito: ver comentario arriba.
         }
+
+        try
+        {
+            if (Directory.Exists(_directorioFeedTemporal))
+                Directory.Delete(_directorioFeedTemporal, recursive: true);
+        }
+        catch (Exception)
+        {
+            // Ignorado a propósito: mismo criterio que la carpeta de logs.
+        }
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -100,6 +120,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
                 ["Bootstrap:Password"] = AdminPasswordDePrueba,
                 ["Licencia:ClavePublicaBase64"] = ClavesDePrueba.ClavePublicaBase64,
                 ["Logs:Directorio"] = _directorioLogsTemporal,
+                ["Actualizaciones:Directorio"] = _directorioFeedTemporal,
 
                 // Límite alto por defecto: la ApiFactory es compartida por toda la
                 // collection "Api" (ver ApiCollection abajo), así que el contador del
