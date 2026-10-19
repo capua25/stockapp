@@ -156,6 +156,10 @@ public partial class ShellViewModel : ViewModelBase, IDisposable
         {
             try
             {
+                // La espera va DENTRO del try a propósito: si lanzara algo que no sea cancelación
+                // el catch genérico lo traga y el bucle gira sin esperar (lazo caliente). Hoy no
+                // ocurre (Task.Delay solo lanza por cancelación), pero una espera nueva debe
+                // respetar esa regla.
                 await _esperaChequeo.EsperarAsync(CoordinadorActualizacion.IntervaloChequeoHorario, ct);
 
                 var accion = await _coordinadorActualizacion.EvaluarEnSesionAsync();
@@ -190,8 +194,11 @@ public partial class ShellViewModel : ViewModelBase, IDisposable
 
     /// <summary>
     /// Decide si un overlay hallado por el chequeo horario puede reemplazar al actual.
-    /// Nunca se pisa un bloqueo (o degradado) ni se interrumpe un modal abierto; el aviso
-    /// crítico sí reemplaza a un banner o a nada, pero no a otro aviso crítico.
+    /// Nunca se pisa un bloqueo (o degradado). Un aviso crítico reemplaza a cualquier otro
+    /// overlay que no sea un bloqueo: nada, un banner, un modal abierto y también otro aviso
+    /// crítico (el nuevo es de una versión más nueva, porque cada versión se notifica una sola
+    /// vez). Un banner nuevo reemplaza a nada o a otro banner, pero no interrumpe un modal ni
+    /// pisa un aviso crítico.
     /// </summary>
     internal static bool DebeReemplazarOverlay(ViewModelBase? actual, ModoUx nuevo)
     {
@@ -208,8 +215,9 @@ public partial class ShellViewModel : ViewModelBase, IDisposable
     /// <summary>
     /// Conecta los eventos de "aplicar actualización" y "posponer" del overlay resuelto al
     /// flujo real: aplicar dispara <see cref="CoordinadorActualizacion.AplicarActualizacionAsync"/>
-    /// (descarga + reinicio); posponer cierra el overlay. Cada VM de overlay expone eventos con
-    /// nombres propios (banner/modal/bloqueo), por eso se resuelve por tipo concreto.
+    /// (descarga + reinicio); posponer cierra el overlay (banner y modal; el bloqueo y el aviso
+    /// crítico no se pueden posponer). Cada VM de overlay expone eventos con nombres propios
+    /// (banner/modal/bloqueo/aviso crítico), por eso se resuelve por tipo concreto.
     /// </summary>
     private void SuscribirEventosOverlay(ViewModelBase? overlay)
     {
@@ -242,8 +250,8 @@ public partial class ShellViewModel : ViewModelBase, IDisposable
         => _uiDispatcher.Post(() => OverlayActualizacion = null);
 
     /// <summary>
-    /// Tarea del background disparada por el último "aplicar actualización" (banner/modal/
-    /// bloqueo). Expuesta como internal para que los tests puedan awaitarla de forma
+    /// Tarea del background disparada por el último "aplicar actualización" (banner, modal,
+    /// bloqueo o aviso crítico). Expuesta como internal para que los tests puedan awaitarla de forma
     /// determinista, igual que <see cref="_tareaActualizacion"/>.
     /// </summary>
     internal Task _tareaAplicarActualizacion = Task.CompletedTask;

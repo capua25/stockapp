@@ -211,7 +211,8 @@ public class CoordinadorActualizacionTests
 
         var arranque = coordinador.EvaluarEnArranqueAsync();   // toma el cerrojo y queda en BuscarAsync
 
-        var accion = await coordinador.EvaluarEnSesionAsync();
+        // WaitAsync: si el cerrojo se rompe, el tick se cuelga; que falle por timeout y no congele el CI.
+        var accion = await coordinador.EvaluarEnSesionAsync().WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Null(accion);
         updateMock.Verify(s => s.BuscarAsync(default), Times.Once);
@@ -230,7 +231,7 @@ public class CoordinadorActualizacionTests
 
         var aplicar = coordinador.AplicarActualizacionAsync();   // queda en DescargarAsync
 
-        var accion = await coordinador.EvaluarEnSesionAsync();
+        var accion = await coordinador.EvaluarEnSesionAsync().WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Null(accion);
         updateMock.Verify(s => s.BuscarAsync(default), Times.Never);
@@ -270,6 +271,42 @@ public class CoordinadorActualizacionTests
 
         Assert.NotNull(tras);
         Assert.Equal("0.5.0", tras!.Version);
+    }
+
+    [Fact]
+    public async Task EvaluarEnArranque_BuscarTira_LiberaElCerrojoYLaSesionSigueBuscando()
+    {
+        // Arrancar sin red es el camino real más probable: un cerrojo que quede tomado
+        // silenciaría el chequeo horario durante toda la sesión.
+        var updateMock = new Mock<IUpdateService>();
+        updateMock.SetupSequence(s => s.BuscarAsync(default))
+            .ThrowsAsync(new HttpRequestException("sin red"))
+            .ReturnsAsync(Hay("0.5.0", UpdateSeverity.Important));
+        var coordinador = Crear(updateMock);
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => coordinador.EvaluarEnArranqueAsync());
+
+        var accion = await coordinador.EvaluarEnSesionAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.NotNull(accion);
+        Assert.Equal("0.5.0", accion!.Version);
+        updateMock.Verify(s => s.BuscarAsync(default), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task EvaluarEnSesion_BuscarTira_LiberaElCerrojoYElSiguienteTickBusca()
+    {
+        var updateMock = new Mock<IUpdateService>();
+        updateMock.SetupSequence(s => s.BuscarAsync(default))
+            .ThrowsAsync(new HttpRequestException("sin red"))
+            .ReturnsAsync(Hay("0.5.0", UpdateSeverity.Important));
+        var coordinador = Crear(updateMock);
+
+        Assert.Null(await coordinador.EvaluarEnSesionAsync());
+        var accion = await coordinador.EvaluarEnSesionAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.NotNull(accion);
+        Assert.Equal("0.5.0", accion!.Version);
     }
 
     [Fact]
