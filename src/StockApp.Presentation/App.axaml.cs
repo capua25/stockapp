@@ -420,27 +420,11 @@ public partial class App : AvaloniaApp
 
         // ── Inc 7 Fase A: actualizador in-app (mudado a Presentation en Fase 3b) ──
 
-        // UpdaterOptions: configura fuentes. GitHub es primaria (real); feed propio es
-        // fallback opcional. La URL y el flag de prerelease vienen de appsettings.json
-        // (sección "Updater"); si la key falta o el archivo no existe, se cae al fallback
-        // defensivo de UpdaterOptions.
-        var repoUrl = configuration["Updater:GitHubRepoUrl"];
-        if (string.IsNullOrWhiteSpace(repoUrl))
-        {
-            repoUrl = UpdaterOptions.GitHubRepoUrlDefault;
-        }
-
-        if (!bool.TryParse(configuration["Updater:GitHubPrerelease"], out var prerelease))
-        {
-            prerelease = false;
-        }
-
+        // UpdaterOptions: el feed es <url de la API>/updates/, sin configuración nueva. Un cambio
+        // del Configurador aplica en el próximo arranque, igual que la API.
         services.AddSingleton(new UpdaterOptions
         {
-            GitHubRepoUrl  = repoUrl,
-            GitHubPrerelease = prerelease,
-            FeedPropiUrl   = null,    // null → solo GitHub; setear URL para habilitar feed propio
-            Orden          = OrdenFuentes.GitHubPrimero,
+            FeedUrl = UrlFeedActualizaciones.Desde(ResolverApiBaseUrl(configuration)),
         });
 
         // Gateway: singleton — envuelve UpdateManager de Velopack (proceso-global)

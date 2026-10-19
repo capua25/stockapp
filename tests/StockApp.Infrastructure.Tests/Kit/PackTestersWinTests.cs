@@ -88,4 +88,16 @@ public class PackTestersWinTests
         Assert.Equal("localhost", baseUrl.Host);
         Assert.Equal(Uri.UriSchemeHttp, baseUrl.Scheme);
     }
+
+    [Fact]
+    public void AppsettingsDelRepo_NoTieneSeccionUpdater()
+    {
+        var ruta = RutaAppsettingsRepo();
+        Assert.True(File.Exists(ruta), $"No se encontro el appsettings.json del repo en: {ruta}");
+
+        using var doc = JsonDocument.Parse(File.ReadAllText(ruta));
+        // El feed se deriva de Api:BaseUrl; una seccion Updater reintroduciria una segunda fuente
+        // de verdad (y GitHub) que el cliente ya no lee.
+        Assert.False(doc.RootElement.TryGetProperty("Updater", out _));
+    }
 }

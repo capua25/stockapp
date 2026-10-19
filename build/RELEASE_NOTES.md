@@ -36,7 +36,7 @@ LINEA DE SEVERITY (OBLIGATORIA — DEBE SER LA PRIMERA LINEA DEL ARCHIVO):
                  Si la descarga falla, reintenta en cada arranque.
 
     critical  -> Overlay ROJO BLOQUEANTE. La app no se puede usar hasta actualizar.
-                 Si la descarga NO puede completarse (sin red, GitHub caido, etc.),
+                 Si la descarga NO puede completarse (sin red, servidor caido, etc.),
                  la app entra en MODO DEGRADADO: sigue siendo operable pero con un
                  banner rojo permanente no-cerrable, y reintenta en cada arranque.
 

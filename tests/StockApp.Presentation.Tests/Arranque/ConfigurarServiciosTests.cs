@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using StockApp.Application.Exportacion;
 using StockApp.Documentos;
+using StockApp.Presentation.Actualizaciones;
 using Xunit;
 
 namespace StockApp.Presentation.Tests.Arranque;
@@ -31,5 +32,16 @@ public class ConfigurarServiciosTests
         var servicio = sp.GetRequiredService<IPdfExporter>();
 
         Assert.IsType<PdfExporterMigraDoc>(servicio);
+    }
+
+    [Fact]
+    public void ConfigurarServicios_FeedUrl_DerivaDeLaUrlDeLaApi()
+    {
+        using var sp = StockApp.Presentation.App.ConfigurarServicios();
+
+        Assert.Equal(
+            UrlFeedActualizaciones.Desde(
+                StockApp.Presentation.App.ResolverApiBaseUrl(StockApp.Presentation.App.ConstruirConfiguracion())),
+            sp.GetRequiredService<UpdaterOptions>().FeedUrl);
     }
 }
