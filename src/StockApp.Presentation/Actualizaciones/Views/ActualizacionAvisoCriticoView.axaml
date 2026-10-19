@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.Actualizaciones"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="56"
+             x:Class="StockApp.Presentation.Actualizaciones.Views.ActualizacionAvisoCriticoView"
+             Classes="ui2"
+             x:DataType="vm:ActualizacionAvisoCriticoViewModel">
+
+    <!-- UI v2. Franja superior fija para una actualización crítica hallada a mitad de sesión:
+         misma banda de 56 que el banner, sin "Más tarde" ni cerrar. Espejo:
+         docs/ui-v2/mockups/actualizaciones/aviso-critico.html. -->
+    <Border Background="{DynamicResource V2AlertaErrorFondoBrush}"
+            BorderBrush="{DynamicResource V2AlertaErrorBordeBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="24,0"
+            Height="56"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Top">
+        <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0"
+                       Text="{x:Static vm:ActualizacionAvisoCriticoViewModel.Mensaje}"
+                       VerticalAlignment="Center"
+                       FontSize="{DynamicResource V2FuenteSubtituloFormularioTamano}"
+                       FontWeight="{DynamicResource V2FuenteSubtituloFormularioPeso}"
+                       Foreground="{DynamicResource V2AlertaErrorTextoBrush}" />
+            <Button Grid.Column="1" Classes="primario" Content="Actualizar ahora"
+                    Command="{Binding ActualizarAhoraCommand}"
+                    IsEnabled="{Binding !OperacionEnCurso}"
+                    VerticalAlignment="Center" />
+        </Grid>
+    </Border>
+
+</UserControl>

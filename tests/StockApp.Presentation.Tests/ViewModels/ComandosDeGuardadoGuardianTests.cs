@@ -70,6 +70,8 @@ public class ComandosDeGuardadoGuardianTests
             "sin campos tipeados",
         [("ActualizacionModalViewModel", "ActualizarAhoraCommand")] =
             "sin campos tipeados",
+        [("ActualizacionAvisoCriticoViewModel", "ActualizarAhoraCommand")] =
+            "sin campos tipeados",
     };
 
     /// <summary>Botones primarios que son NAVEGACIÓN ("Nuevo ..." abre el formulario vacío): no

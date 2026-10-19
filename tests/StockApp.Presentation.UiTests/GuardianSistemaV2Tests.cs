@@ -79,6 +79,7 @@ public class GuardianSistemaV2Tests
         typeof(ActualizacionBannerView),
         typeof(ActualizacionModalView),
         typeof(ActualizacionBloqueoView),
+        typeof(ActualizacionAvisoCriticoView),
         typeof(InicioView),
         typeof(ProductoListView),
         typeof(ProductoFormView),

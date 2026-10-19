@@ -39,4 +39,12 @@ public class ActualizacionesComparacionTests
     [AvaloniaFact]
     public void ModoDegradado_IgualAlMockup_1366x768() =>
         ComparacionVisual.CompararConMockup(new ActualizacionBloqueoView(), DatosActualizaciones.ModoDegradado(), "actualizaciones/modo-degradado.html", tamano: TamanoLienzo.Municipio);
+
+    [AvaloniaFact]
+    public void AvisoCritico_IgualAlMockup() =>
+        ComparacionVisual.CompararConMockup(new ActualizacionAvisoCriticoView(), DatosActualizaciones.AvisoCritico(), "actualizaciones/aviso-critico.html");
+
+    [AvaloniaFact]
+    public void AvisoCritico_IgualAlMockup_1366x768() =>
+        ComparacionVisual.CompararConMockup(new ActualizacionAvisoCriticoView(), DatosActualizaciones.AvisoCritico(), "actualizaciones/aviso-critico.html", tamano: TamanoLienzo.Municipio);
 }

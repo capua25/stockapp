@@ -20,4 +20,7 @@ public static class DatosActualizaciones
 
     public static ActualizacionBloqueoViewModel ModoDegradado() =>
         new(new AccionUx(ModoUx.ModoDegradado, TextoCritico, false, true, "0.5.0"));
+
+    public static ActualizacionAvisoCriticoViewModel AvisoCritico() =>
+        new(new AccionUx(ModoUx.AvisoCriticoEnSesion, "Corrige un problema de seguridad.", false, true, "0.5.0"));
 }
