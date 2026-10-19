@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using StockApp.Tests.Compartido;
@@ -68,6 +69,12 @@ public class PublicarReleaseTests
         if [[ -n "${TRUNCAR_AL_INSTALAR:-}" && "$cmd" == *"install -m 640"* && "$cmd" == *"updates/${TRUNCAR_AL_INSTALAR}"* ]]; then
             truncate -s 1 "$SERVIDOR_FALSO/var/lib/stockapp/updates/${TRUNCAR_AL_INSTALAR}"
         fi
+        # Paquete que queda del MISMO tamaño pero con otros bytes.
+        if [[ -n "${CORROMPER_AL_INSTALAR:-}" && "$cmd" == *"install -m 640"* && "$cmd" == *"updates/${CORROMPER_AL_INSTALAR}"* ]]; then
+            f="$SERVIDOR_FALSO/var/lib/stockapp/updates/${CORROMPER_AL_INSTALAR}"
+            tam="$(stat -c %s "$f")"
+            head -c "$tam" /dev/zero | tr '\0' '\1' > "$f"
+        fi
         exit "$rc"
         """;
 
@@ -110,7 +117,9 @@ public class PublicarReleaseTests
             exit 22
         fi
         if [[ "$cabeceras" -eq 1 ]]; then
-            printf 'HTTP/1.1 200 OK\r\nContent-Length: %s\r\n\r\n' "$(stat -c %s "$archivo")"
+            printf 'HTTP/1.1 %s\r\nContent-Length: %s\r\n\r\n' "${CURL_ESTADO:-200 OK}" "${CURL_LARGO:-$(stat -c %s "$archivo")}"
+        elif [[ -n "${CURL_FEED_SIN_VERSION:-}" ]]; then
+            echo '{"Assets":[]}'
         else
             cat "$archivo"
         fi
@@ -141,6 +150,7 @@ public class PublicarReleaseTests
 
         public Entorno(string? fileNameDelta = null, int tamanoFull05 = 200)
         {
+            _tamanoFull05 = tamanoFull05;
             Directory.CreateDirectory(Path.Combine(Repo, "build"));
             Directory.CreateDirectory(Path.Combine(Repo, "deploy"));
             Directory.CreateDirectory(Origen);
@@ -160,12 +170,17 @@ public class PublicarReleaseTests
             File.WriteAllText(Path.Combine(Origen, "releases.win.json"), JsonDelFeed(fileNameDelta ?? Delta05));
         }
 
-        private static string JsonDelFeed(string fileNameDelta) =>
+        // SHA256 en mayúsculas como lo escribe Velopack; el script compara sin distinguir caso.
+        private static string Sha256(int tamano) => Convert.ToHexString(SHA256.HashData(new byte[tamano]));
+
+        private string JsonDelFeed(string fileNameDelta) =>
             "{\"Assets\":[" +
-            $"{{\"PackageId\":\"GestionMunicipal\",\"Version\":\"0.4.0\",\"Type\":\"Full\",\"FileName\":\"{Full04}\",\"SHA1\":\"a\",\"SHA256\":\"b\",\"Size\":100}}," +
-            $"{{\"PackageId\":\"GestionMunicipal\",\"Version\":\"0.5.0\",\"Type\":\"Full\",\"FileName\":\"{Full05}\",\"SHA1\":\"a\",\"SHA256\":\"b\",\"Size\":200}}," +
-            $"{{\"PackageId\":\"GestionMunicipal\",\"Version\":\"0.5.0\",\"Type\":\"Delta\",\"FileName\":\"{fileNameDelta}\",\"SHA1\":\"a\",\"SHA256\":\"b\",\"Size\":50}}" +
+            $"{{\"PackageId\":\"GestionMunicipal\",\"Version\":\"0.4.0\",\"Type\":\"Full\",\"FileName\":\"{Full04}\",\"SHA1\":\"a\",\"SHA256\":\"{Sha256(100)}\",\"Size\":100}}," +
+            $"{{\"PackageId\":\"GestionMunicipal\",\"Version\":\"0.5.0\",\"Type\":\"Full\",\"FileName\":\"{Full05}\",\"SHA1\":\"a\",\"SHA256\":\"{Sha256(_tamanoFull05)}\",\"Size\":200}}," +
+            $"{{\"PackageId\":\"GestionMunicipal\",\"Version\":\"0.5.0\",\"Type\":\"Delta\",\"FileName\":\"{fileNameDelta}\",\"SHA1\":\"a\",\"SHA256\":\"{Sha256(50)}\",\"Size\":50}}" +
             "]}";
+
+        private readonly int _tamanoFull05;
 
         public void PonerEnServidor(string nombre, byte[] contenido)
         {
@@ -397,7 +412,7 @@ public class PublicarReleaseTests
     public void VerificacionRemotaFalla_AbortaSinRename_YElFeedVigenteQuedaIntacto()
     {
         using var e = new Entorno();
-        const string feedViejo = "{\"Assets\":[]} VIEJO";
+        const string feedViejo = "{\"Assets\":[],\"Nota\":\"VIEJO\"}";
         e.PonerEnServidor("releases.win.json", Encoding.UTF8.GetBytes(feedViejo));
 
         var r = e.Correr("0.5.0", new Dictionary<string, string> { ["TRUNCAR_AL_INSTALAR"] = Full05 });
@@ -430,6 +445,181 @@ public class PublicarReleaseTests
 
         Assert.NotEqual(0, r.ExitCode);
         Assert.Contains("verificación remota", r.Stderr);
+    }
+
+    // ---------- Contenido (sha256), no solo tamaño ----------
+
+    [Fact]
+    public void MismoNombreMismoTamanoDistintoContenido_AbortaSinPublicarNiPisar()
+    {
+        using var e = new Entorno();
+        const string feedViejo = "{\"Assets\":[],\"Nota\":\"VIEJO\"}";
+        e.PonerEnServidor("releases.win.json", Encoding.UTF8.GetBytes(feedViejo));
+        var otroContenido = Enumerable.Repeat((byte)1, 200).ToArray(); // mismo tamaño que Full05, otros bytes
+        e.PonerEnServidor(Full05, otroContenido);
+
+        var r = e.Correr("0.5.0");
+
+        Assert.NotEqual(0, r.ExitCode);
+        Assert.Contains("contenido distinto", r.Stderr);
+        Assert.Contains(Full05, r.Stderr);
+        Assert.Empty(r.Scp);
+        Assert.DoesNotContain(r.Ssh, l => l.Contains("mv -f"));
+        Assert.DoesNotContain(r.Ssh, l => l.Contains("install -o") && l.Contains(".nupkg"));
+        Assert.Equal(otroContenido, File.ReadAllBytes(Path.Combine(e.CarpetaFeed, Full05)));
+        Assert.Equal(feedViejo, File.ReadAllText(Path.Combine(e.CarpetaFeed, "releases.win.json")));
+    }
+
+    [Fact]
+    public void MismoNombreDistintoTamano_TambienAbortaEnVezDePisarEnElLugar()
+    {
+        using var e = new Entorno();
+        var otro = new byte[7];
+        e.PonerEnServidor(Delta05, otro);
+
+        var r = e.Correr("0.5.0");
+
+        Assert.NotEqual(0, r.ExitCode);
+        Assert.Contains("contenido distinto", r.Stderr);
+        Assert.Empty(r.Scp);
+        Assert.Equal(otro, File.ReadAllBytes(Path.Combine(e.CarpetaFeed, Delta05)));
+    }
+
+    [Fact]
+    public void VerificacionDePaso5_ExigeElHash_NoSoloElTamano()
+    {
+        using var e = new Entorno();
+
+        // El paquete queda del mismo tamaño pero con otros bytes DESPUÉS de instalarse.
+        var r = e.Correr("0.5.0", new Dictionary<string, string> { ["CORROMPER_AL_INSTALAR"] = Full05 });
+
+        Assert.NotEqual(0, r.ExitCode);
+        Assert.Contains("sha256", r.Stderr);
+        Assert.Contains(Full05, r.Stderr);
+        Assert.DoesNotContain(r.Ssh, l => l.Contains("mv -f"));
+        Assert.False(File.Exists(Path.Combine(e.CarpetaFeed, "releases.win.json")));
+    }
+
+    [Fact]
+    public void FileNameVacio_AbortaSinTocarElServidor()
+    {
+        using var e = new Entorno(fileNameDelta: "");
+
+        var r = e.Correr("0.5.0");
+
+        Assert.NotEqual(0, r.ExitCode);
+        Assert.Contains("FileName vacío", r.Stderr);
+        Assert.Empty(r.Ssh);
+        Assert.Empty(r.Scp);
+    }
+
+    // ---------- Verificación final por HTTP (paso 7) ----------
+
+    [Fact]
+    public void Paso7_ElFeedServidoNoTieneLaVersion_Falla()
+    {
+        using var e = new Entorno();
+
+        var r = e.Correr("0.5.0", new Dictionary<string, string> { ["CURL_FEED_SIN_VERSION"] = "1" });
+
+        Assert.NotEqual(0, r.ExitCode);
+        Assert.Contains("no contiene la versión 0.5.0", r.Stderr);
+    }
+
+    [Fact]
+    public void Paso7_ElFullNoResponde200_Falla()
+    {
+        using var e = new Entorno();
+
+        var r = e.Correr("0.5.0", new Dictionary<string, string> { ["CURL_ESTADO"] = "206 Partial Content" });
+
+        Assert.NotEqual(0, r.ExitCode);
+        Assert.Contains("no respondió 200", r.Stderr);
+    }
+
+    [Fact]
+    public void Paso7_ContentLengthDistinto_Falla()
+    {
+        using var e = new Entorno();
+
+        var r = e.Correr("0.5.0", new Dictionary<string, string> { ["CURL_LARGO"] = "199" });
+
+        Assert.NotEqual(0, r.ExitCode);
+        Assert.Contains("Content-Length", r.Stderr);
+    }
+
+    [Fact]
+    public void ApiSchemeHttp_AvisaQueSeOmiteElCurlDelOperador()
+    {
+        using var e = new Entorno();
+
+        var r = e.Correr("0.5.0");
+
+        Assert.True(r.ExitCode == 0, Diagnostico(r));
+        Assert.Contains("se omite la verificación desde la máquina del operador", r.Stdout);
+    }
+
+    // ---------- No retroceder el feed ----------
+
+    private static void PonerFeedServido(Entorno e, string version) =>
+        e.PonerEnServidor("releases.win.json", Encoding.UTF8.GetBytes(
+            $"{{\"Assets\":[{{\"PackageId\":\"GestionMunicipal\",\"Version\":\"{version}\",\"Type\":\"Full\",\"FileName\":\"GestionMunicipal-{version}-full.nupkg\",\"SHA1\":\"a\",\"SHA256\":\"b\",\"Size\":1}}]}}"));
+
+    [Fact]
+    public void VersionMenorQueLaServida_AbortaSinSubirNada()
+    {
+        using var e = new Entorno();
+        PonerFeedServido(e, "0.6.0");
+        var antes = File.ReadAllText(Path.Combine(e.CarpetaFeed, "releases.win.json"));
+
+        var r = e.Correr("0.5.0");
+
+        Assert.NotEqual(0, r.ExitCode);
+        Assert.Contains("MENOR", r.Stderr);
+        Assert.Contains("0.6.0", r.Stderr);
+        Assert.Empty(r.Scp);
+        Assert.DoesNotContain(r.Ssh, l => l.Contains("mv -f"));
+        Assert.Equal(antes, File.ReadAllText(Path.Combine(e.CarpetaFeed, "releases.win.json")));
+    }
+
+    [Fact]
+    public void VersionMenorQueLaServida_ConForzar_Publica()
+    {
+        using var e = new Entorno();
+        PonerFeedServido(e, "0.6.0");
+
+        var r = e.Correr("0.5.0 --forzar");
+
+        Assert.True(r.ExitCode == 0, Diagnostico(r));
+        Assert.Contains("--forzar", r.Stderr);
+        Assert.Equal(File.ReadAllText(Path.Combine(e.Origen, "releases.win.json")),
+            File.ReadAllText(Path.Combine(e.CarpetaFeed, "releases.win.json")));
+    }
+
+    [Fact]
+    public void FeedServidoIlegible_AbortaSalvoForzar()
+    {
+        using var e = new Entorno();
+        e.PonerEnServidor("releases.win.json", Encoding.UTF8.GetBytes("esto no es json"));
+
+        var sin = e.Correr("0.5.0");
+        Assert.NotEqual(0, sin.ExitCode);
+        Assert.Contains("no es un feed válido", sin.Stderr);
+        Assert.Empty(sin.Scp);
+
+        var con = e.Correr("0.5.0 --forzar");
+        Assert.True(con.ExitCode == 0, Diagnostico(con));
+    }
+
+    [Fact]
+    public void MismaVersionQueLaServida_NoSeConsideraRetroceso()
+    {
+        using var e = new Entorno();
+        PonerFeedServido(e, "0.5.0");
+
+        var r = e.Correr("0.5.0");
+
+        Assert.True(r.ExitCode == 0, Diagnostico(r));
     }
 
     [Fact]

@@ -6,11 +6,13 @@ set -euo pipefail
 # /var/lib/stockapp/updates, dueño stockapp:stockapp, 750). Corre en la MÁQUINA DEL OPERADOR.
 #
 # Uso:
-#   build/publicar-release.sh <version> [--origen <dir>]
+#   build/publicar-release.sh <version> [--origen <dir>] [--forzar]
 #
 #   --origen  carpeta con lo que generó pack-win.ps1 (default: <repo>/releases/win). Sirve
 #             cuando el empaquetado corrió en otro checkout (p. ej. el de Windows) y se copió
 #             la carpeta acá.
+#   --forzar  permite publicar una versión MENOR que la que sirve hoy el servidor. Es una
+#             salida de emergencia, no el camino normal de un rollback (ver más abajo).
 #
 # Configuración (deploy/.env local o entorno). OBLIGATORIAS, sin default a propósito: un
 # host por defecto subiría el feed al servidor equivocado en silencio.
@@ -25,28 +27,35 @@ set -euo pipefail
 # Pasos, en este orden:
 #   1. Validación LOCAL con jq: <version> es el Full de mayor versión del releases.win.json y
 #      cada FileName (nombre seguro, existe en --origen con su Size).
-#   2. Relevamiento del servidor (nombres + tamaños). Salida vacía = primera publicación;
-#      ssh que falla = "no pude relevar" -> aborta sin subir nada.
-#   3. scp al staging de los .nupkg que el servidor no tiene con ese tamaño, y del JSON.
+#   2. Relevamiento del servidor (nombres + tamaños + sha256) y lectura del releases.win.json
+#      vigente. Salida vacía = primera publicación; ssh que falla = "no pude relevar" ->
+#      aborta sin subir nada. Si la versión nueva es MENOR que la que sirve el servidor,
+#      aborta (salvo --forzar).
+#   3. Un nombre que el servidor ya tiene con OTRO contenido (sha256 distinto al del feed
+#      nuevo) aborta: nunca se pisa en el lugar un paquete que el feed vigente describe con
+#      otro hash. Luego scp al staging de los .nupkg que el servidor no tiene, y del JSON.
 #   4. sudo install de los paquetes en la carpeta del feed.
-#   5. Re-relevamiento: CADA FileName del JSON nuevo tiene que estar con su Size. Si no,
-#      aborta SIN tocar el feed vigente.
+#   5. Re-relevamiento: CADA FileName del JSON nuevo tiene que estar con su Size y su SHA256.
+#      Si no, aborta SIN tocar el feed vigente.
 #   6. El feed (releases.win.json) va ÚLTIMO, con rename atómico: nunca hay un feed que
 #      apunte a paquetes que todavía no están.
 #   7. Verificación final por HTTP: el feed publicado dice <version> y el full responde 200
 #      con su Content-Length.
 #
 # Retirar una versión mala: Velopack no hace downgrade. Se republica la última versión BUENA
-# con un número MAYOR (empaquetar de nuevo desde ese código con una versión nueva).
+# con un número MAYOR (empaquetar de nuevo desde ese código con una versión nueva). Por eso
+# publicar una versión menor que la servida aborta: --forzar existe solo como escape de
+# emergencia (p. ej. el feed vigente quedó apuntando a algo irrecuperable), no para el rollback.
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 uso() {
-    echo "Uso: $0 <version> [--origen <dir>]" >&2
+    echo "Uso: $0 <version> [--origen <dir>] [--forzar]" >&2
 }
 
 VERSION=""
 ORIGEN="${REPO_ROOT}/releases/win"
+FORZAR=0
 
 while [[ "$#" -gt 0 ]]; do
     case "$1" in
@@ -58,6 +67,10 @@ while [[ "$#" -gt 0 ]]; do
             fi
             ORIGEN="$2"
             shift 2
+            ;;
+        --forzar)
+            FORZAR=1
+            shift
             ;;
         --*)
             echo "ERROR: opción desconocida '$1'." >&2
@@ -164,6 +177,7 @@ fallar() {
 
 NOMBRES=()
 TAMANOS=()
+HASHES=()
 FULL_NUEVO=""
 FULL_NUEVO_TAMANO=""
 
@@ -181,14 +195,23 @@ paso1_validar_local() {
         fallar "la versión pedida '${VERSION}' no es la mayor del feed (Full de mayor versión: '${mayor:-ninguna}')."
     fi
 
+    # FileName y SHA256 vacíos se rechazan ACÁ: en el TSV de abajo un campo vacío se colapsa
+    # (el tab es IFS-whitespace) y correría los demás en silencio.
+    local invalidos
+    if ! invalidos="$(jq -r '.Assets[] | select(((.FileName // "") == "") or (((.SHA256 // "") | test("^[0-9A-Fa-f]{64}$")) | not)) | "FileName=\(.FileName // "")|SHA256=\(.SHA256 // "")"' "$json")"; then
+        fallar "no se pudo validar FileName/SHA256 de '${json}'."
+    fi
+    if [[ -n "$invalidos" ]]; then
+        fallar "'${json}' tiene paquetes con FileName vacío o SHA256 inválido (${invalidos%%$'\n'*}); no se publica."
+    fi
+
     local pares
-    if ! pares="$(jq -r '.Assets[] | [.FileName, (.Size | tostring), .Type, .Version] | @tsv' "$json")"; then
+    if ! pares="$(jq -r '.Assets[] | [.FileName, (.Size | tostring), .Type, .Version, .SHA256] | @tsv' "$json")"; then
         fallar "no se pudo leer la lista de paquetes de '${json}'."
     fi
 
-    local nombre tamano tipo ver local_tamano
-    while IFS=$'\t' read -r nombre tamano tipo ver; do
-        [[ -n "$nombre" ]] || continue
+    local nombre tamano tipo ver sha local_tamano
+    while IFS=$'\t' read -r nombre tamano tipo ver sha; do
         if [[ ! "$nombre" =~ ^[A-Za-z0-9._-]+\.nupkg$ ]]; then
             fallar "FileName inseguro en el feed: '${nombre}' (va a un comando remoto)."
         fi
@@ -202,6 +225,7 @@ paso1_validar_local() {
         fi
         NOMBRES+=("$nombre")
         TAMANOS+=("$tamano")
+        HASHES+=("${sha,,}")
         if [[ "$tipo" == "Full" && "$ver" == "$VERSION" ]]; then
             FULL_NUEVO="$nombre"
             FULL_NUEVO_TAMANO="$tamano"
@@ -213,10 +237,11 @@ paso1_validar_local() {
 }
 
 # ---------------------------------------------------------------------------------------
-# Paso 2 -- relevamiento remoto (nombres + tamaños)
+# Paso 2 -- relevamiento remoto (nombres + tamaños + sha256) y feed vigente
 # ---------------------------------------------------------------------------------------
 
 RELEVAMIENTO=""
+VERSION_SERVIDA=""
 
 relevar_servidor() {
     local rc=0
@@ -227,7 +252,7 @@ relevar_servidor() {
         fallar "no se pudo relevar el servidor: sudo sin contraseña no está disponible para ${VPS_USER} (ssh exit ${rc}). No se subió nada."
     fi
     rc=0
-    RELEVAMIENTO="$(ssh_vps "if sudo test -d ${DIR_FEED}; then sudo find ${DIR_FEED} -maxdepth 1 -type f -printf '%f %s\n'; fi")" || rc=$?
+    RELEVAMIENTO="$(ssh_vps "if sudo test -d ${DIR_FEED}; then sudo find ${DIR_FEED} -maxdepth 1 -type f -printf '%f %s ' -exec sha256sum {} \\;; fi")" || rc=$?
     if [[ "$rc" -ne 0 ]]; then
         fallar "no se pudo relevar el servidor (ssh exit ${rc}) -- no es lo mismo que carpeta vacía. No se subió nada."
     fi
@@ -237,6 +262,46 @@ tamano_remoto() {
     awk -v n="$1" '$1 == n { print $2; exit }' <<<"$RELEVAMIENTO"
 }
 
+# sha256 en minúsculas (el feed de Velopack lo trae en mayúsculas; se compara en minúsculas).
+hash_remoto() {
+    awk -v n="$1" '$1 == n { print tolower($3); exit }' <<<"$RELEVAMIENTO"
+}
+
+# Lee el releases.win.json que sirve hoy el servidor y deja en VERSION_SERVIDA su Full de
+# mayor versión (vacía = no hay feed vigente o no lista ningún Full). Un feed ilegible NO es
+# "no hay feed": aborta, salvo --forzar (que existe justamente para destrabar ese caso).
+leer_feed_vigente() {
+    local rc=0 cuerpo
+    cuerpo="$(ssh_vps "if sudo test -f ${DIR_FEED}/${JSON_NOMBRE}; then sudo cat ${DIR_FEED}/${JSON_NOMBRE}; fi")" || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        fallar "no se pudo leer el ${JSON_NOMBRE} vigente del servidor (ssh exit ${rc}) -- no es lo mismo que no tener feed. No se subió nada."
+    fi
+    VERSION_SERVIDA=""
+    [[ -n "$cuerpo" ]] || return 0
+    local versiones
+    if ! versiones="$(jq -r '.Assets[] | select(.Type == "Full") | .Version' <<<"$cuerpo" 2>/dev/null)"; then
+        if [[ "$FORZAR" -eq 1 ]]; then
+            echo "AVISO: el ${JSON_NOMBRE} vigente del servidor no es un feed válido; sigo por --forzar." >&2
+            return 0
+        fi
+        fallar "el ${JSON_NOMBRE} vigente del servidor no es un feed válido, no puedo saber qué versión sirve. No se subió nada (--forzar para publicar igual)."
+    fi
+    VERSION_SERVIDA="$(printf '%s\n' "$versiones" | sort -V | tail -n 1)"
+}
+
+verificar_no_retrocede() {
+    [[ -n "$VERSION_SERVIDA" ]] || return 0
+    local menor
+    menor="$(printf '%s\n%s\n' "$VERSION" "$VERSION_SERVIDA" | sort -V | head -n 1)"
+    if [[ "$VERSION" != "$VERSION_SERVIDA" && "$menor" == "$VERSION" ]]; then
+        if [[ "$FORZAR" -eq 1 ]]; then
+            echo "AVISO: ${VERSION} es MENOR que la ${VERSION_SERVIDA} que sirve el servidor; sigo por --forzar." >&2
+            return 0
+        fi
+        fallar "la versión ${VERSION} es MENOR que la ${VERSION_SERVIDA} que sirve el servidor: los clientes no hacen downgrade y el feed retrocedería. Para retirar una versión mala republicá la última buena con un número MAYOR. No se subió nada (--forzar solo como emergencia)."
+    fi
+}
+
 # ---------------------------------------------------------------------------------------
 # Paso 3 -- staging + scp
 # ---------------------------------------------------------------------------------------
@@ -244,14 +309,20 @@ tamano_remoto() {
 PENDIENTES=()
 
 paso3_subir_a_staging() {
-    local i nombre
+    local i nombre remoto_tamano remoto_hash
     PENDIENTES=()
     for i in "${!NOMBRES[@]}"; do
         nombre="${NOMBRES[$i]}"
-        if [[ "$(tamano_remoto "$nombre")" == "${TAMANOS[$i]}" ]]; then
-            echo "[publicar] ya está en el servidor con el mismo tamaño: ${nombre}"
-        else
+        remoto_tamano="$(tamano_remoto "$nombre")"
+        if [[ -z "$remoto_tamano" ]]; then
             PENDIENTES+=("$nombre")
+            continue
+        fi
+        remoto_hash="$(hash_remoto "$nombre")"
+        if [[ "$remoto_tamano" == "${TAMANOS[$i]}" && "$remoto_hash" == "${HASHES[$i]}" ]]; then
+            echo "[publicar] ya está en el servidor con el mismo contenido: ${nombre}"
+        else
+            fallar "'${nombre}' ya existe en el servidor con contenido distinto (tamaño ${remoto_tamano}, sha256 ${remoto_hash:-<ilegible>}; el feed nuevo dice tamaño ${TAMANOS[$i]}, sha256 ${HASHES[$i]}). No se pisa en el lugar: el feed vigente lo describe con otro hash. Publicá con una versión MAYOR. No se subió nada."
         fi
     done
 
@@ -284,17 +355,21 @@ paso4_instalar_paquetes() {
 }
 
 # ---------------------------------------------------------------------------------------
-# Paso 5 -- verificar que TODO paquete del feed nuevo está con su tamaño
+# Paso 5 -- verificar que TODO paquete del feed nuevo está con su tamaño y sha256
 # ---------------------------------------------------------------------------------------
 
 paso5_verificar_paquetes() {
-    local i nombre remoto faltan=0
+    local i nombre remoto remoto_hash faltan=0
     relevar_servidor
     for i in "${!NOMBRES[@]}"; do
         nombre="${NOMBRES[$i]}"
         remoto="$(tamano_remoto "$nombre")"
+        remoto_hash="$(hash_remoto "$nombre")"
         if [[ "$remoto" != "${TAMANOS[$i]}" ]]; then
             echo "ERROR: en el servidor '${nombre}' tiene tamaño '${remoto:-<ausente>}' y el feed dice ${TAMANOS[$i]}." >&2
+            faltan=1
+        elif [[ "$remoto_hash" != "${HASHES[$i]}" ]]; then
+            echo "ERROR: en el servidor '${nombre}' tiene sha256 '${remoto_hash:-<ausente>}' y el feed dice ${HASHES[$i]}." >&2
             faltan=1
         fi
     done
@@ -346,11 +421,15 @@ paso7_verificar_http() {
         cuerpo="$(curl -fsS "https://${API_HOSTNAME}:${API_PORT}/updates/${JSON_NOMBRE}")" \
             || fallar "verificación local: no se pudo traer 'https://${API_HOSTNAME}:${API_PORT}/updates/${JSON_NOMBRE}'. El feed YA se reemplazó en el servidor."
         verificar_feed_publicado "local" "$cuerpo"
+    else
+        echo "[publicar] AVISO: API_SCHEME=http, se omite la verificación desde la máquina del operador (el curl local); la verificación en el servidor sí corrió."
     fi
 }
 
 paso1_validar_local
 relevar_servidor
+leer_feed_vigente
+verificar_no_retrocede
 paso3_subir_a_staging
 paso4_instalar_paquetes
 paso5_verificar_paquetes

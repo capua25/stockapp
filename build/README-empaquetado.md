@@ -204,11 +204,14 @@ Orden que sigue el script (el feed va **ultimo**, asi nunca apunta a paquetes qu
 
 1. Valida local: `<version>` es el `Full` de mayor version del `releases.win.json`; cada `.nupkg`
    existe en el origen con el `Size` del feed y un nombre seguro.
-2. Releva el servidor (nombres y tamanos). Si no puede relevar, aborta sin subir nada.
-3. Sube por `scp` a un staging (`<VPS_DIR>/updates-staging`) solo los paquetes que el servidor no
-   tiene con ese tamano, mas el JSON. El staging se borra siempre al terminar.
+2. Releva el servidor (nombres, tamanos y sha256) y lee el `releases.win.json` que sirve hoy. Si no
+   puede relevar, aborta sin subir nada. Si `<version>` es **menor** que la que sirve el servidor,
+   aborta (ver `--forzar` abajo).
+3. Si el servidor ya tiene un paquete con el mismo nombre pero **otro contenido** (sha256 distinto al
+   del feed nuevo), aborta: nunca pisa un paquete en el lugar. Sube por `scp` a un staging
+   (`<VPS_DIR>/updates-staging`) solo los paquetes que el servidor no tiene, mas el JSON. El staging se borra siempre al terminar.
 4. Instala los paquetes con `sudo install` en la carpeta del feed.
-5. Re-releva y verifica que **todos** los paquetes del feed nuevo estan con su tamano. Si no, aborta
+5. Re-releva y verifica que **todos** los paquetes del feed nuevo estan con su tamano y sha256. Si no, aborta
    y el feed vigente queda intacto.
 6. Publica `releases.win.json` con rename atomico (`install` a `.tmp` + `mv -f`).
 7. Verifica por HTTP (`curl` en el VPS, y desde la maquina del operador si `API_SCHEME=https`) que el
@@ -222,10 +225,13 @@ Reglas:
   existan en el origen.
 - **Retirar una version mala = publicar la ultima buena con un numero MAYOR.** Velopack no hace
   downgrade: re-empaquetar el codigo bueno con una version nueva (ej. la mala es 0.3.0, la buena es
-  0.2.0 -> publicar 0.3.1) y correr el script.
+  0.2.0 -> publicar 0.3.1) y correr el script. Por eso el script **se niega** a publicar una
+  version menor que la que sirve el servidor; `--forzar` lo permite, pero es solo una salida de
+  emergencia (los clientes ya en la version mayor no bajan), no el camino del rollback.
 - **El feed es publico** (`/updates` no pide autenticacion): no subir nada que no pueda leer cualquiera.
-- Los `.nupkg` ya publicados con el mismo tamano no se vuelven a subir: republicar la misma version
-  es seguro.
+- Los `.nupkg` ya publicados con el mismo contenido (tamano y sha256) no se vuelven a subir:
+  republicar la misma version es seguro **si el empaquetado es el mismo**. Si se re-empaqueto la misma
+  version (los hashes cambian), el script aborta: publicar con un numero mayor.
 - No usar prerelease (`-beta`) como version a publicar: la comparacion de "mayor version" es `sort -V`.
 
 ---

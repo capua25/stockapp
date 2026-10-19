@@ -54,9 +54,9 @@ Si `vpk` no aparece en el PATH después de `dotnet tool install -g vpk`, agregar
 | V8 | Modo degradado (critical sin red) | ✅ Validable |
 | V9 | Threading del overlay | ✅ Validable |
 | V10 | Corrida en dev (no empaquetado) | ✅ Validable |
-| V11 | Fallback de fuente | 🔲 Diferido a Fase B (feed propio no existe todavía) |
+| V11 | Fallback de fuente | ➖ Sin objeto (ya no existe fallback: el feed propio es la única fuente) |
 
-**Resumen: 6 validables ahora, 1 parcial, 3 pendientes por entorno, 1 diferido a Fase B.**
+**Resumen: 6 validables ahora, 1 parcial, 3 pendientes por entorno, 1 sin objeto (V11).**
 
 ---
 
@@ -234,10 +234,10 @@ Si `vpk` no aparece en el PATH después de `dotnet tool install -g vpk`, agregar
 
 ---
 
-### V11. Fallback de fuente
+### V11. Fallback de fuente (eliminado)
 
-- **Aplica a**: N/A en Fase A
-- **Estado en esta ronda**: 🔲 Diferido a Fase B
+- **Aplica a**: N/A
+- **Estado en esta ronda**: ➖ Sin objeto (no diferido: el caso dejó de existir)
 - **Motivo**: ya no existe fallback de fuente: la app usa solo el feed propio (`<Api:BaseUrl>/updates`, servido por StockApp.Api); GitHub Releases dejó de ser fuente. No hay nada que ejercitar.
 - **Acción**: ninguna.
 - **Resultado**: N/A
