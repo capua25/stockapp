@@ -3,11 +3,11 @@
 **Fecha:** 2026-10-19
 **Estado:** diseño para revisión de Martin. Las decisiones marcadas **(decidido por Martin)** ya están tomadas; las marcadas **(decisión del asistente)** son propuestas para que Martin las confirme o corrija antes de planificar.
 **Alcance:** actualizador del desktop (`src/StockApp.Presentation/Actualizaciones/`, `src/StockApp.Application/Actualizaciones/`), la API (`src/StockApp.Api/`) como servidor del feed, los scripts de deploy (`deploy/`) y de empaquetado (`build/`).
-**Fuera de alcance:** Linux/AppImage, el zip de testers, la compatibilidad de versiones cliente/API, hacer privado el repo (ver §3).
+**Fuera de alcance:** Linux/AppImage, el zip de testers, las instalaciones en LAN con API propia, la compatibilidad de versiones cliente/API, hacer privado el repo (ver §3).
 
 ## 1. Intención y porqué
 
-Hoy el desktop (Avalonia + Velopack 1.2.0) se actualiza desde GitHub Releases del repo público `capua25/stockapp`, y cada release se sube a mano por la web de GitHub. La API va a correr en producción en un VPS que Martin controla y al que tiene acceso.
+Hoy el desktop (Avalonia + Velopack 1.2.0) se actualiza desde GitHub Releases del repo público `capua25/stockapp`, y cada release se sube a mano por la web de GitHub. La API va a correr en producción en un VPS que Martin controla y al que tiene acceso. El municipio usa esa API del VPS **(decidido por Martin, 2026-10-19)**, así que el VPS es el único feed de producción.
 
 Queremos dos cosas:
 
@@ -26,6 +26,7 @@ La regla que gobierna el chequeo horario: **nunca se bloquea la app de golpe en 
 
 ## 3. No-objetivos
 
+- **Instalaciones en LAN con API propia (decidido por Martin, 2026-10-19).** El municipio usa la API del VPS, no una instalación en LAN con su propia API, así que ese escenario queda fuera de alcance. Si existiera una, su feed estaría vacío y no se construye ningún mecanismo para alcanzarla. Tampoco se diseña para HTTP sin TLS.
 - **Linux.** `build/pack-linux.sh` y el AppImage no se tocan, aunque `pack-linux.sh:133` todavía diga "subir a un GitHub Release".
 - **El zip de testers** (`build/pack-testers-win.sh`). No tiene actualizador.
 - **La compatibilidad de versiones cliente/API.** Que un cliente nuevo hable con una API vieja, o al revés, es otro problema y va por separado.
@@ -51,6 +52,14 @@ La regla que gobierna el chequeo horario: **nunca se bloquea la app de golpe en 
 2. GitHub sale del actualizador por completo, sin quedar ni como fallback.
 3. Hay un chequeo cada 1 hora, además del de arranque.
 4. El comportamiento a mitad de sesión es el de la tabla de §5.4, que Martin aprobó. Una versión se notifica una sola vez. El chequeo horario falla en silencio si no hay red, y el modo degradado queda solo para el arranque. Nunca hay un bloqueo abrupto a mitad de sesión.
+5. **(decidido por Martin, 2026-10-19)** El municipio usa la API del VPS, no una instalación en LAN con API propia. El único feed de producción es el VPS (ver §3).
+6. **(decidido por Martin, 2026-10-19)** No hay instalaciones reales hechas con el `Setup.exe` de Velopack: solo existen los zips de testers, que no tienen actualizador. No hace falta una release de transición en GitHub (R9 cerrado).
+
+**Resoluciones del asistente a las preguntas abiertas** (están desarrolladas en §5.4 y §5.5):
+- **(decisión del asistente)** Retirar una versión mala se hace publicando la versión buena anterior con un número **mayor** (§5.5).
+- **(decisión del asistente)** Cuando el cliente salta varias versiones, la severidad efectiva es el máximo entre todas las releases posteriores a la instalada, hasta el destino (§5.4).
+- **(decisión del asistente)** Si aplicar una actualización falla, esa versión no cuenta como ya notificada (§5.4).
+- **(decisión del asistente)** El script de publicación releva el servidor por SSH antes de subir (§5.5).
 
 ### 5.2 Servidor: la API sirve el feed
 
@@ -91,9 +100,11 @@ La regla que gobierna el chequeo horario: **nunca se bloquea la app de golpe en 
 
 **El arranque no cambia.** `ShellViewModel.EvaluarYAsignarOverlayAsync` → `CoordinadorActualizacion.EvaluarEnArranqueAsync` → `PoliticaUxActualizacion.Decidir` → `ResolverOverlayViewModel` queda tal cual.
 
+**Severidad efectiva con varias versiones de salto (decisión del asistente).** Si el cliente tiene la 0.3.0 y el feed ya está en la 0.5.0, la severidad efectiva es el **máximo** entre las severidades de todas las releases posteriores a la instalada, hasta el destino, no solo la de `TargetFullRelease`. Así, una 0.4.0 crítica no se pierde porque la 0.5.0 sea normal. El implementador tiene que determinar cómo obtener las notas de las releases intermedias con Velopack 1.2.0: las notas de `UpdateInfo.DeltasToTarget`, o leer las entradas de `releases.win.json` del feed (que ya incluye `NotesMarkdown` por asset). Esto afecta a `VelopackUpdateService` y a sus tests (§7).
+
 **Corrección a una premisa: la severidad viaja en el feed, no solo en el nupkg.** El `releases.win.json` real generado por vpk 1.2.0 (`releases/win/releases.win.json`, versión 0.2.0) tiene en cada asset un campo `NotesMarkdown` con las notas completas, y la primera línea es `severity: normal`. `VelopackUpdateService.BuscarAsync` lee `TargetFullRelease.NotesMarkdown` y se lo pasa a `SeverityParser`, así que **la severidad se conoce al consultar el feed, sin descargar el paquete**. Con `SimpleWebSource` esto funciona igual que con GitHub, porque las dos fuentes leen el mismo JSON.
 
-**HTTP sin TLS.** `SimpleWebSource` acepta `http://`. Velopack verifica el SHA1/SHA256 que figura en el feed contra el paquete descargado, pero sobre HTTP plano un intermediario puede cambiar los dos a la vez (ver §9).
+**HTTP sin TLS.** `SimpleWebSource` acepta `http://`. Velopack verifica el SHA1/SHA256 que figura en el feed contra el paquete descargado, pero sobre HTTP plano un intermediario puede cambiar los dos a la vez (ver §9). Como el feed de producción es el del VPS, que sirve por `https`, este diseño no atiende el caso de HTTP sin TLS (§3).
 
 ### 5.4 Chequeo horario
 
@@ -124,6 +135,7 @@ Hay tres reglas más **(decidido por Martin)**:
    - Llama a `BuscarAsync`. Cualquier excepción devuelve `null` en silencio.
    - Si `Version` ya está en el conjunto de **versiones notificadas en la sesión**, devuelve `null`.
    - Si no, la agrega al conjunto y devuelve `DecidirEnSesion(resultado)`.
+   - **Si aplicar falla (decisión del asistente).** Cuando `AplicarActualizacionAsync` devuelve `false` (descarga parcial, reinicio pendiente), esa versión **no** se considera ya notificada: se saca del conjunto, y el próximo chequeo horario puede volver a avisarla.
    - El chequeo de arranque **también** agrega su versión al conjunto, así que si al arrancar se mostró la 0.5.0, el chequeo horario no la vuelve a mostrar. El conjunto vive en memoria y se pierde al reiniciar. Eso es intencional: el arranque vuelve a evaluar todo, como hoy.
 4. **Sin superposición.** `VelopackUpdateService` guarda el `UpdateInfo` en `_updatePendiente`, y cada `BuscarAsync` lo pisa. Por eso el coordinador serializa todo con un único `SemaphoreSlim(1,1)`: el chequeo de arranque, el horario y `AplicarActualizacionAsync`.
    - El chequeo horario usa `WaitAsync(0)`: si el semáforo está tomado, porque el arranque no terminó o hay una aplicación en curso, **se saltea ese tick** sin esperar.
@@ -167,6 +179,8 @@ Hay tres reglas más **(decidido por Martin)**:
   6. **Limpieza** de `updates-staging/`, acotada a esa carpeta y con un `trap` que la limpia también si el script falla.
   7. **Verificación final con curl.** `GET <api>/updates/releases.win.json` tiene que responder 200 y contener `<version>`. La comprobación remota es obligatoria: corre por `ssh_vps` contra `127.0.0.1`, con `--resolve ${API_HOSTNAME}:${API_PORT}:127.0.0.1` si `API_SCHEME=https`, igual que `deploy-vps.sh:170-177`. Funciona también en modo loopback más túnel. Si `API_HOSTNAME` está definido, además se pega desde la máquina del operador a `https://${API_HOSTNAME}:${API_PORT}/updates/releases.win.json`, que es lo que ve un cliente real. También se verifica que `GET` del `.nupkg` full nuevo responda 200 con `Content-Length` igual al `Size`.
 - **Alcance:** solo `/var/lib/stockapp/updates` y `${VPS_DIR}/updates-staging`. Nada de `rm -rf` con variables sin validar, ni comandos globales, ni `systemctl` sobre otro servicio. La API **no** necesita reiniciarse para publicar.
+- **Relevamiento previo (decisión del asistente).** Antes de subir nada, el script releva el servidor por SSH (nombres y tamaños de lo que hay en `/var/lib/stockapp/updates`) y sube solo lo que falta. Los detalles quedan a criterio del implementador.
+- **Retirar una versión mala (decisión del asistente).** Velopack no soporta downgrade. El procedimiento estándar es publicar la versión buena anterior con un número de versión **mayor** que la mala. No hay un comando especial de retiro.
 - **Lo que el script no hace:** no borra paquetes viejos del servidor (§6) y no sube el Setup.exe salvo que se decida servirlo (§6).
 
 **Nota sobre "sin acceso al servidor".** La restricción original se refería al servidor **del municipio**. Ahora el VPS de producción es de Martin, así que publicar ahí está bien. Lo que se mantiene es que una instalación no requiere editar configuración del servidor después de instalar, más allá de lo que hacen `install.sh` y `deploy-vps.sh`.
@@ -209,7 +223,9 @@ Hay tres reglas más **(decidido por Martin)**:
 **Política y coordinador** (`StockApp.Application.Tests` / `StockApp.Presentation.Tests`):
 - `DecidirEnSesion`: Normal → banner, Important → **banner** (mutación: si devuelve modal, queda en rojo), Critical → `AvisoCriticoEnSesion` (mutación: si devuelve `BloqueoCritico`, queda en rojo), sin update → Ninguno.
 - `Decidir` (arranque): los tests existentes siguen verdes sin cambios.
+- Severidad con saltos de varias versiones: el máximo de las intermedias gana. Mutación: usar solo la de `TargetFullRelease` pone el test en rojo (una intermedia crítica con destino normal).
 - `EvaluarEnSesionAsync`:
+  - Si `AplicarActualizacionAsync` devolvió `false`, la versión no queda como notificada y el próximo tick puede avisarla.
   - Si `BuscarAsync` tira una excepción, devuelve `null` sin propagarla.
   - La misma versión dos veces se notifica una sola vez. Mutación: sacar el registro de la versión pone el test en rojo.
   - Una versión ya mostrada en el arranque no se repite.
@@ -239,6 +255,7 @@ Hay tres reglas más **(decidido por Martin)**:
 - Hay que afirmar que **ningún** `mv … releases.win.json` ocurre antes de que todos los `.nupkg` estén instalados y verificados. Mutación: invertir el orden pone el test en rojo.
 - Si falta un paquete local, aborta sin tocar el servidor.
 - Si la verificación remota falla, aborta sin hacer rename.
+- El relevamiento previo no vuelve a subir lo que ya está en el servidor con el mismo tamaño.
 
 **Build.** Los cambios en `App.axaml.cs` y los `.axaml` nuevos obligan a compilar por regla del proyecto: hay que compilar **cada proyecto por separado o la `.sln`**, nunca varios `.csproj` en un mismo `dotnet build`.
 
@@ -270,10 +287,10 @@ Esto se agrega como caso nuevo en `build/VALIDACION-MANUAL-faseA.md`.
 
 - **R1. Que Velopack 1.2.0 pida algo más que `releases.win.json` y los `.nupkg`.** Mitigación: confirmarlo en el fuente antes de implementar (§5.2). En el e2e de Windows, mirar el log de acceso de la API o el `velopack.log` del cliente.
 - **R2. El feed es público.** Cualquiera que conozca la URL descarga el binario de la app. Hoy ya es así, porque el repo y las releases son públicos. El uso lo protege la licencia, no el secreto del binario. Las descargas anónimas de unos 53 MB consumen ancho de banda de un VPS compartido. Por ahora se acepta, y si molesta, se le pone rate limiting a `/updates`.
-- **R3. HTTP sin TLS.** Si una instalación apunta a la API por `http://`, que es el modo por defecto del kit municipal en LAN, el feed y el paquete viajan sin protección: un intermediario puede servir un paquete y un hash falsos. En el VPS de producción con `API_SCHEME=https` el riesgo no existe. Se documenta, no se resuelve acá.
+- **R3. HTTP sin TLS.** Si una instalación apuntara a la API por `http://`, el feed y el paquete viajarían sin protección: un intermediario puede servir un paquete y un hash falsos. En el VPS de producción con `API_SCHEME=https` el riesgo no existe, y las instalaciones en LAN con API propia están fuera de alcance (§3). Se documenta, no se resuelve acá.
 - **R4. Que se borre `releases/win` localmente.** No se rompe nada, pero se pierden los deltas y la próxima versión va full. Se documenta (§5.5).
 - **R5. Que vpk se corra contra una carpeta `releases/win` distinta de la que generó lo publicado.** El JSON nuevo podría no listar deltas que los clientes esperan, o listar archivos que el servidor no tiene. Para lo segundo, el paso 4 de `publicar-release.sh` aborta antes del rename (A2). Lo primero solo hace que los clientes bajen el paquete full.
 - **R6. Que el chequeo horario pise `_updatePendiente` mientras el usuario mira un banner viejo.** Al aplicar se instala la versión más nueva, lo que es aceptable. La serialización de §5.4.4 evita que pase **durante** una descarga o una aplicación.
 - **R7. Un aviso crítico en sesión que el usuario ignora todo el día.** Es intencional: el bloqueo llega en el próximo arranque. Martin lo aceptó a cambio de no perder trabajo (A1).
 - **R8. La versión de `RELEASE_NOTES.md` (0.2.0) no coincide con la del csproj (0.4.0).** Si se empaqueta sin corregirla, las notas anunciarían la versión equivocada. Queda anotado para la próxima release, y este diseño no decide su contenido.
-- **R9. Una instalación vieja que todavía apunta a GitHub.** Las versiones ya instaladas buscan en GitHub hasta que reciben una versión con este cambio. **La primera versión con el feed propio todavía tiene que publicarse también en GitHub Releases** para que esas instalaciones la reciban. De ahí en adelante, solo el VPS. Si no quedan instalaciones reales de una versión anterior, este paso se puede saltear. Martin decide.
+- **R9. Una instalación vieja que todavía apunta a GitHub. CERRADO (decidido por Martin, 2026-10-19).** No hay instalaciones reales hechas con el `Setup.exe` de Velopack, solo los zips de testers, que no tienen actualizador. Por eso no hace falta publicar una release de transición en GitHub, y la primera versión con el feed propio se publica solo en el VPS.
