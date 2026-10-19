@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -15,8 +16,12 @@ using StockApp.Presentation.Services;
 
 namespace StockApp.Presentation.ViewModels.Catalogo;
 
+/// <summary>Opción del combo de Estado del listado: si deja ver los productos activos o los inactivos (filtro en el cliente).</summary>
+public sealed record OpcionEstadoProducto(string Nombre, bool Activos);
+
 /// <summary>
-/// Listado de productos con búsqueda por nombre, SKU o código de barras.
+/// Listado de productos con búsqueda por nombre, SKU o código de barras y filtro de Estado en el cliente
+/// ("Activos" por defecto: el listado ya trae todos con su flag Activo).
 /// </summary>
 public partial class ProductoListViewModel : ViewModelBase
 {
@@ -69,6 +74,36 @@ public partial class ProductoListViewModel : ViewModelBase
 
     public ObservableCollection<ProductoDto> Items { get; } = new();
 
+    /// <summary>Opciones del combo de Estado, en el orden en que se muestran.</summary>
+    public IReadOnlyList<OpcionEstadoProducto> FiltrosEstado { get; } = new[]
+    {
+        new OpcionEstadoProducto("Activos", true),
+        new OpcionEstadoProducto("Inactivos", false),
+    };
+
+    [ObservableProperty] private OpcionEstadoProducto _filtroEstado;
+
+    private int _cantidadVisible;
+
+    /// <summary>Filas que deja ver el filtro de Estado (el pie "N productos").</summary>
+    public int CantidadVisible { get => _cantidadVisible; private set => SetProperty(ref _cantidadVisible, value); }
+
+    /// <summary>Predicado del filtro: la grilla y el pie usan el mismo, así lo que se cuenta es lo que se ve.</summary>
+    internal bool EsVisible(object item) => item is ProductoDto p && p.Activo == FiltroEstado.Activos;
+
+    partial void OnFiltroEstadoChanged(OpcionEstadoProducto value)
+    {
+        // La selección oculta se suelta ANTES de refrescar: con la fila todavía seleccionada, el DataGrid reubica la
+        // selección por índice en otro producto y Editar / Eliminar actuarían sobre una fila que el usuario no eligió.
+        if (ItemSeleccionado is { } seleccionado && !EsVisible(seleccionado))
+            ItemSeleccionado = null;
+        ItemsView.Refresh();
+        Recalcular();
+    }
+
+    /// <summary>Recuenta el pie con el mismo predicado que la grilla.</summary>
+    private void Recalcular() => CantidadVisible = Items.Count(p => EsVisible(p));
+
     /// <summary>
     /// Vista sobre <see cref="Items"/> que habilita el ordenamiento por click en encabezados
     /// del DataGrid. Necesaria por una regresión de Avalonia 12 (AvaloniaUI/Avalonia#21129):
@@ -89,7 +124,9 @@ public partial class ProductoListViewModel : ViewModelBase
         _confirmacion = confirmacion;
         _session      = session;
 
-        ItemsView = new DataGridCollectionView(Items);
+        _filtroEstado = FiltrosEstado[0];
+        ItemsView = new DataGridCollectionView(Items) { Filter = EsVisible };
+        Items.CollectionChanged += (_, _) => Recalcular();
     }
 
     /// <summary>

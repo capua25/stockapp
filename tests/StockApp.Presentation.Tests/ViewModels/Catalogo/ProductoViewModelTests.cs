@@ -625,6 +625,111 @@ public class ProductoListViewModelTests
 
         Assert.Equal(new[] { 1 }, vm.Items.Select(p => p.Id));
     }
+
+    // ── Filtro de Estado (cliente): Activos por defecto, mismo patrón que Tareas ──
+
+    private static List<ProductoDto> DosActivosYUnInactivo() => new()
+    {
+        CrearProductoDto(1, "P001", "Uno"),
+        CrearProductoDto(2, "P002", "Dos", activo: false),
+        CrearProductoDto(3, "P003", "Tres"),
+    };
+
+    private static List<ProductoDto> Visibles(ProductoListViewModel vm) => vm.ItemsView.Cast<ProductoDto>().ToList();
+
+    [Fact]
+    public void Filtros_EstanEnElOrdenDelCombo()
+    {
+        var (vm, _, _, _) = Crear();
+
+        Assert.Equal(new[] { "Activos", "Inactivos" }, vm.FiltrosEstado.Select(o => o.Nombre));
+    }
+
+    [Fact]
+    public async Task FiltroPorDefecto_Activos_OcultaLosInactivosYElPieCuentaLosVisibles()
+    {
+        var (vm, _, _, _) = Crear(DosActivosYUnInactivo());
+
+        await vm.CargarAsync();
+
+        Assert.Equal("Activos", vm.FiltroEstado.Nombre);
+        Assert.Equal(3, vm.Items.Count);
+        Assert.Equal(new[] { 1, 3 }, Visibles(vm).Select(p => p.Id).OrderBy(i => i));
+        Assert.Equal(2, vm.CantidadVisible);
+    }
+
+    [Fact]
+    public async Task FiltroInactivos_MuestraSoloLosInactivos()
+    {
+        var (vm, _, _, _) = Crear(DosActivosYUnInactivo());
+        await vm.CargarAsync();
+
+        vm.FiltroEstado = vm.FiltrosEstado.Single(o => o.Nombre == "Inactivos");
+
+        Assert.Equal(new[] { 2 }, Visibles(vm).Select(p => p.Id));
+        Assert.Equal(1, vm.CantidadVisible);
+    }
+
+    [Fact]
+    public async Task FiltroQueOcultaLaFilaSeleccionada_LimpiaLaSeleccion()
+    {
+        var (vm, _, _, _) = Crear(DosActivosYUnInactivo());
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = vm.Items.First(p => p.Activo);
+
+        vm.FiltroEstado = vm.FiltrosEstado.Single(o => o.Nombre == "Inactivos");
+
+        Assert.Null(vm.ItemSeleccionado);
+    }
+
+    [Fact]
+    public async Task FiltroQueNoOcultaLaSeleccion_LaConserva()
+    {
+        var (vm, _, _, _) = Crear(DosActivosYUnInactivo());
+        await vm.CargarAsync();
+        var inactivo = vm.Items.First(p => !p.Activo);
+        vm.FiltroEstado = vm.FiltrosEstado.Single(o => o.Nombre == "Inactivos");
+        vm.ItemSeleccionado = inactivo;
+
+        vm.FiltroEstado = vm.FiltrosEstado.Single(o => o.Nombre == "Inactivos");
+
+        Assert.Same(inactivo, vm.ItemSeleccionado);
+    }
+
+    [Fact]
+    public async Task Busqueda_ConservaElFiltroDeEstado()
+    {
+        var (vm, svcMock, _, _) = Crear();
+        svcMock.Setup(s => s.BuscarPorTextoAsync("o")).ReturnsAsync(DosActivosYUnInactivo());
+
+        vm.FiltroBusqueda = "o";
+        await vm.BuscarCommand.ExecuteAsync(null);
+
+        Assert.Equal(3, vm.Items.Count);
+        Assert.Equal(new[] { 1, 3 }, Visibles(vm).Select(p => p.Id).OrderBy(i => i));
+        Assert.Equal(2, vm.CantidadVisible);
+    }
+
+    [Fact]
+    public async Task Baja_TrasLaRecarga_ElFiltroSigueAplicando()
+    {
+        var (vm, svcMock, _, _) = Crear(DosActivosYUnInactivo());
+        await vm.CargarAsync();
+        vm.ItemSeleccionado = vm.Items.First(p => p.Id == 1);
+        svcMock
+            .Setup(s => s.BuscarAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<string?>()))
+            .ReturnsAsync(new List<ProductoDto>
+            {
+                CrearProductoDto(1, "P001", "Uno", activo: false),
+                CrearProductoDto(2, "P002", "Dos", activo: false),
+                CrearProductoDto(3, "P003", "Tres"),
+            });
+
+        await vm.BajaCommand.ExecuteAsync(null);
+
+        Assert.Equal(new[] { 3 }, Visibles(vm).Select(p => p.Id));
+        Assert.Equal(1, vm.CantidadVisible);
+    }
 }
 
 public class ProductoFormViewModelTests
