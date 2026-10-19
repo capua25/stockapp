@@ -5,6 +5,7 @@
         mc:Ignorable="d" d:DesignWidth="520" d:DesignHeight="360"
         x:Class="StockApp.Presentation.Views.Dialogs.ConfirmacionPreciosDialog"
         Title="Cambios de precio de costo"
+        Icon="/Assets/icono-app.ico"
         Width="520"
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"

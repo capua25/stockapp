@@ -8,6 +8,7 @@
         x:Class="StockApp.Presentation.Views.Tareas.ReclasificarTareaDialog"
         x:DataType="vm:ReclasificarTareaDialogViewModel"
         Title="Reclasificar tarea"
+        Icon="/Assets/icono-app.ico"
         Width="500"
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"

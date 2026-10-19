@@ -4,6 +4,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Icono del exe (Explorador, menu Inicio, accesos directos). Fuente unica en assets/marca/. -->
+    <ApplicationIcon>..\..\assets\marca\icono-app.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <!-- Branding visible al usuario final: el producto pasa a llamarse "Gestión Municipal".
          RootNamespace se fija explícito para que el default no siga a AssemblyName y
@@ -22,6 +24,8 @@
   <ItemGroup>
     <Folder Include="Models\" />
     <AvaloniaResource Include="Assets\**" />
+    <!-- Mismo .ico para Window.Icon (barra de tareas): se enlaza como Assets/icono-app.ico. -->
+    <AvaloniaResource Include="..\..\assets\marca\icono-app.ico" Link="Assets\icono-app.ico" />
   </ItemGroup>
 
   <ItemGroup>

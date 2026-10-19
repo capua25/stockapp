@@ -6,7 +6,7 @@
         mc:Ignorable="d" d:DesignWidth="480" d:DesignHeight="400"
         x:Class="StockApp.Presentation.Views.MainWindow"
         x:DataType="vm:ShellViewModel"
-        Icon="/Assets/avalonia-logo.ico"
+        Icon="/Assets/icono-app.ico"
         Title="Gestión Municipal"
         MinWidth="400"
         MinHeight="300">

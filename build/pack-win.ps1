@@ -47,6 +47,8 @@ $PackId       = "GestionMunicipal"
 $PackTitle    = "Gestión Municipal"
 $Channel      = "win"
 $MainExe      = "GestionMunicipal.exe"
+# Icono de marca (Setup.exe + accesos directos). Mismo .ico que ApplicationIcon de los csproj.
+$IconPath     = "assets\marca\icono-app.ico"
 $Runtime      = "win-x64"
 
 # ── Funciones auxiliares ──────────────────────────────────────────────────────
@@ -88,6 +90,10 @@ if (-not (Test-Path $ConfiguradorCsprojPath)) {
 
 if (-not (Test-Path $ReleaseNotes)) {
     Abort "No se encontro el archivo de release notes en: $ReleaseNotes"
+}
+
+if (-not (Test-Path $IconPath)) {
+    Abort "No se encontro el icono de la app en: $IconPath"
 }
 
 # ── Leer version del .csproj (single source of truth) ───────────────────────
@@ -142,6 +148,7 @@ vpk pack `
     --packVersion  $Version  `
     --packDir      $PublishDir `
     --mainExe      $MainExe  `
+    --icon         $IconPath `
     --channel      $Channel  `
     --delta        BestSpeed `
     --releaseNotes $ReleaseNotes `

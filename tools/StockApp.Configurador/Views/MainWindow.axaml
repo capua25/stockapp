@@ -7,6 +7,7 @@
         x:Class="StockApp.Configurador.Views.MainWindow"
         x:DataType="vm:ConfiguradorViewModel"
         Title="Gestión Municipal · Configuración"
+        Icon="/Assets/icono-app.ico"
         Width="420" SizeToContent="Height" CanResize="False"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource FondoBrush}">

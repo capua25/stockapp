@@ -5,6 +5,7 @@
         mc:Ignorable="d" d:DesignWidth="360" d:DesignHeight="160"
         x:Class="StockApp.Presentation.Views.Dialogs.MensajeDialog"
         Title="Aviso"
+        Icon="/Assets/icono-app.ico"
         Width="360"
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"

@@ -7,6 +7,7 @@
         mc:Ignorable="d" d:DesignWidth="400" d:DesignHeight="220"
         x:Class="StockApp.Presentation.Views.Dialogs.RecalcularStockDialog"
         Title="Recalcular stock"
+        Icon="/Assets/icono-app.ico"
         Width="400"
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"

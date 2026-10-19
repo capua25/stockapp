@@ -7,6 +7,7 @@
         mc:Ignorable="d" d:DesignWidth="440" d:DesignHeight="360"
         x:Class="StockApp.Presentation.Views.Dialogs.AltaProductoRapidaDialog"
         Title="Producto nuevo"
+        Icon="/Assets/icono-app.ico"
         Width="440"
         SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
