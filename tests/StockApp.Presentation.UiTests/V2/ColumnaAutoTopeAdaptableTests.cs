@@ -26,9 +26,9 @@ namespace StockApp.Presentation.UiTests.V2;
 
 /// <summary>
 /// El tope de una columna medida se adapta al espacio libre: una unidad más larga que lo que queda en la grilla
-/// se corta con elipsis en vez de empujar a las demás columnas fuera del borde. Grilla real con el tema v2 y las
-/// columnas de Productos (CÓDIGO, COSTO y UNIDAD medidas; NOMBRE 2* y CATEGORÍA * con piso 160; STOCK 220 y
-/// ESTADO 78 fijas). Grilla de 950 y 1036: la que deja la vista a 1280x760 y a 1366x768 con el sidebar de 240.
+/// se corta con elipsis en vez de empujar a las demás columnas fuera del borde. Grilla real con el tema v2 y un
+/// fixture sintético (no es la vista de Productos, que ya no tiene columna ESTADO): CÓDIGO, COSTO y UNIDAD medidas;
+/// NOMBRE 2* y CATEGORÍA * con piso 160; STOCK 220 y ESTADO 78 fijas. Grilla de 950 y 1036: la que deja la vista a 1280x760 y a 1366x768 con el sidebar de 240.
 /// </summary>
 public class ColumnaAutoTopeAdaptableTests
 {
