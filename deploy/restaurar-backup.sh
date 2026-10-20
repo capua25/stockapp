@@ -159,6 +159,7 @@ fi
 MANIFIESTO_SHA=""
 MANIFIESTO_TAMANO=""
 MANIFIESTO_ULTIMA_MIGRACION=""
+MANIFIESTO_FECHA=""
 MANIFIESTO_TABLAS=()
 declare -A MANIFIESTO_CONTEOS=()
 leer_manifiesto() {
@@ -181,6 +182,7 @@ leer_manifiesto() {
                 sha256) MANIFIESTO_SHA="$valor" ;;
                 tamano_bytes) MANIFIESTO_TAMANO="$valor" ;;
                 ultima_migracion) MANIFIESTO_ULTIMA_MIGRACION="$valor" ;;
+                fecha_utc) MANIFIESTO_FECHA="$valor" ;;
             esac
         else
             [[ -z "$linea" ]] && continue
@@ -394,6 +396,8 @@ if [[ -n "$MANIFIESTO" ]]; then
         exit 4
     fi
     echo "OK: sha256 y tamaño coinciden con el manifiesto."
+    echo "== El dump a restaurar se volcó el: ${MANIFIESTO_FECHA:-(el manifiesto no trae fecha_utc)} (UTC) =="
+    echo "   Comprobá que es la del volcado que querés: un par viejo pasa todos los chequeos."
 fi
 
 # ---------------------------------------------------------------------------------------

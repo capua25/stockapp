@@ -559,6 +559,8 @@ public class RestaurarBackupTests
 
             Assert.True(r.ExitCode == 0, Diag(r));
             Assert.Equal(d.Conteos, ParsearSnapshot(c.Snapshot()));
+            // Un par viejo pasa todos los chequeos: la fecha del volcado se imprime para que el operador la vea.
+            Assert.Contains("se volcó el: 2026-10-20T13:05:00Z (UTC)", r.Stdout);
             foreach (var tabla in d.Conteos.Keys)
                 Assert.Matches(new System.Text.RegularExpressions.Regex(
                     $@"^\s*{System.Text.RegularExpressions.Regex.Escape(tabla)}\s.*\bOK\b",
