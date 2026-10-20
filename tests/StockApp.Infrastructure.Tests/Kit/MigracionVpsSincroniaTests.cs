@@ -24,6 +24,7 @@ public class MigracionVpsSincroniaTests
     [
         "deploy/restaurar-backup.sh",
         "deploy/volcado-final-vps.sh",
+        "deploy/bajar-backup-vps.sh",
     ];
 
     public static TheoryData<string> CasosScriptsNuevos()
