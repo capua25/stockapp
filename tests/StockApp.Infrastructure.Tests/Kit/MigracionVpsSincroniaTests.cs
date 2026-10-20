@@ -29,7 +29,15 @@ public class MigracionVpsSincroniaTests
         "deploy/ensayo/shims/ssh",
         "deploy/ensayo/shims/sudo",
         "deploy/ensayo/shims/systemctl",
+        HookTls,
     ];
+
+    /// <summary>
+    /// El hook de certbot documenta en su encabezado cómo se registra (`certbot certonly ...
+    /// --deploy-hook`), así que queda exento SOLO del token "certbot". El resto de la lista
+    /// aplica igual: la prohibición es de ejecutar certbot global, no de nombrar el hook propio.
+    /// </summary>
+    private const string HookTls = "deploy/tls/stockapp-tls-deploy-hook.sh";
 
     public static TheoryData<string> CasosScriptsNuevos()
     {
@@ -82,7 +90,7 @@ public class MigracionVpsSincroniaTests
         // ...más lo propio de la migración: ni el proxy ni los certificados de la otra app, y
         // ningún borrado recursivo sobre una ruta que sale de una variable.
         Assert.DoesNotContain("nginx", texto);
-        Assert.DoesNotContain("certbot", texto);
+        if (script != HookTls) Assert.DoesNotContain("certbot", texto);
         Assert.DoesNotContain("rm -rf \"$", texto);
     }
 
