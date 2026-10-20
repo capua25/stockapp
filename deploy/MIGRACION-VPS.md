@@ -474,12 +474,12 @@ Esperado: la segunda corrida no imprime nada al repetir la primera.
   (el post-corte los elimina):
 
 ```bash
-mkdir -p -m 700 ~/stockapp-deploy/migracion/ensayo-e2
-find ~/stockapp-deploy/migracion -maxdepth 1 -type f \( -name 'volcado-*' -o -name 'backups-historial.tar' \) -exec mv -t ~/stockapp-deploy/migracion/ensayo-e2/ {} +
+mkdir -p -m 700 ~/stockapp-deploy/migracion/ensayo-e2-<fecha>
+find ~/stockapp-deploy/migracion -maxdepth 1 -type f \( -name 'volcado-*' -o -name 'backups-historial.tar' \) -exec mv -t ~/stockapp-deploy/migracion/ensayo-e2-<fecha>/ {} +
 ls ~/stockapp-deploy/migracion
 ```
 
-Esperado: el `ls` no muestra ningún `volcado-*` (solo `ensayo-e2/` y lo que quede de `pre-recrear-*`).
+Esperado: el `ls` no muestra ningún `volcado-*` (solo `ensayo-e2-<fecha>/` y lo que quede de `pre-recrear-*`).
 
 - [ ] **C2.c** Máquina del operador, **antes de C3**: guardá la lista de contenedores del VPS viejo (solo
   lectura, acotada: V10 la compara al final).
@@ -734,20 +734,29 @@ estaba, para reintentar otro día.
   StockApp (nunca nada global; certbot del viejo solo se toca en la línea del certificado de StockApp):
   - `docker compose --env-file .env -f docker-compose.postgres.yml down` **sin** `-v`;
   - `docker volume rm stockapp_pgdata`, solo después de confirmar que `LogsAuditoria` del VPS nuevo es ≥ al del
-    manifiesto **y** de tener un dump archivado fuera del servidor;
+    manifiesto **y** de tener el dump del corte archivado en `~/stockapp-backups-vps/corte-<fecha>/` (ver más abajo);
   - `systemctl disable` solo aplica si antes se hizo `unmask`: enmascarada, la unit ya no arranca.
-- **Copias de los datos de producción (al día 14, o cuando cierre el rollback): confirmar y borrar.** Los
-  volcados contienen todo, incluidos los hashes de contraseñas. Imprimí ruta y tamaño de cada una, mostráselas
-  a Martin y borrá **solo con su confirmación**, una por una y por ruta exacta (nunca con comodines amplios):
-  1. local: `~/stockapp-backups-vps/ensayo-e2-*` y `~/stockapp-backups-vps/migracion-<fecha>/` (los volcados
-     de E2 y del corte; el archivado fuera del servidor que pide el `volume rm` de arriba se conserva aparte);
-  2. servidor nuevo: `~/stockapp-deploy/migracion/` (volcados, `ensayo-e2/`, `corte-<fecha>/` y los
-     `pre-recrear-*` de seguridad).
+- **Copias de los datos de producción (al día 14, o cuando cierre el rollback).** Los volcados contienen
+  todo, incluidos los hashes de contraseñas. **El dump final del corte y su manifiesto NO se borran: se
+  MUEVEN** a un archivo permanente, `~/stockapp-backups-vps/corte-<fecha>/` (modo 700). Ese es el
+  "dump archivado fuera del servidor" que exige el `volume rm` de arriba, y **va primero**: sin él, no
+  se borra nada más. Se verifica el sha256 antes y después del movimiento.
+  1. **Archivar (mover, no borrar):** el `volcado-<ts>.dump` y el `volcado-<ts>.manifiesto` del corte.
+  2. **Borrar, solo con la confirmación de Martin**, una por una, por ruta exacta y mostrando antes ruta y
+     tamaño (nunca con comodines amplios): lo que queda en `~/stockapp-backups-vps/migracion-<fecha>/`,
+     las copias del ensayo `~/stockapp-backups-vps/ensayo-e2-<fecha>/` y, en el servidor nuevo,
+     `~/stockapp-deploy/migracion/` (copias, `ensayo-e2-<fecha>/`, `corte-<fecha>/` y los `pre-recrear-*`).
 
 ```bash
-du -sh ~/stockapp-backups-vps/ensayo-e2-* ~/stockapp-backups-vps/migracion-<fecha>
+cd ~/stockapp-backups-vps/migracion-<fecha>
+sha256sum volcado-<ts>.dump volcado-<ts>.manifiesto | tee /tmp/sha-corte-<fecha>.txt   # antes
+mkdir -m 700 ~/stockapp-backups-vps/corte-<fecha>
+mv volcado-<ts>.dump volcado-<ts>.manifiesto ~/stockapp-backups-vps/corte-<fecha>/
+( cd ~/stockapp-backups-vps/corte-<fecha> && sha256sum -c /tmp/sha-corte-<fecha>.txt )   # después: dos OK
+rm -f /tmp/sha-corte-<fecha>.txt
+# recién con los dos OK, y con la confirmación de Martin, por ruta exacta:
+du -sh ~/stockapp-backups-vps/ensayo-e2-<fecha> ~/stockapp-backups-vps/migracion-<fecha>
 ssh -p <puerto-nuevo> <usuario>@<ip-nueva> 'du -sh ~/stockapp-deploy/migracion; ls -la ~/stockapp-deploy/migracion'
-# con la confirmación de Martin, por ruta exacta:
 rm -r ~/stockapp-backups-vps/ensayo-e2-<fecha> ~/stockapp-backups-vps/migracion-<fecha>
 ssh -p <puerto-nuevo> <usuario>@<ip-nueva> 'rm -r ~/stockapp-deploy/migracion'
 ```

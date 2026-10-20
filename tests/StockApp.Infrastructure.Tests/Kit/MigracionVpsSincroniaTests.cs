@@ -241,12 +241,14 @@ public class MigracionVpsSincroniaTests
     [InlineData("migracion/corte-<fecha>/")]              // el corte no comparte directorio con E2
     [InlineData("exactamente el `<ts>` que imprimió C3")]
     [InlineData("fecha_utc")]
-    [InlineData("-exec mv -t ~/stockapp-deploy/migracion/ensayo-e2/")]  // C2.b aparta los volcados de E2
+    [InlineData("-exec mv -t ~/stockapp-deploy/migracion/ensayo-e2-<fecha>/")]  // C2.b aparta los volcados de E2
     [InlineData("sudo install -d -o stockapp -g stockapp -m 750 /var/lib/stockapp/.local /var/lib/stockapp/.local/share /var/lib/stockapp/.local/share/StockApp")]
     [InlineData("PW=\"$PW\" jq -n --arg u '<usuario-real>' '{nombreUsuario:$u,contrasena:env.PW}'")]
     [InlineData("sudo systemctl stop stockapp-api` (si C7")]  // R-A: primero se detiene el nuevo
-    [InlineData("confirmar y borrar")]                      // post-corte: copias de producción
-    [InlineData("ensayo-e2-*")]
+    [InlineData("Borrar, solo con la confirmación de Martin")]                      // post-corte: copias de producción
+    [InlineData("~/stockapp-backups-vps/ensayo-e2-<fecha>/")]
+    [InlineData("mv volcado-<ts>.dump volcado-<ts>.manifiesto ~/stockapp-backups-vps/corte-<fecha>/")]  // D+14: el dump final se archiva, no se borra
+    [InlineData("sha256sum -c /tmp/sha-corte-<fecha>.txt")]
     [InlineData("omandos se corren desde la raíz del repo")]
     [InlineData("contenedores-viejo-<fecha>.txt")]         // C2.c guarda, V10 compara
     [InlineData("no renueves certificados ni reinicies el VPS nuevo")]
@@ -261,6 +263,9 @@ public class MigracionVpsSincroniaTests
         var texto = Texto(Runbook);
 
         Assert.DoesNotContain("--arg p ", texto);
+        Assert.DoesNotContain("rm -r ~/stockapp-backups-vps/migracion-<fecha>/volcado", texto);
+        Assert.DoesNotMatch(@"rm [^\n]*volcado-<ts>", texto);
+        Assert.DoesNotContain("ensayo-e2/", texto);
         Assert.DoesNotContain("migracion/volcado-<ts>", texto);
         Assert.DoesNotContain("CorridasBackup` puede crecer", texto);
     }
