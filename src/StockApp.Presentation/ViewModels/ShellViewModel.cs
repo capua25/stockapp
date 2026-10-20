@@ -153,21 +153,21 @@ public partial class ShellViewModel : ViewModelBase, IDisposable
         _uiDispatcher.Post(() => OverlayActualizacion = overlay);
 
         // El chequeo periódico arranca siempre, también si el de arranque falló o no halló nada.
-        _tareaChequeoHorario = Task.Run(() => BucleChequeoHorarioAsync(_cts.Token));
+        _tareaChequeoPeriodico = Task.Run(() => BucleChequeoPeriodicoAsync(_cts.Token));
     }
 
     /// <summary>
     /// Tarea del bucle periódico. Internal para que los tests verifiquen que termina al
     /// disponer el ViewModel.
     /// </summary>
-    internal Task _tareaChequeoHorario = Task.CompletedTask;
+    internal Task _tareaChequeoPeriodico = Task.CompletedTask;
 
     /// <summary>
     /// Busca actualizaciones cada <see cref="CoordinadorActualizacion.IntervaloChequeo"/>
     /// mientras la app está abierta. Falla en silencio: un tick con error nunca mata los
     /// siguientes ni interrumpe la sesión.
     /// </summary>
-    private async Task BucleChequeoHorarioAsync(CancellationToken ct)
+    private async Task BucleChequeoPeriodicoAsync(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {

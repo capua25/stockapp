@@ -16,7 +16,7 @@ using Xunit;
 
 namespace StockApp.Presentation.Tests.Actualizaciones;
 
-public class ShellViewModelChequeoHorarioTests
+public class ShellViewModelChequeoPeriodicoTests
 {
     private static readonly IInfoApp InfoAppStub = Mock.Of<IInfoApp>(x => x.Version == "0.0.0");
     private static readonly TimeSpan CotaEspera = TimeSpan.FromSeconds(10);
@@ -125,6 +125,12 @@ public class ShellViewModelChequeoHorarioTests
     }
 
     [Fact]
+    public void IntervaloChequeo_EsDeQuinceMinutos()
+    {
+        Assert.Equal(TimeSpan.FromMinutes(15), CoordinadorActualizacion.IntervaloChequeo);
+    }
+
+    [Fact]
     public async Task PrimerTick_PideQuinceMinutos()
     {
         var (vm, _, espera, _) = Crear(UpdateCheckResult.SinUpdate);
@@ -168,8 +174,8 @@ public class ShellViewModelChequeoHorarioTests
 
         vm.Dispose();
 
-        await vm._tareaChequeoHorario.WaitAsync(CotaEspera);
-        espera.Avanzar(TimeSpan.FromHours(1));
+        await vm._tareaChequeoPeriodico.WaitAsync(CotaEspera);
+        espera.Avanzar(CoordinadorActualizacion.IntervaloChequeo);
         update.Verify(s => s.BuscarAsync(default), Times.Once);
     }
 
@@ -180,9 +186,9 @@ public class ShellViewModelChequeoHorarioTests
         await ArrancarAsync(vm, espera);
         update.Setup(s => s.BuscarAsync(default)).ThrowsAsync(new HttpRequestException("sin red"));
 
-        espera.Avanzar(TimeSpan.FromHours(1));
+        espera.Avanzar(CoordinadorActualizacion.IntervaloChequeo);
         await espera.SiguienteEsperaAsync();
-        espera.Avanzar(TimeSpan.FromHours(1));
+        espera.Avanzar(CoordinadorActualizacion.IntervaloChequeo);
         await espera.SiguienteEsperaAsync();
 
         update.Verify(s => s.BuscarAsync(default), Times.Exactly(3));
@@ -198,13 +204,13 @@ public class ShellViewModelChequeoHorarioTests
         // Tick 1: hay update pero el Post al UI thread explota (excepción que el coordinador no atrapa).
         update.Setup(s => s.BuscarAsync(default)).ReturnsAsync(Hay("0.6.0", UpdateSeverity.Normal));
         ui.FallarEnElProximoPost = true;
-        espera.Avanzar(TimeSpan.FromHours(1));
+        espera.Avanzar(CoordinadorActualizacion.IntervaloChequeo);
         await espera.SiguienteEsperaAsync();
         Assert.Null(vm.OverlayActualizacion);
 
         // Tick 2: otra versión; el bucle sigue vivo y la muestra.
         update.Setup(s => s.BuscarAsync(default)).ReturnsAsync(Hay("0.7.0", UpdateSeverity.Normal));
-        espera.Avanzar(TimeSpan.FromHours(1));
+        espera.Avanzar(CoordinadorActualizacion.IntervaloChequeo);
         await espera.SiguienteEsperaAsync();
 
         var banner = Assert.IsType<ActualizacionBannerViewModel>(vm.OverlayActualizacion);
@@ -219,7 +225,7 @@ public class ShellViewModelChequeoHorarioTests
         await ArrancarAsync(vm, espera);
         update.Setup(s => s.BuscarAsync(default)).ReturnsAsync(Hay("0.6.0", UpdateSeverity.Critical));
 
-        espera.Avanzar(TimeSpan.FromHours(1));
+        espera.Avanzar(CoordinadorActualizacion.IntervaloChequeo);
         await espera.SiguienteEsperaAsync();
 
         var aviso = Assert.IsType<ActualizacionAvisoCriticoViewModel>(vm.OverlayActualizacion);
@@ -239,7 +245,7 @@ public class ShellViewModelChequeoHorarioTests
         var modal = Assert.IsType<ActualizacionModalViewModel>(vm.OverlayActualizacion);
         update.Setup(s => s.BuscarAsync(default)).ReturnsAsync(Hay("0.6.0", UpdateSeverity.Normal));
 
-        espera.Avanzar(TimeSpan.FromHours(1));
+        espera.Avanzar(CoordinadorActualizacion.IntervaloChequeo);
         await espera.SiguienteEsperaAsync();
 
         Assert.Same(modal, vm.OverlayActualizacion);

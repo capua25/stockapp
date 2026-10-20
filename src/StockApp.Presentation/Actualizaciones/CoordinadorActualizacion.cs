@@ -21,7 +21,7 @@ public sealed class CoordinadorActualizacion
     /// <summary>Cada cuánto se repite la búsqueda con la app abierta.</summary>
     public static readonly TimeSpan IntervaloChequeo = TimeSpan.FromMinutes(15);
 
-    // Un único cerrojo para arranque, chequeo horario y aplicar: nunca dos BuscarAsync/DescargarAsync
+    // Un único cerrojo para arranque, chequeo periódico y aplicar: nunca dos BuscarAsync/DescargarAsync
     // a la vez (el UltimoFeed de la fuente es compartido). Todo acceso a _notificadas y
     // _ultimaVersionBuscada ocurre con el cerrojo tomado.
     private readonly SemaphoreSlim      _cerrojo = new(1, 1);
@@ -103,7 +103,7 @@ public sealed class CoordinadorActualizacion
     }
 
     /// <summary>
-    /// Chequeo horario con la app abierta. Devuelve la acción a mostrar, o <c>null</c> si no
+    /// Chequeo periódico con la app abierta. Devuelve la acción a mostrar, o <c>null</c> si no
     /// hay nada que mostrar: ya se pidió aplicar, hay otra operación en curso (ese tick se
     /// saltea), la búsqueda falló (en silencio), no hay update o esa versión ya se notificó.
     /// </summary>
@@ -166,7 +166,7 @@ public sealed class CoordinadorActualizacion
         }
         catch
         {
-            // La versión vuelve a ser notificable y el chequeo horario vuelve a correr.
+            // La versión vuelve a ser notificable y el chequeo periódico vuelve a correr.
             if (_ultimaVersionBuscada is not null) _notificadas.Remove(_ultimaVersionBuscada);
             _aplicacionSolicitada = false;
             return false;

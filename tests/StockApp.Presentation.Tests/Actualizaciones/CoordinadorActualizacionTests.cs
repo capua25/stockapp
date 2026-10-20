@@ -152,7 +152,7 @@ public class CoordinadorActualizacionTests
         Assert.False(resultado);
     }
 
-    // ── evaluación en sesión (chequeo horario) ────────────────────────────────
+    // ── evaluación en sesión (chequeo periódico) ────────────────────────────────
 
     private static UpdateCheckResult Hay(string version, UpdateSeverity severity) =>
         new(HayUpdate: true, Version: version, Severity: severity, NotasMarkdown: "notas");
@@ -277,7 +277,7 @@ public class CoordinadorActualizacionTests
     public async Task EvaluarEnArranque_BuscarTira_LiberaElCerrojoYLaSesionSigueBuscando()
     {
         // Arrancar sin red es el camino real más probable: un cerrojo que quede tomado
-        // silenciaría el chequeo horario durante toda la sesión.
+        // silenciaría el chequeo periódico durante toda la sesión.
         var updateMock = new Mock<IUpdateService>();
         updateMock.SetupSequence(s => s.BuscarAsync(default))
             .ThrowsAsync(new HttpRequestException("sin red"))
