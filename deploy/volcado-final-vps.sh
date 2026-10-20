@@ -380,17 +380,25 @@ congelar_unit() {
     fi
     remoto "sudo test -e ${UNIT_CONGELADA}"
     if [[ "$RC_REMOTO" -eq 0 && -z "$ERROR_REMOTO" ]]; then
+        # Un intento anterior movió la unit y no llegó al daemon-reload (systemd todavía la ve en
+        # /etc): la vuelta atrás es la de una unit movida, no solo el start.
+        UNIT_MOVIDA=1
         echo "ERROR: ya existe '${UNIT_CONGELADA}' (¿un intento anterior a medias?). No se pisa. ABORTO." >&2
         exit 8
     elif [[ "$RC_REMOTO" -ne 1 || -n "$ERROR_REMOTO" ]]; then
         no_pude "si existe ${UNIT_CONGELADA}"
     fi
 
-    remoto_ok "el mv de la unit a ${UNIT_CONGELADA}" "sudo mv ${UNIT_ETC} ${UNIT_CONGELADA}"
+    # Las banderas van ANTES de cada comando: si hizo efecto pero dejó algo en stderr, remoto_ok
+    # aborta y el aviso de vuelta atrás tiene que incluir deshacerlo. Si el comando no llegó a
+    # hacer efecto, el paso de más en la vuelta atrás falla sin tocar nada (mv sin origen) o no
+    # hace nada (unmask de una unit no enmascarada); faltar ese paso, en cambio, deja la API sin
+    # poder arrancar.
     UNIT_MOVIDA=1
+    remoto_ok "el mv de la unit a ${UNIT_CONGELADA}" "sudo mv ${UNIT_ETC} ${UNIT_CONGELADA}"
     remoto_ok "el daemon-reload" "sudo systemctl daemon-reload"
-    remoto_ok "el mask de stockapp-api" "sudo systemctl -q mask stockapp-api"
     ENMASCARADA=1
+    remoto_ok "el mask de stockapp-api" "sudo systemctl -q mask stockapp-api"
     remoto "systemctl is-enabled stockapp-api"
     [[ -n "$SALIDA_REMOTA" ]] || no_pude "la habilitación de stockapp-api tras el mask"
     if [[ "$SALIDA_REMOTA" != "masked" ]]; then

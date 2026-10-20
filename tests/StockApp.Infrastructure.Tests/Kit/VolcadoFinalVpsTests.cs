@@ -104,6 +104,7 @@ public class VolcadoFinalVpsTests : IDisposable
                 fi
                 echo masked > "$STUB_MASCARA"
                 [[ "$cmd" == *" -q "* ]] || echo "Created symlink $unit_fragmento → /dev/null." >&2
+                [[ -z "${STUB_MASK_ADVIERTE:-}" ]] || echo 'systemctl: advertencia simulada tras enmascarar' >&2
                 exit 0
                 ;;
             *"test -e $unit_fragmento.congelado"*)
@@ -116,6 +117,7 @@ public class VolcadoFinalVpsTests : IDisposable
                     exit 1
                 fi
                 echo movida > "$STUB_UNIT"
+                [[ -z "${STUB_MV_ADVIERTE:-}" ]] || echo 'mv: advertencia simulada tras mover' >&2
                 exit 0
                 ;;
             *"systemctl start stockapp-api"*)
@@ -648,6 +650,49 @@ public class VolcadoFinalVpsTests : IDisposable
         Assert.True(r.ExitCode == 8, r.Diag);
         Assert.DoesNotContain("sudo mv", r.Rastro);
         Assert.False(HuboPgDump(r), r.Diag);
+    }
+
+    /// <summary>
+    /// Reintento tras una corrida a medias: la unit ya se movió a .congelado (systemd todavía la
+    /// reporta en /etc porque no hubo daemon-reload). El aborto tiene que dar la vuelta atrás de
+    /// una unit movida (mv, daemon-reload, start), no solo el start.
+    /// </summary>
+    [Fact]
+    public void CongeladoYaExiste_InformaLaVueltaAtrasDeUnaUnitMovida()
+    {
+        var r = Correr(env: Env(("STUB_CONGELADO_EXISTE", "1")));
+
+        Assert.True(r.ExitCode == 8, r.Diag);
+        Assert.Contains($"sudo mv {UnitEtc}.congelado {UnitEtc}", r.Stderr);
+        Assert.Contains("sudo systemctl daemon-reload", r.Stderr);
+        Assert.Contains("sudo systemctl start stockapp-api", r.Stderr);
+        Assert.DoesNotContain("unmask", r.Stderr);
+    }
+
+    /// <summary>
+    /// Un comando que HIZO efecto pero dejó algo en stderr aborta (remoto_ok), y el mensaje tiene
+    /// que reflejar el efecto: las banderas se ponen ANTES de ejecutar.
+    /// </summary>
+    [Fact]
+    public void MvConEfectoYStderr_InformaLaUnitMovida()
+    {
+        var r = Correr(env: Env(("STUB_MV_ADVIERTE", "1")));
+
+        Assert.True(r.ExitCode == 8, r.Diag);
+        Assert.Equal("movida", r.Estado("unit"));
+        Assert.Contains($"sudo mv {UnitEtc}.congelado {UnitEtc}", r.Stderr);
+        Assert.Contains("sudo systemctl daemon-reload", r.Stderr);
+    }
+
+    [Fact]
+    public void MaskConEfectoYStderr_InformaQueQuedoEnmascarada()
+    {
+        var r = Correr(env: Env(("STUB_MASK_ADVIERTE", "1")));
+
+        Assert.True(r.ExitCode == 8, r.Diag);
+        Assert.Equal("masked", r.Estado("mascara"));
+        Assert.Contains("ENMASCARADA", r.Stderr);
+        Assert.Contains("sudo systemctl unmask stockapp-api", r.Stderr);
     }
 
     // ---------- I1: en modo final, todo fallo después del stop informa el estado y R-A ----------
