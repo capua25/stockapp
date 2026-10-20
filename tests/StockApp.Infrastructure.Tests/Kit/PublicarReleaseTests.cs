@@ -567,7 +567,8 @@ public class PublicarReleaseTests
     private static string NombrePaquete(string version, string tipo) => $"GestionMunicipal-{version}-{tipo}.nupkg";
 
     // Reemplaza el feed y los paquetes de --origen por Full+Delta de cada versión dada.
-    private static void PrepararOrigenConVersiones(Entorno e, string[] versiones)
+    // `notas` (opcional) pisa el NotesMarkdown de una versión; null en el valor = campo ausente.
+    private static void PrepararOrigenConVersiones(Entorno e, string[] versiones, IDictionary<string, string?>? notas = null)
     {
         foreach (var f in Directory.GetFiles(e.Origen)) File.Delete(f);
         var assets = new List<string>();
@@ -578,10 +579,16 @@ public class PublicarReleaseTests
                 var nombre = NombrePaquete(versiones[i], tipo);
                 File.WriteAllBytes(Path.Combine(e.Origen, nombre), new byte[tamano]);
                 var sha = Convert.ToHexString(SHA256.HashData(new byte[tamano]));
-                assets.Add($"{{\"PackageId\":\"GestionMunicipal\",\"Version\":\"{versiones[i]}\",\"Type\":\"{(tipo == "full" ? "Full" : "Delta")}\",\"FileName\":\"{nombre}\",\"SHA1\":\"a\",\"SHA256\":\"{sha}\",\"Size\":{tamano},\"NotesMarkdown\":\"notas {versiones[i]}\"}}");
+                assets.Add($"{{\"PackageId\":\"GestionMunicipal\",\"Version\":\"{versiones[i]}\",\"Type\":\"{(tipo == "full" ? "Full" : "Delta")}\",\"FileName\":\"{nombre}\",\"SHA1\":\"a\",\"SHA256\":\"{sha}\",\"Size\":{tamano}{NotasJson(versiones[i], notas)}}}");
             }
         }
         File.WriteAllText(Path.Combine(e.Origen, "releases.win.json"), "{\"Assets\":[" + string.Join(",", assets) + "]}");
+    }
+
+    private static string NotasJson(string version, IDictionary<string, string?>? notas)
+    {
+        if (notas is null || !notas.TryGetValue(version, out var texto)) return $",\"NotesMarkdown\":\"notas {version}\"";
+        return texto is null ? "" : ",\"NotesMarkdown\":" + System.Text.Json.JsonSerializer.Serialize(texto);
     }
 
     private static string[] NombresDelFeedServido(Entorno e)
@@ -630,6 +637,108 @@ public class PublicarReleaseTests
 
         Assert.True(r.ExitCode == 0, Diagnostico(r));
         Assert.False(File.Exists(Path.Combine(e.CarpetaFeed, NombrePaquete("0.5.0", "full"))));
+    }
+
+    // ---------- Poda del feed: las críticas viejas conservan su Full ----------
+
+    private static readonly string[] CincoMayores = ["0.7.0", "0.8.0", "0.9.0", "0.10.0", "0.11.0"];
+
+    private static string[] ConCincoMayores(params string[] extras) =>
+        extras.Concat(CincoMayores.SelectMany(v => new[] { NombrePaquete(v, "full"), NombrePaquete(v, "delta") })).OrderBy(x => x).ToArray();
+
+    [Fact]
+    public void Poda_CriticaVieja_ConservaSuFullPeroNoSuDelta_YDescartaLaNoCritica()
+    {
+        using var e = new Entorno();
+        // 0.5.0 (la más vieja podada) es crítica; 0.6.0 no.
+        PrepararOrigenConVersiones(e, SieteVersiones, new Dictionary<string, string?> { ["0.5.0"] = "severity: critical\n\n- arreglo importante" });
+        e.PonerEnServidor(NombrePaquete("0.5.0", "full"), new byte[100]);
+
+        var r = e.Correr("0.11.0");
+
+        Assert.True(r.ExitCode == 0, Diagnostico(r));
+        Assert.Equal(ConCincoMayores(NombrePaquete("0.5.0", "full")), NombresDelFeedServido(e));
+    }
+
+    [Fact]
+    public void Poda_CriticaVieja_NoEstaEnOrigenPeroSiEnElServidor_Publica()
+    {
+        using var e = new Entorno();
+        PrepararOrigenConVersiones(e, SieteVersiones, new Dictionary<string, string?> { ["0.5.0"] = "severity: critical" });
+        File.Delete(Path.Combine(e.Origen, NombrePaquete("0.5.0", "full")));
+        e.PonerEnServidor(NombrePaquete("0.5.0", "full"), new byte[100]);
+
+        var r = e.Correr("0.11.0");
+
+        Assert.True(r.ExitCode == 0, Diagnostico(r));
+        Assert.Equal(ConCincoMayores(NombrePaquete("0.5.0", "full")), NombresDelFeedServido(e));
+        Assert.DoesNotContain(r.Scp, l => l.Contains("0.5.0"));
+    }
+
+    [Fact]
+    public void Poda_CriticaVieja_NoEstaEnOrigenNiEnElServidor_AbortaSinSubirNada()
+    {
+        using var e = new Entorno();
+        PrepararOrigenConVersiones(e, SieteVersiones, new Dictionary<string, string?> { ["0.5.0"] = "severity: critical" });
+        File.Delete(Path.Combine(e.Origen, NombrePaquete("0.5.0", "full")));
+
+        var r = e.Correr("0.11.0");
+
+        Assert.NotEqual(0, r.ExitCode);
+        Assert.Contains(NombrePaquete("0.5.0", "full"), r.Stderr);
+        Assert.Empty(r.Scp);
+        Assert.Empty(e.ArchivosEnServidor());
+    }
+
+    [Fact]
+    public void Poda_CriticaVieja_NoEstaEnOrigenYElServidorTieneOtroContenido_Aborta()
+    {
+        using var e = new Entorno();
+        PrepararOrigenConVersiones(e, SieteVersiones, new Dictionary<string, string?> { ["0.5.0"] = "severity: critical" });
+        File.Delete(Path.Combine(e.Origen, NombrePaquete("0.5.0", "full")));
+        e.PonerEnServidor(NombrePaquete("0.5.0", "full"), new byte[99]);
+
+        var r = e.Correr("0.11.0");
+
+        Assert.NotEqual(0, r.ExitCode);
+        Assert.Empty(r.Scp);
+    }
+
+    // Mismo criterio que SeverityParser: primera línea `severity: <valor>`, sin distinguir
+    // mayúsculas ni espacios alrededor; ausente o inválido = no crítica.
+    [Theory]
+    [InlineData("severity: critical", true)]
+    [InlineData("  SEVERITY:   Critical  \n\nresto", true)]
+    [InlineData("severity:critical\r\n- algo", true)]
+    [InlineData("severity: important", false)]
+    [InlineData("severity: criticalx", false)]
+    [InlineData("severity critical", false)]
+    [InlineData("notas\nseverity: critical", false)]
+    [InlineData("\nseverity: critical", false)]
+    [InlineData("   ", false)]
+    [InlineData(null, false)]
+    public void Poda_SeveridadDeLasNotas_SeLeeComoSeverityParser(string? notas, bool critica)
+    {
+        using var e = new Entorno();
+        PrepararOrigenConVersiones(e, SieteVersiones, new Dictionary<string, string?> { ["0.5.0"] = notas });
+        e.PonerEnServidor(NombrePaquete("0.5.0", "full"), new byte[100]);
+
+        var r = e.Correr("0.11.0");
+
+        Assert.True(r.ExitCode == 0, Diagnostico(r));
+        Assert.Equal(critica ? ConCincoMayores(NombrePaquete("0.5.0", "full")) : ConCincoMayores(), NombresDelFeedServido(e));
+    }
+
+    [Fact]
+    public void Poda_CriticaDentroDeLaVentana_NoDuplicaNada()
+    {
+        using var e = new Entorno();
+        PrepararOrigenConVersiones(e, SieteVersiones, new Dictionary<string, string?> { ["0.9.0"] = "severity: critical" });
+
+        var r = e.Correr("0.11.0");
+
+        Assert.True(r.ExitCode == 0, Diagnostico(r));
+        Assert.Equal(ConCincoMayores(), NombresDelFeedServido(e));
     }
 
     [Fact]

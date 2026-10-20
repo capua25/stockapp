@@ -53,6 +53,17 @@ set -euo pipefail
 # verificación de tamaño+sha256 del paso 5, subida) opera sobre el feed podado. Un cliente
 # más viejo que la ventana no tiene delta hacia la versión actual y baja el último Full.
 #
+# Excepción -- críticas viejas: además de la ventana, se CONSERVA SIEMPRE la entrada Full de
+# toda versión más vieja cuyas NotesMarkdown tengan por primera línea `severity: critical`
+# (los Delta de esas versiones sí se podan). Motivo: VelopackUpdateService calcula la
+# severidad efectiva como el MÁXIMO entre las releases que hay entre la instalada y la
+# destino, leídas del feed; sin esa entrada un cliente más de N versiones atrasado perdería
+# la marca crítica. El parseo espeja a SeverityParser (primera línea, `severity:` sin
+# distinguir mayúsculas, valor recortado; ausente o inválido = no crítica). Ese Full viejo
+# ya está en el servidor de publicaciones anteriores, así que NO se exige en --origen: si
+# falta ahí, tiene que estar en el servidor con el tamaño y el sha256 del feed (si no, aborta
+# sin subir nada). Si está en --origen se valida como cualquier otro paquete.
+#
 # Retirar una versión mala: Velopack no hace downgrade. Se republica la última versión BUENA
 # con un número MAYOR (empaquetar de nuevo desde ese código con una versión nueva). Por eso
 # publicar una versión menor que la servida aborta: --forzar existe solo como escape de
@@ -199,10 +210,18 @@ fallar() {
 NOMBRES=()
 TAMANOS=()
 HASHES=()
+# Críticas viejas conservadas fuera de la ventana que NO están en --origen: deben estar en el servidor.
+SOLO_SERVIDOR=()
 FULL_NUEVO=""
 FULL_NUEVO_TAMANO=""
 # Feed que se publica de verdad: copia podada del de --origen (que no se toca).
 JSON_PUBLICAR=""
+
+# Espeja SeverityParser.Parse == Critical: primera línea (split por \n, trim), empieza con
+# "severity:" sin distinguir mayúsculas y el valor recortado es "critical". Acepta .NotesMarkdown
+# ausente/null/vacío (= no crítica).
+JQ_CRITICA='def critica: ((.NotesMarkdown // "") | tostring | ((split("\n")[0]) // "") | gsub("^\\s+|\\s+$"; "")) as $p
+    | ($p | ascii_downcase | startswith("severity:")) and (($p[9:] | gsub("^\\s+|\\s+$"; "") | ascii_downcase) == "critical");'
 
 paso1_validar_local() {
     local json="${ORIGEN}/${JSON_NOMBRE}"
@@ -218,13 +237,15 @@ paso1_validar_local() {
         fallar "la versión pedida '${VERSION}' no es la mayor del feed (Full de mayor versión: '${mayor:-ninguna}')."
     fi
 
-    # Poda: solo las FEED_VERSIONES_MAX versiones mayores (por sus Full) quedan en el feed.
+    # Poda: solo las FEED_VERSIONES_MAX versiones mayores (por sus Full) quedan en el feed,
+    # más el Full de toda versión vieja cuyas notas sean `severity: critical`.
     local conservar
     conservar="$(printf '%s\n' "$versiones" | sort -uV | tail -n "$FEED_VERSIONES_MAX" | jq -R . | jq -s .)" \
         || fallar "no se pudo calcular las versiones a conservar de '${json}'."
     DIR_PODADO="$(mktemp -d)" || fallar "no se pudo crear el directorio temporal para el feed podado."
     JSON_PUBLICAR="${DIR_PODADO}/${JSON_NOMBRE}"
-    jq --argjson conservar "$conservar" '.Assets |= map(select(.Version as $v | $conservar | index($v)))' "$json" >"$JSON_PUBLICAR" \
+    jq --argjson conservar "$conservar" "${JQ_CRITICA}"'
+        .Assets |= map(select((.Version as $v | $conservar | index($v)) or (.Type == "Full" and critica)))' "$json" >"$JSON_PUBLICAR" \
         || fallar "no se pudo podar '${json}'."
     # Sin nada que podar se publica el archivo de --origen tal cual (byte a byte), no el
     # re-serializado por jq.
@@ -237,6 +258,15 @@ paso1_validar_local() {
         echo "[publicar] feed podado a las ${FEED_VERSIONES_MAX} versiones mayores: ${despues} de ${antes} paquetes (no se borra nada del servidor)."
     fi
     json="$JSON_PUBLICAR"
+
+    # Los Full conservados por crítica (fuera de la ventana): pueden faltar en --origen.
+    local fuera_ventana
+    if ! fuera_ventana="$(jq -r --argjson conservar "$conservar" '.Assets[] | select((.Version as $v | $conservar | index($v)) | not) | .FileName' "$json")"; then
+        fallar "no se pudo calcular las críticas viejas conservadas de '${json}'."
+    fi
+    if [[ -n "$fuera_ventana" ]]; then
+        echo "[publicar] se conservan en el feed los Full de versiones viejas con severity: critical: ${fuera_ventana//$'\n'/ }"
+    fi
 
     # FileName y SHA256 vacíos se rechazan ACÁ: en el TSV de abajo un campo vacío se colapsa
     # (el tab es IFS-whitespace) y correría los demás en silencio.
@@ -261,10 +291,18 @@ paso1_validar_local() {
         if [[ ! "$tamano" =~ ^[0-9]+$ ]]; then
             fallar "Size inválido para '${nombre}': '${tamano}'."
         fi
-        [[ -f "${ORIGEN}/${nombre}" ]] || fallar "falta el paquete '${nombre}' en '${ORIGEN}'."
-        local_tamano="$(stat -c %s "${ORIGEN}/${nombre}")"
-        if [[ "$local_tamano" != "$tamano" ]]; then
-            fallar "'${nombre}' pesa ${local_tamano} bytes y el feed dice ${tamano}."
+        if [[ ! -f "${ORIGEN}/${nombre}" ]]; then
+            if [[ -n "$fuera_ventana" ]] && grep -qxF -- "$nombre" <<<"$fuera_ventana"; then
+                # Crítica vieja: ya está en el servidor; se exige ahí (paso 3) en vez de acá.
+                SOLO_SERVIDOR+=("$nombre")
+            else
+                fallar "falta el paquete '${nombre}' en '${ORIGEN}'."
+            fi
+        else
+            local_tamano="$(stat -c %s "${ORIGEN}/${nombre}")"
+            if [[ "$local_tamano" != "$tamano" ]]; then
+                fallar "'${nombre}' pesa ${local_tamano} bytes y el feed dice ${tamano}."
+            fi
         fi
         NOMBRES+=("$nombre")
         TAMANOS+=("$tamano")
@@ -358,6 +396,9 @@ paso3_subir_a_staging() {
         nombre="${NOMBRES[$i]}"
         remoto_tamano="$(tamano_remoto "$nombre")"
         if [[ -z "$remoto_tamano" ]]; then
+            if [[ " ${SOLO_SERVIDOR[*]:-} " == *" ${nombre} "* ]]; then
+                fallar "'${nombre}' (Full de una versión vieja con severity: critical que el feed conserva) no está en '${ORIGEN}' ni en el servidor. Copialo a --origen. No se subió nada."
+            fi
             PENDIENTES+=("$nombre")
             continue
         fi

@@ -236,6 +236,15 @@ versiones mayores (default 5, orden `sort -V`). Detalles:
 - Un cliente mas viejo que la ventana conservada no tiene delta hacia la version actual y
   descarga el ultimo `Full`.
 - `FEED_VERSIONES_MAX` invalido (no entero positivo) aborta antes de relevar o subir nada.
+- **Excepcion: criticas viejas.** Ademas de la ventana, el feed conserva siempre la entrada `Full`
+  de cualquier version mas vieja cuyas notas empiecen con `severity: critical` (los `Delta` de esas
+  versiones si se podan). Razon: el cliente calcula la severidad efectiva como el maximo entre las
+  releases que hay entre la instalada y la destino, leidas del feed; sin esa entrada, un cliente
+  con mas de N versiones de atraso perderia la marca critica. El parseo espeja a `SeverityParser`
+  (primera linea, `severity:` sin distinguir mayusculas, valor recortado; ausente o invalido = no
+  critica). Ese `Full` viejo ya esta en el servidor de publicaciones anteriores, por eso **no se exige
+  en `--origen`**: si falta ahi, el script exige que el servidor lo tenga con el tamano y el sha256
+  del feed, y si no aborta sin subir nada. Si esta en `--origen` se valida como cualquier paquete.
 
 Reglas:
 
