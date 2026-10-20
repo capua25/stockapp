@@ -36,7 +36,8 @@ public class BajarBackupVpsTests : IDisposable
     // ---------- Stubs ----------
 
     /// <summary>
-    /// ssh falso: STUB_LOGIN_FALLA (curl -f ante un 401: exit 22), STUB_LISTADO (archivo con el
+    /// ssh falso: STUB_LOGIN_FALLA=&lt;código HTTP&gt; (curl -f ante un 4xx/5xx: exit 22 y
+    /// "returned error: &lt;código&gt;" en stderr), STUB_LISTADO (archivo con el
     /// JSON de GET /backups), STUB_LISTADO_FALLA, STUB_TAMANO_CONTENIDO (bytes que devuelve
     /// /contenido, default 2048).
     /// </summary>
@@ -58,7 +59,7 @@ public class BajarBackupVpsTests : IDisposable
             *"/auth/login"*)
                 registrar_stdin
                 if [[ -n "${STUB_LOGIN_FALLA:-}" ]]; then
-                    echo 'curl: (22) The requested URL returned error: 401' >&2
+                    echo "curl: (22) The requested URL returned error: ${STUB_LOGIN_FALLA}" >&2
                     exit 22
                 fi
                 echo '{"token":"FAKE-TOKEN-123","usuario":{"id":1}}'
@@ -99,7 +100,8 @@ public class BajarBackupVpsTests : IDisposable
         [
           {"id":10,"finalizadaEn":"2026-10-20T03:00:00Z","resultado":"Fallida","nombreArchivo":null,"tamanioBytes":null,"motivoFallo":"simulado"},
           {"id":9,"finalizadaEn":"2026-10-19T03:00:00.5Z","resultado":"Exitosa","nombreArchivo":"backup_20261019_030000500.dump","tamanioBytes":2048,"motivoFallo":null},
-          {"id":7,"finalizadaEn":"2026-10-18T03:00:00.123Z","resultado":"Exitosa","nombreArchivo":"backup_20261018_030000123.dump","tamanioBytes":2048,"motivoFallo":null}
+          {"id":7,"finalizadaEn":"2026-10-18T03:00:00.123Z","resultado":"Exitosa","nombreArchivo":"backup_20261018_030000123.dump","tamanioBytes":2048,"motivoFallo":null},
+          {"id":12,"finalizadaEn":"2026-10-17T03:00:00Z","resultado":"Exitosa","nombreArchivo":"backup_20261017_030000000.dump","tamanioBytes":2048,"motivoFallo":null}
         ]
         """;
 
@@ -271,13 +273,41 @@ public class BajarBackupVpsTests : IDisposable
         Assert.DoesNotContain("/contenido", r.Rastro);
     }
 
-    [Fact]
-    public void LoginFalla_Aborta3()
+    [Theory]
+    [InlineData("401")]
+    [InlineData("403")]
+    public void LoginRechazado_Aborta3(string codigo)
     {
-        var r = Correr(env: Env(("STUB_LOGIN_FALLA", "1")));
+        var r = Correr(env: Env(("STUB_LOGIN_FALLA", codigo)));
 
         Assert.True(r.ExitCode == 3, r.Diag);
+        Assert.Contains(codigo, r.Stderr);
         Assert.DoesNotContain("/backups", r.Rastro);
+    }
+
+    /// <summary>Un 429 (límite de intentos) o un 5xx no son credenciales malas: no se puede
+    /// decirle al operador "revisá la contraseña".</summary>
+    [Theory]
+    [InlineData("429")]
+    [InlineData("503")]
+    public void LoginServidorFalla_Aborta8NombrandoElCodigo(string codigo)
+    {
+        var r = Correr(env: Env(("STUB_LOGIN_FALLA", codigo)));
+
+        Assert.True(r.ExitCode == 8, r.Diag);
+        Assert.Contains($"respondió {codigo}", r.Stderr);
+        Assert.DoesNotContain("/backups", r.Rastro);
+    }
+
+    [Fact]
+    public void ExitosaConFinalizadaEnNull_Aborta8ConMensaje()
+    {
+        var r = Correr(listado:
+            """[{"id":9,"finalizadaEn":null,"resultado":"Exitosa","nombreArchivo":"backup_20261019_030000500.dump","tamanioBytes":2048,"motivoFallo":null}]""");
+
+        Assert.True(r.ExitCode == 8, r.Diag);
+        Assert.Contains("finalizadaEn", r.Stderr);
+        Assert.DoesNotContain("/contenido", r.Rastro);
     }
 
     [Fact]

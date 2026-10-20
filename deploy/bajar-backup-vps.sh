@@ -30,12 +30,12 @@
 # Códigos de salida (estables):
 #   0  OK
 #   2  uso / argumentos inválidos
-#   3  precondición: config faltante o inválida, falta jq/pg_restore/sha256sum, login rechazado,
+#   3  precondición: config faltante o inválida, falta jq/pg_restore/sha256sum, login rechazado (401/403),
 #      sin corrida exitosa, --id inexistente o no exitoso, el archivo destino ya existe
 #   4  descarga inválida: tamaño ≠ listado o < 1024, pg_restore --list falla, nombre de archivo
 #      inseguro (lo bajado se borra)
-#   8  no se pudo consultar (ssh/curl con error, respuesta ilegible): "no pude consultar" nunca
-#      es "no hay backups"
+#   8  no se pudo consultar (ssh/curl con error, respuesta ilegible, una Exitosa sin finalizadaEn,
+#      login con un código que no es 401/403): "no pude consultar" nunca es "no hay backups"
 # =======================================================================================
 
 set -euo pipefail
@@ -171,10 +171,21 @@ RESPUESTA_LOGIN="$(VPS_ADMIN_USER="$VPS_ADMIN_USER" VPS_ADMIN_PASSWORD="$VPS_ADM
         2>"$archivo_stderr")" || RC=$?
 leer_stderr "$archivo_stderr"
 if [[ "$RC" -eq 22 ]]; then
-    echo "ERROR: la API rechazó el login de '${VPS_ADMIN_USER}' (curl -f: código HTTP de error)." >&2
+    # curl -f sale 22 ante cualquier 4xx/5xx; el código HTTP viene en su stderr ("returned error:
+    # 401"). Solo 401/403 son credenciales; un 429 (límite de intentos) o un 5xx no.
+    CODIGO_HTTP=""
+    if [[ "$ERROR_REMOTO" =~ returned\ error:\ ([0-9]{3}) ]]; then
+        CODIGO_HTTP="${BASH_REMATCH[1]}"
+    fi
+    if [[ "$CODIGO_HTTP" == "401" || "$CODIGO_HTTP" == "403" ]]; then
+        echo "ERROR: la API rechazó el login de '${VPS_ADMIN_USER}' (HTTP ${CODIGO_HTTP})." >&2
+        echo "       Revisá VPS_ADMIN_USER / VPS_ADMIN_PASSWORD. No se reintenta (límite de intentos)." >&2
+        exit 3
+    fi
+    echo "ERROR: el login falló: el servidor respondió ${CODIGO_HTTP:-un código HTTP de error que no se pudo leer}." >&2
+    echo "       No es un problema de credenciales: no se reintenta." >&2
     [[ -z "$ERROR_REMOTO" ]] || printf '       stderr: %s\n' "$ERROR_REMOTO" >&2
-    echo "       Revisá VPS_ADMIN_USER / VPS_ADMIN_PASSWORD. No se reintenta (límite de intentos)." >&2
-    exit 3
+    exit 8
 fi
 if [[ "$RC" -ne 0 ]]; then
     echo "ERROR: no se pudo hacer el login (código ${RC}): ssh o la API no respondieron." >&2
@@ -220,6 +231,11 @@ if [[ -n "$ID_PEDIDO" ]]; then
         exit 3
     fi
 else
+    if ! printf '%s' "$LISTADO" | jq -e 'all(.[] | select(.resultado == "Exitosa"); (.finalizadaEn | type) == "string")' >/dev/null; then
+        echo "ERROR: GET /backups trae una corrida Exitosa sin finalizadaEn: no se puede elegir la más" >&2
+        echo "       reciente. Elegí una a mano con --id <n> (ver la tabla de arriba). ABORTO." >&2
+        exit 8
+    fi
     # Orden por finalizadaEn sin la fracción de segundo (el JSON no siempre trae los mismos
     # dígitos, y como texto "…00.5Z" quedaría después de "…00.12Z"); empate: el id mayor.
     CORRIDA="$(printf '%s' "$LISTADO" | jq -c '
