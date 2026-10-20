@@ -43,7 +43,9 @@ public class ProductoListViewStockOrdenTests
     public void Ordenar_PorCostoYPorStock_MantieneAlineadosYSinRecorteLosNumerosDeStock()
     {
         var vista = new ProductoListView();
-        var window = new Window { Width = 1700, Height = 1600, Content = vista };
+        // Sin DataContext los estados vacío / cargando / sin conexión / sin resultados se muestran todos y le quitan alto
+        // a la grilla: 1800 alcanza para realizar las 23 filas (con la última, de stock negativo) pese a esos paneles.
+        var window = new Window { Width = 1700, Height = 1800, Content = vista };
         window.Show();
         Dispatcher.UIThread.RunJobs();
 

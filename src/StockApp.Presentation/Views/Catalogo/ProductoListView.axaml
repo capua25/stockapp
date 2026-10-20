@@ -13,7 +13,17 @@
              Classes="ui2"
              Background="{DynamicResource V2FondoBrush}">
 
-    <!-- UI v2 (spec §5.1). Espejo: docs/ui-v2/mockups/inventario/productos.html y productos-vacio.html.
+    <UserControl.Styles>
+        <!-- El buscador va alineado con el borde inferior de la barra: el combo de Estado lleva su etiqueta arriba y es
+             más alto, y sin esto el buscador se estira a esa altura (mockup: align-items flex-end). -->
+        <Style Selector="v2|BarraFiltros#Filtros /template/ TextBox#PART_Busqueda">
+            <Setter Property="VerticalAlignment" Value="Bottom" />
+        </Style>
+    </UserControl.Styles>
+
+    <!-- UI v2 (spec §5.1). Espejo: docs/ui-v2/mockups/inventario/productos.html, productos-inactivos.html, productos-vacio.html,
+         productos-cargando.html y productos-celda-cortada.html.
+         Filtro de Estado en el cliente (Activos por defecto, sin columna ESTADO: la fila inactiva va en texto terciario).
          Editar y Eliminar se habilitan solo con un producto activo seleccionado (regla del VM). Los tres botones se ven solo con
          catalogo.productos (PuedeGestionarProductos, bug B3), como el resto de las pantallas: IsVisible, no IsEnabled.
          Mientras carga sin filas: EstadoCargando; tras un 403: Sin permiso en lugar de la card; sin servidor: el error
@@ -47,17 +57,28 @@
                                  DockPanel.Dock="Top"
                                  TextoBusqueda="{Binding FiltroBusqueda}"
                                  MarcaAguaBusqueda="Nombre, SKU o código de barras">
-                    <Button x:Name="BotonBuscar" Classes="secundario" Content="Buscar" Command="{Binding BuscarCommand}" />
+                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Bottom">
+                        <Button x:Name="BotonBuscar" Classes="secundario" Content="Buscar" Command="{Binding BuscarCommand}"
+                                VerticalAlignment="Bottom" />
+                        <v2:CampoFormulario x:Name="CampoEstado" Etiqueta="Estado" VerticalAlignment="Bottom">
+                            <ComboBox x:Name="ComboEstado" Width="160"
+                                      ItemsSource="{Binding FiltrosEstado}" SelectedItem="{Binding FiltroEstado}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:OpcionEstadoProducto"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </v2:CampoFormulario>
+                    </StackPanel>
                 </v2:BarraFiltros>
 
                 <TextBlock x:Name="PieConteo"
                            DockPanel.Dock="Bottom"
                            Classes="pie-conteo"
                            Margin="0,12,0,0"
-                           Text="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.Instance}, ConverterParameter='producto|productos'}">
+                           Text="{Binding CantidadVisible, Converter={x:Static conv:ConteoConverter.Instance}, ConverterParameter='producto|productos'}">
                     <TextBlock.IsVisible>
                         <MultiBinding Converter="{x:Static BoolConverters.And}">
-                            <Binding Path="Items.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="CantidadVisible" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
                             <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
                         </MultiBinding>
                     </TextBlock.IsVisible>
@@ -108,12 +129,29 @@
                     </v2:EstadoVacio.IsVisible>
                 </v2:EstadoVacio>
 
+                <!-- Hay productos pero el filtro de Estado no deja ver ninguno. -->
+                <v2:EstadoVacio x:Name="EstadoSinResultados"
+                                UseLayoutRounding="False"
+                                DockPanel.Dock="Top"
+                                Titulo="No hay productos en este estado"
+                                Mensaje="Probá con otro estado.">
+                    <v2:EstadoVacio.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinPermiso" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="Items.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="CantidadVisible" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                        </MultiBinding>
+                    </v2:EstadoVacio.IsVisible>
+                </v2:EstadoVacio>
+
                 <!-- Columnas de plantilla para marcar cada TextBlock con Classes.inactivo (texto terciario por
                      token, nunca Opacity). SortMemberPath conserva el orden por click en el encabezado.
                      MinWidth por columna y scroll horizontal Auto: fix 3548397.
                      CÓDIGO, COSTO y UNIDAD miden su texto sobre TODAS las filas al cargar (b:ColumnaAuto), con un
                      tope; lo que lo pasa se corta con elipsis y se lee en el tooltip, que solo abre si el texto está
-                     cortado. ESTADO fija 78 (la insignia es un conjunto cerrado) y STOCK 220. -->
+                     cortado. STOCK fija 220. -->
                 <DataGrid x:Name="Grilla"
                           ItemsSource="{Binding ItemsView}"
                           SelectedItem="{Binding ItemSeleccionado}"
@@ -123,7 +161,7 @@
                           ScrollViewer.HorizontalScrollBarVisibility="Auto">
                     <DataGrid.IsVisible>
                         <MultiBinding Converter="{x:Static BoolConverters.And}">
-                            <Binding Path="Items.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="CantidadVisible" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
                             <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
                         </MultiBinding>
                     </DataGrid.IsVisible>
@@ -207,13 +245,6 @@
                                                ToolTip.Tip="{Binding CategoriaNombre, TargetNullValue='—'}"
                                                b:TooltipSiSeCorta.Activo="True"
                                                VerticalAlignment="Center" />
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="ESTADO" Width="78" CanUserSort="False">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="dto:ProductoDto">
-                                    <v2:Insignia Texto="Inactivo" Variante="Neutro" IsVisible="{Binding !Activo}" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>

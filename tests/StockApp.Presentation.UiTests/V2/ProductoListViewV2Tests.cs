@@ -99,6 +99,14 @@ public class ProductoListViewV2Tests
         return new Montaje(ventana, vista, vm, servicio, navegacion);
     }
 
+    /// <summary>Pasa el filtro de Estado a "Inactivos" como lo hace el combo: por el ViewModel al que está enlazado.</summary>
+    private static void VerInactivos(Montaje m)
+    {
+        m.Vm.FiltroEstado = m.Vm.FiltrosEstado.Single(o => o.Nombre == "Inactivos");
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+    }
+
     private static void Clickear(Window ventana, Control control)
     {
         Dispatcher.UIThread.RunJobs();
@@ -110,7 +118,7 @@ public class ProductoListViewV2Tests
     }
 
     private static DataGridRow Fila(Montaje m, ProductoDto producto) =>
-        m.Vista.GetVisualDescendants().OfType<DataGridRow>().Single(r => ReferenceEquals(r.DataContext, producto));
+        m.Vista.GetVisualDescendants().OfType<DataGridRow>().Single(r => ReferenceEquals(r.DataContext, producto) && ArbolVisual.EsVisibleEnArbol(r));
 
     /// <summary>TextBlocks de las celdas de la fila que NO son de una Insignia (la insignia pinta su propio color).</summary>
     private static List<TextBlock> TextosDeCeldas(DataGridRow fila) =>
@@ -126,7 +134,7 @@ public class ProductoListViewV2Tests
     /// </summary>
     private static bool Visible(Montaje m, string nombre)
     {
-        var parte = m.Vista.GetLogicalDescendants().OfType<Control>().First(c => c.Name == nombre);
+        var parte = m.Vista.GetLogicalDescendants().OfType<Control>().Concat(m.Vista.GetVisualDescendants().OfType<Control>()).First(c => c.Name == nombre);
         return TopLevel.GetTopLevel(parte) is not null && ArbolVisual.EsVisibleEnArbol(parte);
     }
 
@@ -137,7 +145,7 @@ public class ProductoListViewV2Tests
     {
         var h = grilla.GetVisualDescendants().OfType<DataGridColumnHeader>().Single(x => Equals(x.Content, header));
         var centro = h.TranslatePoint(new Point(h.Bounds.Width / 2, 0), grilla)!.Value.X;
-        var fila = grilla.GetVisualDescendants().OfType<DataGridRow>().Single(r => ReferenceEquals(r.DataContext, item));
+        var fila = grilla.GetVisualDescendants().OfType<DataGridRow>().Single(r => ReferenceEquals(r.DataContext, item) && ArbolVisual.EsVisibleEnArbol(r));
         var celda = fila.GetVisualDescendants().OfType<DataGridCell>().Single(c =>
         {
             var x0 = c.TranslatePoint(default, grilla)!.Value.X;
@@ -171,32 +179,31 @@ public class ProductoListViewV2Tests
     }
 
     [AvaloniaFact]
-    public void Columnas_LasSieteActualesEnMayusculasYEnSuOrden()
+    public void Columnas_LasSeisActualesEnMayusculasYEnSuOrden()
     {
         var m = Montar(Activo);
         var headers = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla").Columns.Select(c => c.Header as string).ToArray();
 
-        Assert.Equal(new string?[] { "CÓDIGO", "NOMBRE", "COSTO", "STOCK", "UNIDAD", "CATEGORÍA", "ESTADO" }, headers);
+        Assert.Equal(new string?[] { "CÓDIGO", "NOMBRE", "COSTO", "STOCK", "UNIDAD", "CATEGORÍA" }, headers);
     }
 
     [AvaloniaFact]
-    public void ProductoInactivo_TextoTerciarioInsigniaPlenaYSinOpacidad()
+    public void ProductoInactivo_TextoTerciarioSinInsigniaYSinOpacidad()
     {
         var m = Montar(Activo, Inactivo);
+        VerInactivos(m);
         var fila = Fila(m, Inactivo);
 
         var textos = TextosDeCeldas(fila);
         Assert.Equal(6, textos.Count); // código, nombre, costo, stock, unidad, categoría
         Assert.All(textos, t => Assert.Equal(Terciario, ColorDe(t)));
-        Assert.All(TextosDeCeldas(Fila(m, Activo)), t => Assert.Equal(Etiqueta, ColorDe(t)));
 
-        var insignia = fila.GetVisualDescendants().OfType<Insignia>().Single(i => i.Texto == "Inactivo");
-        Assert.True(ArbolVisual.EsVisibleEnArbol(insignia));
-        Assert.Equal(VarianteInsignia.Neutro, insignia.Variante);
+        // El estado ya no es una columna: ninguna insignia "Inactivo" en la vista, el color del texto alcanza.
+        Assert.DoesNotContain(m.Vista.GetVisualDescendants().OfType<Insignia>(), i => i.Texto == "Inactivo");
 
-        // Ninguna opacidad entre cada texto (o la insignia) y la grilla: el inactivo se marca por color, nunca por Opacity.
+        // Ninguna opacidad entre cada texto y la grilla: el inactivo se marca por color, nunca por Opacity.
         var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
-        foreach (var v in textos.Cast<Visual>().Append(insignia))
+        foreach (var v in textos.Cast<Visual>())
         {
             for (Visual? a = v; a is not null && !ReferenceEquals(a, grilla); a = a.GetVisualParent())
                 Assert.True(a.Opacity == 1, $"{a.GetType().Name} con Opacity {a.Opacity} en la fila inactiva");
@@ -224,6 +231,7 @@ public class ProductoListViewV2Tests
     public void InactivoConStockNegativo_ElNumeroSigueEnRojo()
     {
         var m = Montar(InactivoNegativo);
+        VerInactivos(m);
         var textos = TextosDeCeldas(Fila(m, InactivoNegativo));
 
         Assert.Equal(PeligroTexto, ColorDe(textos.Single(t => t.Text == "-7")));
@@ -254,6 +262,7 @@ public class ProductoListViewV2Tests
     public void EditarYEliminar_ConInactivoSeleccionado_Deshabilitados()
     {
         var m = Montar(Activo, Inactivo);
+        VerInactivos(m);
         Clickear(m.Ventana, Fila(m, Inactivo));
 
         Assert.Same(Inactivo, m.Vm.ItemSeleccionado);
@@ -317,6 +326,125 @@ public class ProductoListViewV2Tests
         Assert.Equal("2 productos", MontajeV2.Parte<TextBlock>(m.Vista, "PieConteo").Text);
     }
 
+    // ── Filtro de Estado (Activos / Inactivos) ─────────────────────────────────────────────────────────
+
+    private static ComboBox Combo(Montaje m) => MontajeV2.Parte<ComboBox>(m.Vista, "ComboEstado");
+
+    [AvaloniaFact]
+    public void FiltroDeEstado_ComboEtiquetadoConActivosEInactivos_YActivosPorDefecto()
+    {
+        var m = Montar(Activo, Inactivo);
+        var combo = Combo(m);
+
+        Assert.True(Visible(m, "ComboEstado"));
+        Assert.Equal(160, combo.Bounds.Width, 1);
+        Assert.Equal("Estado", MontajeV2.Parte<CampoFormulario>(m.Vista, "CampoEstado").Etiqueta);
+        Assert.Equal(new[] { "Activos", "Inactivos" }, combo.Items.Cast<OpcionEstadoProducto>().Select(o => o.Nombre));
+        Assert.Equal("Activos", ((OpcionEstadoProducto)combo.SelectedItem!).Nombre);
+    }
+
+    [AvaloniaFact]
+    public void FiltroDeEstado_ElComboVaALaDerechaDeBuscar_ConOchoDeSeparacionYAlineadoAbajo()
+    {
+        var m = Montar(Activo);
+        var buscar = MontajeV2.Parte<Button>(m.Vista, "BotonBuscar");
+        var campo = MontajeV2.Parte<CampoFormulario>(m.Vista, "CampoEstado");
+        var caja = MontajeV2.Parte<BarraFiltros>(m.Vista, "Filtros").GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "PART_Busqueda");
+
+        var finBuscar = buscar.TranslatePoint(new Point(buscar.Bounds.Width, 0), m.Vista)!.Value.X;
+        var inicioCampo = campo.TranslatePoint(default, m.Vista)!.Value.X;
+        Assert.Equal(8, inicioCampo - finBuscar, 1);
+
+        double Fondo(Control c) => c.TranslatePoint(new Point(0, c.Bounds.Height), m.Vista)!.Value.Y;
+        Assert.Equal(Fondo(campo), Fondo(buscar), 1);
+        Assert.Equal(Fondo(campo), Fondo(caja), 1);
+        Assert.True(caja.Bounds.Height < campo.Bounds.Height, "El buscador se estiró a la altura del campo con etiqueta.");
+        Assert.Equal(280, caja.Bounds.Width, 1);
+    }
+
+    [AvaloniaFact]
+    public void FiltroDeEstado_PorDefectoMuestraSoloActivos_YElPieCuentaLasVisibles()
+    {
+        var m = Montar(Activo, Negativo, Inactivo, InactivoNegativo);
+        var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
+
+        var filas = grilla.GetVisualDescendants().OfType<DataGridRow>().Where(r => ArbolVisual.EsVisibleEnArbol(r)).Select(r => r.DataContext).ToList();
+        Assert.Equal(new object[] { Activo, Negativo }, filas);
+        Assert.Equal("2 productos", MontajeV2.Parte<TextBlock>(m.Vista, "PieConteo").Text);
+    }
+
+    [AvaloniaFact]
+    public void FiltroDeEstado_ElegirInactivosEnElComboReal_MuestraLosInactivosYElPieLosCuenta()
+    {
+        var m = Montar(Activo, Negativo, Inactivo, InactivoNegativo);
+        var combo = Combo(m);
+
+        combo.SelectedItem = combo.Items.Cast<OpcionEstadoProducto>().Single(o => o.Nombre == "Inactivos");
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
+
+        var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
+        var filas = grilla.GetVisualDescendants().OfType<DataGridRow>().Where(r => ArbolVisual.EsVisibleEnArbol(r)).Select(r => r.DataContext).OrderBy(d => ((ProductoDto)d!).Id).ToList();
+        Assert.Equal(new object[] { Inactivo, InactivoNegativo }, filas);
+        Assert.Equal("2 productos", MontajeV2.Parte<TextBlock>(m.Vista, "PieConteo").Text);
+    }
+
+    [AvaloniaFact]
+    public void FiltroDeEstado_ConSoloInactivos_MuestraElVacioDelFiltroConElComboAMano()
+    {
+        var m = Montar(Inactivo);
+
+        Assert.True(Visible(m, "EstadoSinResultados"));
+        Assert.Equal("No hay productos en este estado", MontajeV2.Parte<EstadoVacio>(m.Vista, "EstadoSinResultados").Titulo);
+        Assert.False(Visible(m, "EstadoSinProductos"));
+        Assert.False(Visible(m, "Grilla"));
+        Assert.False(Visible(m, "PieConteo"));
+        Assert.True(Visible(m, "ComboEstado"));
+
+        VerInactivos(m);
+
+        Assert.False(Visible(m, "EstadoSinResultados"));
+        Assert.True(Visible(m, "Grilla"));
+        Assert.Equal("1 producto", MontajeV2.Parte<TextBlock>(m.Vista, "PieConteo").Text);
+    }
+
+    [AvaloniaFact]
+    public void FiltroDeEstado_ListaVacia_NoMuestraElVacioDelFiltro()
+    {
+        var m = Montar();
+
+        Assert.True(Visible(m, "EstadoSinProductos"));
+        Assert.False(Visible(m, "EstadoSinResultados"));
+    }
+
+    [AvaloniaFact]
+    public void FiltroDeEstado_ConElFiltroEnInactivos_LaBusquedaLoConserva()
+    {
+        var m = Montar(Activo, Inactivo);
+        VerInactivos(m);
+
+        m.Servicio.Lista = [Activo, Negativo, Inactivo];
+        Clickear(m.Ventana, MontajeV2.Parte<Button>(m.Vista, "BotonBuscar"));
+
+        var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
+        Assert.Equal(new object[] { Inactivo }, grilla.GetVisualDescendants().OfType<DataGridRow>().Where(r => ArbolVisual.EsVisibleEnArbol(r)).Select(r => r.DataContext).ToList());
+        Assert.Equal("1 producto", MontajeV2.Parte<TextBlock>(m.Vista, "PieConteo").Text);
+    }
+
+    [AvaloniaFact]
+    public void FiltroDeEstado_SeleccionOcultaPorElFiltro_DeshabilitaEditarYEliminar()
+    {
+        var m = Montar(Activo, Inactivo);
+        Clickear(m.Ventana, Fila(m, Activo));
+        Assert.True(MontajeV2.Parte<Button>(m.Vista, "BotonEditar").IsEffectivelyEnabled);
+
+        VerInactivos(m);
+
+        Assert.Null(m.Vm.ItemSeleccionado);
+        Assert.False(MontajeV2.Parte<Button>(m.Vista, "BotonEditar").IsEffectivelyEnabled);
+        Assert.False(MontajeV2.Parte<Button>(m.Vista, "BotonEliminar").IsEffectivelyEnabled);
+    }
+
     [AvaloniaFact]
     public void PieDeConteo_SingularYPluralConMilesEsUy()
     {
@@ -342,27 +470,28 @@ public class ProductoListViewV2Tests
     }
 
     [AvaloniaFact]
-    public void Scroll_HastaLaPrimeraFilaInactiva_NoMueveNingunaColumna()
+    public void Scroll_HastaLaFilaConStockNegativo_NoMueveNingunaColumna()
     {
-        // 30 productos activos con textos cortos y, al final (fuera de pantalla al inicio), uno inactivo y uno con
-        // stock negativo: la grilla mide solo las filas realizadas y una Auto crece cuando aparece una fila más ancha.
+        // 30 productos activos con textos cortos y, al final (fuera de pantalla al inicio), uno con stock negativo
+        // (y otro inactivo, que el filtro de Estado oculta): la grilla mide solo las filas realizadas y una Auto crece
+        // cuando aparece una fila más ancha.
         var productos = Enumerable.Range(1, 30).Select(i => P(i, $"Producto {i}", i)).ToList();
         productos.Add(P(31, "Carretilla reforzada", 4m, activo: false));
         productos.Add(P(32, "Pala de punta", -7m));
         var m = Montar(productos.ToArray());
         var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
-        Assert.DoesNotContain(grilla.GetVisualDescendants().OfType<DataGridRow>(), r => ReferenceEquals(r.DataContext, productos[30]));
+        Assert.DoesNotContain(grilla.GetVisualDescendants().OfType<DataGridRow>(), r => ReferenceEquals(r.DataContext, productos[31]));
 
         var antes = grilla.Columns.Select(c => c.ActualWidth).ToArray();
         grilla.ScrollIntoView(productos[31], null);
         Dispatcher.UIThread.RunJobs();
         Dispatcher.UIThread.RunJobs();
 
-        Assert.Contains(grilla.GetVisualDescendants().OfType<DataGridRow>(), r => ReferenceEquals(r.DataContext, productos[30]));
+        Assert.Contains(grilla.GetVisualDescendants().OfType<DataGridRow>(), r => ReferenceEquals(r.DataContext, productos[31]));
         var despues = grilla.Columns.Select(c => c.ActualWidth).ToArray();
         for (var i = 0; i < antes.Length; i++)
             Assert.True(Math.Abs(antes[i] - despues[i]) <= 0.5,
-                $"La columna {grilla.Columns[i].Header} pasó de {antes[i]} a {despues[i]} al aparecer la fila inactiva.");
+                $"La columna {grilla.Columns[i].Header} pasó de {antes[i]} a {despues[i]} al aparecer la fila con stock negativo.");
     }
 
     [AvaloniaFact]
@@ -601,9 +730,9 @@ public class ProductoListViewV2Tests
         var m = Montar(productos.ToArray());
         var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
         var antes = grilla.Columns.Select(c => c.ActualWidth).ToArray();
-        // La fila larga no está realizada y CÓDIGO ya cedió al espacio libre (116); medida solo sobre lo realizado
+        // La fila larga no está realizada y CÓDIGO ya cedió al espacio libre (188); medida solo sobre lo realizado
         // ("C-001") quedaría en su mínimo y saltaría al llegar a la fila.
-        Assert.Equal(116, Columna(grilla, "CÓDIGO").ActualWidth, 1);
+        Assert.Equal(188, Columna(grilla, "CÓDIGO").ActualWidth, 1);
 
         grilla.ScrollIntoView(productos[^1], null);
         Dispatcher.UIThread.RunJobs();
@@ -627,7 +756,7 @@ public class ProductoListViewV2Tests
         var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
         var antes = grilla.Columns.Select(c => c.ActualWidth).ToArray();
 
-        foreach (var header in grilla.GetVisualDescendants().OfType<DataGridColumnHeader>().Where(h => h.Content is string s && s != "ESTADO").ToList())
+        foreach (var header in grilla.GetVisualDescendants().OfType<DataGridColumnHeader>().Where(h => h.Content is string).ToList())
         {
             Clickear(m.Ventana, header);
             var titulo = header.GetVisualDescendants().OfType<TextBlock>().First(t => !string.IsNullOrEmpty(t.Text));
@@ -642,7 +771,12 @@ public class ProductoListViewV2Tests
         var m = Montar(Activo, Negativo, Inactivo, InactivoNegativo);
         var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
 
-        foreach (var p in new[] { Activo, Negativo, Inactivo, InactivoNegativo })
+        foreach (var p in new[] { Activo, Negativo })
+            foreach (var header in new[] { "CÓDIGO", "COSTO", "UNIDAD" })
+                Assert.Equal(CeldaDe(grilla, p, header).Text, ColumnaAuto.Texto(Columna(grilla, header), p));
+
+        VerInactivos(m);
+        foreach (var p in new[] { Inactivo, InactivoNegativo })
             foreach (var header in new[] { "CÓDIGO", "COSTO", "UNIDAD" })
                 Assert.Equal(CeldaDe(grilla, p, header).Text, ColumnaAuto.Texto(Columna(grilla, header), p));
     }
@@ -655,8 +789,8 @@ public class ProductoListViewV2Tests
         var m = Montar(Activo, largo, corto);
         var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
 
-        // Ventana de 1040 (la vista a 1280 sin el sidebar): UNIDAD pide 240 y cede al espacio libre (145).
-        Assert.Equal(145, Columna(grilla, "UNIDAD").ActualWidth, 1);
+        // Ventana de 1040 (la vista a 1280 sin el sidebar): UNIDAD pide 240 y cede al espacio libre (223).
+        Assert.Equal(223, Columna(grilla, "UNIDAD").ActualWidth, 1);
         Assert.DoesNotContain(grilla.GetVisualDescendants().OfType<ScrollBar>(),
             s => s.Orientation == Orientation.Horizontal && s.IsEffectivelyVisible);
         var cortada = CeldaDe(grilla, largo, "UNIDAD");
@@ -675,16 +809,18 @@ public class ProductoListViewV2Tests
     }
 
     [AvaloniaTheory]
-    [InlineData(1040, 145)]
-    [InlineData(1126, 231)]
-    public void CeldaCortada_LaGrillaNoScrollea_YUnidadTomaElEspacioLibre(double ancho, double unidad)
+    [InlineData(1040, 223, 160)]
+    [InlineData(1126, 240, 229)]
+    public void CeldaCortada_LaGrillaNoScrollea_YUnidadTomaElEspacioLibre(double ancho, double unidad, double nombre)
     {
         // La vista a 1280 y a 1366 sin el sidebar de 240, con los datos del mockup de la celda cortada.
         var m = Montar(new ProductosFake { Lista = ColumnaAutoTopeAdaptableTests.ConCeldaCortada() }, ancho);
         var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
 
+        // A 1280 UNIDAD toma todo lo libre y NOMBRE queda en su piso; a 1366 UNIDAD llega a su tope de 240 (sigue
+        // cortada) y NOMBRE (2*) se lleva el resto. Anchos medidos en headless (el mockup los calculó a mano).
         Assert.Equal(unidad, Columna(grilla, "UNIDAD").ActualWidth, 1);
-        Assert.Equal(160, Columna(grilla, "NOMBRE").ActualWidth, 1);
+        Assert.Equal(nombre, Columna(grilla, "NOMBRE").ActualWidth, 1);
         Assert.Equal(160, Columna(grilla, "CATEGORÍA").ActualWidth, 1);
         Assert.DoesNotContain(grilla.GetVisualDescendants().OfType<ScrollBar>(),
             s => s.Orientation == Orientation.Horizontal && s.IsEffectivelyVisible);
@@ -697,12 +833,17 @@ public class ProductoListViewV2Tests
     {
         // Los productos del mockup de Productos a 1280 y a 1366 sin el sidebar: a 1280 las columnas suman exactamente
         // el ancho interno de la grilla (948), así que un píxel de más en una medida ya daría scroll horizontal.
-        var productos = ColumnaAutoTopeAdaptableTests.Productos();
-        var m = Montar(new ProductosFake { Lista = productos }, ancho);
+        var todos = ColumnaAutoTopeAdaptableTests.Productos();
+        var productos = todos.Where(p => p.Activo).ToList(); // la inactiva (HER-0560) no se ve con el filtro por defecto
+        var m = Montar(new ProductosFake { Lista = todos }, ancho);
         var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
 
         Assert.DoesNotContain(grilla.GetVisualDescendants().OfType<ScrollBar>(),
             s => s.Orientation == Orientation.Horizontal && s.IsEffectivelyVisible);
+        // NOMBRE (2*) se lleva lo que sobra sin la columna ESTADO: 286 a 1280 (como el mockup) y 354,7 a 1366 (el mockup
+        // dice 372 porque deja CATEGORÍA en 160; con el reparto real 2:1 de las estrellas CATEGORÍA queda en 177,3).
+        Assert.Equal(ancho == 1040 ? 286 : 354.7, Columna(grilla, "NOMBRE").ActualWidth, 1);
+        Assert.Equal(ancho == 1040 ? 160 : 177.3, Columna(grilla, "CATEGORÍA").ActualWidth, 1);
         foreach (var p in productos)
             foreach (var header in new[] { "CÓDIGO", "NOMBRE", "COSTO", "UNIDAD", "CATEGORÍA" })
                 Assert.False(TooltipSiSeCorta.EstaCortado(CeldaDe(grilla, p, header)), $"{header} de {p.Nombre} quedó cortado.");
@@ -734,12 +875,12 @@ public class ProductoListViewV2Tests
         string.Join(", ", grilla.Columns.Select(c => $"{c.Header}={c.ActualWidth:F1}"));
 
     [AvaloniaTheory]
-    [InlineData("UNIDAD", 80)]
-    [InlineData("CÓDIGO", 80)]
+    [InlineData("CÓDIGO", 150)]
     public void ArrastrarUnaColumnaMedida_LasEstrellasNoBajanDeSuPiso_YSiNoEntraHayScroll(string header, double dx)
     {
-        // 1040 = la vista a 1280 con el sidebar. Con los datos del mockup las columnas suman justo el ancho interno
-        // (948): agrandar una medida 80 px no entra y el scroll horizontal es lo que corresponde, no apretar a CATEGORÍA.
+        // 1040 = la vista a 1280 con el sidebar. Con los datos del mockup NOMBRE (2*) tiene 126 px sobre su piso de 160
+        // (286 de ancho, sin la columna ESTADO): agrandar CÓDIGO 150 px no entra (UNIDAD cede 14 y no alcanza) y el scroll horizontal es lo que
+        // corresponde, no apretar a NOMBRE ni a CATEGORÍA por debajo del piso.
         var m = Montar(new ProductosFake { Lista = ColumnaAutoTopeAdaptableTests.Productos() });
         var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
         var antes = Columna(grilla, header).ActualWidth;
@@ -751,6 +892,24 @@ public class ProductoListViewV2Tests
         Assert.Equal(160, Columna(grilla, "CATEGORÍA").ActualWidth, 1);
         Assert.Equal(220, Columna(grilla, "STOCK").ActualWidth, 1);
         Assert.True(HayScrollHorizontal(grilla), $"No entra y no hay scroll horizontal: {Anchos(grilla)}");
+    }
+
+    [AvaloniaFact]
+    public void ArrastrarUnidad_ElDataGridLimitaElCrecimientoYLasEstrellasNoBajanDeSuPiso()
+    {
+        // Sin la columna ESTADO sobran 78 px: agrandar UNIDAD ya no desborda, el crecimiento de una columna Auto lo
+        // limita el DataGrid (solo toma de la derecha) y la grilla sigue entera, sin scroll.
+        var m = Montar(new ProductosFake { Lista = ColumnaAutoTopeAdaptableTests.Productos() });
+        var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
+        var antes = Columna(grilla, "UNIDAD").ActualWidth;
+
+        ArrastrarSeparador(m, "UNIDAD", 140);
+
+        Assert.True(Columna(grilla, "UNIDAD").ActualWidth > antes, $"UNIDAD no creció: {Anchos(grilla)}");
+        Assert.True(Columna(grilla, "NOMBRE").ActualWidth >= 160 - 0.5, $"NOMBRE bajó de su piso: {Anchos(grilla)}");
+        Assert.Equal(160, Columna(grilla, "CATEGORÍA").ActualWidth, 1);
+        Assert.Equal(220, Columna(grilla, "STOCK").ActualWidth, 1);
+        Assert.False(HayScrollHorizontal(grilla), $"Hay scroll horizontal: {Anchos(grilla)}");
     }
 
     [AvaloniaFact]
@@ -773,7 +932,7 @@ public class ProductoListViewV2Tests
     {
         var m = Montar(new ProductosFake { Lista = ColumnaAutoTopeAdaptableTests.Productos() });
         var grilla = MontajeV2.Parte<DataGrid>(m.Vista, "Grilla");
-        ArrastrarSeparador(m, "UNIDAD", 80);
+        ArrastrarSeparador(m, "UNIDAD", 140);
         var arrastrada = Columna(grilla, "UNIDAD").ActualWidth;
 
         m.Vm.FiltroBusqueda = "Pintura";
@@ -782,7 +941,7 @@ public class ProductoListViewV2Tests
         Dispatcher.UIThread.RunJobs();
 
         Assert.Equal(arrastrada, Columna(grilla, "UNIDAD").ActualWidth, 1);
-        Assert.Equal(160, Columna(grilla, "NOMBRE").ActualWidth, 1);
+        Assert.True(Columna(grilla, "NOMBRE").ActualWidth >= 160 - 0.5, $"NOMBRE bajó de su piso: {Anchos(grilla)}");
         Assert.Equal(160, Columna(grilla, "CATEGORÍA").ActualWidth, 1);
     }
 
