@@ -1,7 +1,7 @@
 # StockApp — Migración de VPS automatizada en dos scripts
 
 **Fecha:** 2026-10-20
-**Estado:** diseño para revisión de Martin. Las decisiones marcadas **(decidido por Martin)** ya están tomadas; las marcadas **(decisión del asistente)** son propuestas para que Martin las confirme o corrija antes de planificar.
+**Estado:** aprobado por Martin (2026-10-20, "sí a todo"). Las decisiones marcadas **(decidido por Martin)** están tomadas; las marcadas **(decisión del asistente)** quedaron confirmadas con esa aprobación. Las cuatro preguntas abiertas están resueltas en §10.
 **Alcance:** dos orquestadores nuevos en `deploy/` (`preparar-vps-nuevo.sh` y `migrar-vps.sh`), un cambio chico en `deploy/deploy-vps.sh` (§6.6), la extensión del arnés de ensayo local (`deploy/ensayo/ensayo-local.sh` y sus shims), sus tests, y la reescritura de `deploy/MIGRACION-VPS.md` como runbook corto.
 **Fuera de alcance:** reescribir los bloques que ya existen y están probados (`restaurar-backup.sh`, `volcado-final-vps.sh`, `bajar-backup-vps.sh`, `publicar-release.sh`, el hook de TLS), backups fuera del servidor (off-site), multi-tenant, el ambiente de testing posterior al corte y desmantelar el VPS viejo.
 **Relación con la spec anterior:** `docs/superpowers/specs/2026-10-20-migracion-vps-design.md` sigue siendo la autoridad sobre **qué** se migra, los anti-objetivos A1 a A7, los dos scripts que diseñó y las decisiones de §5.1. Esta spec reemplaza **cómo** se ejecuta: el runbook manual pasa a dos comandos.
@@ -50,7 +50,7 @@ La migración al VPS nuevo ya tiene sus piezas: `restaurar-backup.sh`, `volcado-
 - **Reescribir los bloques existentes.** Los orquestadores los llaman como subprocesos y confían en sus códigos de salida (§6.2). El único cambio a un bloque es el de `deploy-vps.sh` (§6.6), porque sin él el primer deploy sobre una base vacía no funciona.
 - **R-B (migración inversa después del GO).** Sigue siendo manual y de último recurso, con las mismas piezas, como en la spec anterior. Automatizarla obligaría a hacer simétrico el congelamiento del VPS viejo compartido, y eso no se justifica para un camino que se espera no usar nunca.
 - **Parametrizar nombres para varias instancias** (unit, contenedor, `/var/lib/stockapp`). Es trabajo del multi-tenant. Los orquestadores no cablean nada que lo impida, pero tampoco lo resuelven.
-- **Backups off-site.** Siguen siendo un problema aparte (spec anterior, §3). El modo `--desde-backup` hace explícito que la recuperación ante desastres depende de ellos (R8).
+- **Backups off-site.** Siguen siendo un problema aparte (spec anterior, §3). El modo `--desde-backup` hace explícito que la recuperación ante desastres depende de ellos (R8). **Decidido por Martin (2026-10-20, §10.3):** por ahora la recuperación ante desastres es "el último dump disponible" + `migrar-vps.sh --desde-backup`; un backup off-site programado es el **próximo proyecto**, fuera del alcance de esta spec y de su plan.
 - **Desmantelar el VPS viejo.** `--post-corte` solo **imprime** los comandos de referencia y nunca los ejecuta.
 
 ## 4. Anti-objetivos (lo que NO puede pasar)
@@ -211,7 +211,7 @@ La migración al VPS nuevo ya tiene sus piezas: `restaurar-backup.sh`, `volcado-
 - `--version`: obligatoria, sin default (0.5.3 en la migración). Es la misma para el deploy y para el feed.
 - `--env-viejo`: de donde se lee **solo** `LICENCIA_CLAVE_PUBLICA_BASE64`, línea por línea y sin `source`, igual que `restaurar-backup.sh` lee su `.env`.
 - `--verificar`: modo de **solo lectura**. Recorre los pasos, informa `HECHO` o `PENDIENTE` en cada uno y sale con 0 solo si todos están hechos. Es el motor de la idempotencia expuesto al operador: sirve también para revisar un VPS preparado semanas atrás.
-- `--probar-renovacion`: corre el paso 9 (§6.4, tabla). Ver la pregunta abierta 2.
+- `--probar-renovacion`: corre el paso 9 (§6.4, tabla). **Decidido por Martin (§10.2):** la renovación forzada se prueba **solo** con este flag explícito, una vez y a mano, porque gasta cupo de Let's Encrypt. Sin el flag, preparar nunca corre `--force-renewal`.
 
 **Principio de idempotencia (decisión del asistente): manda el estado observado, no un marcador.** Cada paso tiene tres partes: *¿ya está?* (lectura) → *aplicar* → *re-verificar*. Si ya estaba, informa `YA ESTABA` y no aplica nada. El único marcador del servidor es para lo que no se puede observar: que la renovación del certificado ya se probó. Vive en `~/stockapp-deploy/.preparacion/renovacion-probada` y guarda la fecha. Un paso que falla deja hecho lo que hizo, y re-correr el script retoma, porque los pasos anteriores dan `YA ESTABA`.
 
@@ -416,7 +416,7 @@ Es idempotente: re-correrlo da `YA ESTABA` en cada paso. Funciona también para 
 - Pasos 3, 4, 8, 9 (sin manifiesto, `restaurar-backup.sh` verifica la estructura y no los conteos; si se da `--manifiesto`, también los conteos), 11 y 12.
 - V1 reducido, V2 a V5, V7 y V8 (sin historial, `GET /backups` puede listar corridas cuyo archivo no existe: se informa y no bloquea). V6 solo con manifiesto. Sin V10.
 
-**Límite que hay que decir en voz alta:** el desastre se recupera hasta el último dump que esté **fuera** del servidor muerto. Hoy, ninguno lo está de forma automática (R8, pregunta abierta 3).
+**Límite que hay que decir en voz alta:** el desastre se recupera hasta el último dump que esté **fuera** del servidor muerto. Hoy, ninguno lo está de forma automática (R8). Por decisión de Martin (§10.3), el backup off-site programado es el próximo proyecto, no parte de este.
 
 #### 6.5.8 `--post-corte <corrida-del-corte>` (decisión del asistente)
 
@@ -440,7 +440,7 @@ Sobre la base **vacía** que deja el paso 6 de preparar, la tabla no existe, psq
 
 | Opción | A favor | En contra |
 |---|---|---|
-| **a) El pre-vuelo reconoce "la tabla no existe" (recomendada, decisión del asistente)** | cambio chico, con tests y mutación, en un bloque que ya tiene tests; preparar queda desacoplado del VPS viejo (sirve para el desastre y para servidores futuros) | toca un script que hoy funciona |
+| **a) El pre-vuelo reconoce "la tabla no existe" (decidido por Martin, §10.1)** | cambio chico, con tests y mutación, en un bloque que ya tiene tests; preparar queda desacoplado del VPS viejo (sirve para el desastre y para servidores futuros) | toca un script que hoy funciona |
 | b) El primer deploy pasa a `migrar --ensayo`, después del restore, como en el runbook actual | no toca `deploy-vps.sh` | preparar no termina con la API ni el feed andando, la renovación no se puede probar hasta el ensayo y `migrar` tendría que llamar a `deploy-vps.sh`, que es justo lo que A14 quiere evitar |
 | c) preparar instala sin `deploy-vps.sh` (`publish-api.sh` + scp + `install.sh`) | no toca `deploy-vps.sh` | duplica los pasos 3 a 6 de un bloque probado |
 
@@ -470,7 +470,7 @@ Sobre la base **vacía** que deja el paso 6 de preparar, la tabla no existe, psq
    - la credencial del usuario real de verificación;
    - los valores de los overrides.
 3. **Preparar:** `STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/preparar-vps-nuevo.sh --version 0.5.3`, una segunda vez (todo `YA ESTABA`), `--probar-renovacion` una vez, y qué hacer con cada código de salida.
-4. **Ensayo:** `deploy/migrar-vps.sh --ensayo`, cargar los overrides que liste y pegar la tabla de tiempos. Después, el smoke de la GUI (V9) por un agente sobre los datos del ensayo.
+4. **Ensayo:** `deploy/migrar-vps.sh --ensayo`, cargar los overrides que liste y pegar la tabla de tiempos. Después, el smoke de la GUI (V9) por un agente sobre los datos del ensayo. Antes del día D, **ensayo del corte completo + `--revertir`** contra el VPS viejo (testing), por decisión de Martin (§10.4).
 5. **Día D:**
    - `deploy/migrar-vps.sh` y escribir `CONGELAR`;
    - V9 por un agente;
@@ -607,7 +607,7 @@ Casos mínimos de `migrar`:
 1. `preparar-vps-nuevo.sh` contra el VPS nuevo en blanco → exit 0. **Segunda corrida** → todo `YA ESTABA`. `--verificar` → todo `HECHO`. Desde la máquina del operador: `curl` sin `-k` OK y `ufw status` con las tres reglas. `--probar-renovacion` una vez.
 2. `migrar-vps.sh --ensayo` contra el viejo real y el nuevo → GO. Después, el viejo `active`. Se anotan los tiempos (reemplaza E2).
 3. V9 (smoke de la GUI) por un agente sobre los datos del ensayo, mirando las capturas, porque `capturar.sh` no es fail-closed.
-4. (Pregunta abierta 4) un **ensayo del corte completo + `--revertir`** sobre el viejo real, antes del día D.
+4. **Decidido por Martin (§10.4):** un **ensayo del corte completo + `--revertir`** sobre el viejo real (testing), antes del día D. Necesita que el VPS nuevo exista, así que vive en el runbook (§6.7, sección 4), no en la ejecución del plan.
 5. El día D: el corte, con Martin en la terminal para escribir `CONGELAR`.
 
 ## 9. Riesgos
@@ -627,9 +627,9 @@ Casos mínimos de `migrar`:
 - **R10. El cambio de §6.6 afloja el pre-vuelo de `deploy-vps.sh`.** Lo acota que "no existe" sea un resultado de una consulta exitosa (`to_regclass`). Un fallo de consulta sigue abortando, y los dos caminos tienen test y mutación.
 - **R11. Scripts grandes.** Dos orquestadores con varios modos en bash. Mitigación: la secuencia es una tabla de pasos con funciones chicas, la librería común de §7 y tests por paso.
 
-## 10. Preguntas abiertas que solo Martin puede responder
+## 10. Preguntas abiertas — resueltas (Martin, 2026-10-20: "sí a todo")
 
-1. **§6.6:** ¿aceptás el cambio chico al pre-vuelo de `deploy-vps.sh` (opción a)? Es lo que permite que el primer deploy viva en `preparar-vps-nuevo.sh`, como pediste. Si no, la alternativa es (b): el primer deploy pasa a `migrar --ensayo`, y preparar no termina con la API andando.
-2. **Renovación del certificado:** ¿`preparar` la prueba **una sola vez automáticamente** (gasta una emisión del cupo semanal, con marcador para no repetir) o **solo con `--probar-renovacion`**, como propone esta spec?
-3. **Recuperación ante desastres:** ¿alcanza con "el último dump que el operador tenga a mano" (por ejemplo, de un `bajar-backup-vps.sh` corrido cada tanto), o querés que la próxima pieza sea un backup off-site programado? Esta spec no lo incluye.
-4. **¿Ensayamos el corte completo + `--revertir` sobre el VPS viejo** (testing) antes del día D? Es el único ensayo real de la vuelta atrás. Cuesta unos minutos de testing caído, con la unit enmascarada y después restaurada.
+1. **§6.6, cambio al pre-vuelo de `deploy-vps.sh` (opción a): decidido por Martin.** Se arregla el pre-vuelo para que una tabla de catálogo inexistente (`to_regclass` nulo) sea un resultado válido sobre una base vacía; un fallo real de la consulta sigue abortando. Con tests y mutación (§6.6, §8.1).
+2. **Renovación del certificado: decidido por Martin.** El test de renovación (`--force-renewal`) corre **solo** con el flag explícito `--probar-renovacion` de `preparar-vps-nuevo.sh`, una vez y a mano, porque consume cupo de Let's Encrypt. Nunca automáticamente.
+3. **Recuperación ante desastres: decidido por Martin.** Por ahora alcanza con el último dump disponible + `migrar-vps.sh --desde-backup`. Un backup off-site programado es el **próximo proyecto** y queda fuera del alcance de esta spec (§3, No-objetivos).
+4. **Ensayo del corte completo + `--revertir` sobre el VPS viejo (testing) antes del día D: decidido por Martin.** Se hace. Como necesita que el VPS nuevo exista, vive en el runbook (§6.7, sección 4; §8.3, punto 4), no en la ejecución del plan de implementación.
