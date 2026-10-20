@@ -70,13 +70,24 @@ la ventana.
 
 | Paso | E1 (local) | E2 (VPS nuevo) | Corte real |
 |---|---|---|---|
-| Bajar el backup real (`bajar-backup-vps.sh`) | _pendiente_ | n/a | n/a |
-| `ensayo-local.sh preparar` | _pendiente_ | n/a | n/a |
-| Volcado (`ensayo-local.sh volcar` / `volcado-final-vps.sh`, C3) | _pendiente_ | _pendiente_ | _pendiente_ |
-| `restaurar-backup.sh` (C5) | _pendiente_ | _pendiente_ | _pendiente_ |
-| Arranque de la API contra la base restaurada (C7) | _pendiente_ | _pendiente_ | _pendiente_ |
-| Verificación (C8, V1 a V10) | _pendiente_ | _pendiente_ | _pendiente_ |
+| Bajar el backup real (`bajar-backup-vps.sh`) | 13 s (dump de 95 KB; el `--id` del historial, 11 s) | n/a | n/a |
+| `ensayo-local.sh preparar` | 5 s | n/a | n/a |
+| Volcado (`ensayo-local.sh volcar` / `volcado-final-vps.sh`, C3) | 2 s | _pendiente_ | _pendiente_ |
+| `restaurar-backup.sh` (C5) | 14 s sobre la base vacía; 5 s con `--recrear-base` | _pendiente_ | _pendiente_ |
+| Arranque de la API contra la base restaurada (C7) | 28 s hasta `GET /` OK (incluye restore y build de `dotnet run` con un `HOME` vacío) | _pendiente_ | _pendiente_ |
+| Verificación (C8, V1 a V10) | menos de 10 s (V4, V5, V8 y `/updates`; `--verificar-post-arranque`, 0,4 s) | _pendiente_ | _pendiente_ |
 | Ventana total con el VPS viejo sin API (C3 a C9) | n/a | _pendiente_ | _pendiente_ |
+
+**Resultado de E1 (2026-10-20): OK.** Backup real de testing (31 tablas, 150 filas, 25 migraciones,
+última `20260910225922_AgregaIndiceFuncionalNombreCatalogos`): `preparar`, `volcar` y `restaurar` con
+exit 0, conteos idénticos al manifiesto, secuencias y catálogos OK; segundo `restaurar` sin
+`--recrear-base` → 3, con `--recrear-base` → 0 y dump de seguridad. API local: `GET /` OK, sin
+excepciones de migración, V4 `activada: true`, V5 login real con token, V8 historial servido (200) y
+`POST /backups` → 202 con una corrida `Exitosa` en 1 s, `/updates` sirve el feed,
+`--verificar-post-arranque` exit 0 (`CorridasBackup` 11 → 11: el catch-up y el `POST` sumaron dos
+corridas y la retención borró dos). Limpieza: cero contenedores, volúmenes y redes `stockapp-ensayo-*`,
+`docker ps` igual al del inicio. **E2 y el corte quedan PENDIENTES**: necesitan el VPS nuevo, el
+dominio y la fecha.
 
 ---
 
@@ -277,6 +288,10 @@ mkdir -p -m 700 "$TRABAJO"
 docker ps --format '{{.Names}}' > "$TRABAJO/docker-ps-inicio.txt"
 ```
 
+Esa foto se toma con la máquina quieta: justo después de un `dotnet test` suele quedar unos segundos
+un `testcontainers-ryuk-*` que desaparece solo, y su ausencia posterior da `exit 9` en `volcar` o
+`limpiar` (pasó en el primer intento de E1).
+
 - [ ] **E1.2** Backup real, solo lectura (la tabla de corridas se imprime antes de elegir):
 
 ```bash
@@ -302,15 +317,23 @@ manifiesto. Un segundo `restaurar` sin `--recrear-base` sale con 3 (base no vac�
 - [ ] **E1.4** API 0.5.3 local contra la base restaurada (puerto 5199), historial extraído (C6 local):
 
 ```bash
-mkdir -p "$TRABAJO/e1/home-api/.local/share/StockApp"
+mkdir -p "$TRABAJO/e1/home-api/.local/share/StockApp" "$TRABAJO/e1/updates"
+printf '{"Assets":[]}\n' > "$TRABAJO/e1/updates/releases.ensayo.json"
 tar -C "$TRABAJO/e1/home-api/.local/share/StockApp" -xpf "$TRABAJO/e1/salida/backups-historial.tar"
 HOME="$TRABAJO/e1/home-api" ASPNETCORE_URLS=http://127.0.0.1:5199 \
 ConnectionStrings__Default="Host=127.0.0.1;Port=5434;Database=stockapp;Username=stockapp;Password=$(cat "$TRABAJO/e1/pg-password")" \
-Licencia__Habilitado=false Jwt__Secret="$(openssl rand -base64 48)" Bootstrap__AdminUser=ensayo Bootstrap__Password=Ensayo12345 \
+Licencia__Habilitado=false Jwt__Secret="$(openssl rand -base64 48)" Bootstrap__AdminUser=ensayo Bootstrap__Password=Ensayo12345 Actualizaciones__Directorio="$TRABAJO/e1/updates" \
 dotnet run --project src/StockApp.Api/StockApp.Api.csproj --no-launch-profile > "$TRABAJO/e1/api.log" 2>&1 &
 echo $! > "$TRABAJO/e1/api.pid"
 curl -fsS http://127.0.0.1:5199/
+curl -fsS http://127.0.0.1:5199/updates/releases.ensayo.json
 ```
+
+Sin `Actualizaciones__Directorio` la API usa `/var/lib/stockapp/updates`, que en tu máquina no se
+puede crear: `/updates` queda en 404 y no prueba nada. Con el `HOME` descartable, `dotnet run` baja
+de nuevo todos los paquetes NuGet a `$TRABAJO/e1/home-api` (unos 330 MB, y el arranque tarda más):
+se borran con `$TRABAJO` en E1.7. Los logs de la API van a
+`$TRABAJO/e1/home-api/.local/share/StockApp/logs/`, no a `api.log`.
 
 Esperado (en menos de 120 s): `{"status":"ok","service":"StockApp.Api"}` y `api.log` sin excepciones de
 migración.
@@ -333,8 +356,10 @@ docker ps --format '{{.Names}}' | diff - "$TRABAJO/docker-ps-inicio.txt" && echo
 rm -f "$TRABAJO/e1/token"
 ```
 
-Esperado: `ps` sin el proceso (si `dotnet run` dejó un hijo `StockApp.Api`, matalo por su PID exacto,
-que sale de `ps --ppid <pid>`), `limpiar` con exit 0 y `IGUAL`.
+Esperado: `ps` sin el proceso, `limpiar` con exit 0 y `IGUAL`. **Antes** del `kill`, anotá los hijos
+con `ps --ppid "$(cat "$TRABAJO/e1/api.pid")" -o pid=,comm=`: además de `StockApp.Api`, `dotnet run`
+deja dos nodos de MSBuild (`dotnet`, con `/nodeReuse:true`) que sobreviven al padre. Matalos a todos
+por esos PID exactos y confirmá con `ps -p <pid1>,<pid2>,…` que no queda ninguno.
 
 **Exit 9 y falsos rojos.** `volcar` y `limpiar` comparan la lista de `docker ps` del principio con la
 del final y la igualdad es estricta a propósito. Si **otro proceso** crea o borra contenedores mientras
