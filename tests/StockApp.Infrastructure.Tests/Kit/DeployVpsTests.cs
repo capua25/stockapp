@@ -1,5 +1,11 @@
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Primitives;
+using StockApp.Infrastructure.Backups;
+using StockApp.Infrastructure.Tests.Fixtures;
 using StockApp.Tests.Compartido;
 using Xunit;
 
@@ -24,8 +30,14 @@ namespace StockApp.Infrastructure.Tests.Kit;
 /// El guardián más importante de esta suite es <see cref="DryRun_SoloCorreElPrevuelo_NoTocaNadaMas"/>:
 /// con --dry-run, ni 'scp' ni el comando remoto 'install.sh' pueden dejar rastro.
 /// </summary>
+[Collection("Postgres")]
 public class DeployVpsTests
 {
+    // Solo los PrevueloReal_* usan el fixture (de ahí sale el dump con el esquema real).
+    private readonly PostgresFixture _fixture;
+
+    public DeployVpsTests(PostgresFixture fixture) => _fixture = fixture;
+
     private static string RutaScriptReal([CallerFilePath] string archivo = "")
     {
         var dir = Path.GetDirectoryName(archivo)!;
@@ -48,7 +60,9 @@ public class DeployVpsTests
     private static string SshFalso(
         bool simularDuplicados = false, bool simularFalloConsulta = false,
         bool simularFalloConsultaPaso6 = false, bool simularRespuestaNoNumericaPaso6 = false,
-        bool simularFalloPolling = false, bool simularFalloConectividadEstadoServicio = false) => $$"""
+        bool simularFalloPolling = false, bool simularFalloConectividadEstadoServicio = false,
+        bool simularTablaInexistente = false, bool simularExistenciaIlegible = false,
+        bool simularFalloConsultaExistencia = false) => $$"""
         #!/usr/bin/env bash
         {
             printf 'ARGS:'
@@ -62,7 +76,27 @@ public class DeployVpsTests
         case "$cmd" in
             *"docker exec -i stockapp-pg psql"*"-tA"*)
                 entrada="$(cat)"
+                # La SQL viaja por stdin, no por argv: sin este registro el rastro no podría
+                # afirmar nada sobre QUÉ consultas se mandaron (p. ej. "ninguna con HAVING").
+                {
+                    printf 'STDIN:%s' "$entrada"
+                    printf '\n'
+                } >> "${RASTRO_SSH:-/dev/null}"
                 case "$entrada" in
+                    *"to_regclass"*)
+                        # Existencia de la tabla (pre-vuelo): 't' por defecto, como un psql real
+                        # sobre una base ya migrada. Una respuesta que no es exactamente 't' o 'f'
+                        # (p. ej. un NOTICE por stdout) no se puede interpretar.
+                        {{(simularFalloConsultaExistencia
+                            // Responde 't' Y falla: la salida sola sería una respuesta válida, así
+                            // que solo el chequeo de exit code/stderr puede atrapar este caso.
+                            ? "echo t; echo 'psql: FATAL: no se pudo conectar (simulado)' >&2; exit 3"
+                            : simularExistenciaIlegible
+                                ? "echo 'NOTICE: algo'; exit 0"
+                                : simularTablaInexistente
+                                    ? "echo f; exit 0"
+                                    : "echo t; exit 0")}}
+                        ;;
                     *"HAVING COUNT(*) > 1"*)
                         {{(simularFalloConsulta
                             ? "echo 'psql: FATAL: no se pudo conectar (simulado)' >&2; exit 3"
@@ -208,17 +242,28 @@ public class DeployVpsTests
             UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
     }
 
+    /// <summary>Solo las líneas ARGS: del rastro de ssh (el rastro también lleva STDIN:).</summary>
+    private static string SoloArgs(string rastroSsh) => string.Join('\n',
+        rastroSsh.Split('\n').Where(l => l.StartsWith("ARGS:")));
+
+    /// <summary>Solo las líneas STDIN: del rastro de ssh (las consultas SQL que viajaron por stdin).</summary>
+    private static string[] SoloStdin(string rastroSsh) =>
+        rastroSsh.Split('\n').Where(l => l.StartsWith("STDIN:")).ToArray();
+
     private static string CrearTestbin(
         bool simularDuplicados = false, bool simularFalloConsulta = false,
         bool simularFalloConsultaPaso6 = false, bool simularRespuestaNoNumericaPaso6 = false,
-        bool simularFalloPolling = false, bool simularFalloConectividadEstadoServicio = false)
+        bool simularFalloPolling = false, bool simularFalloConectividadEstadoServicio = false,
+        bool simularTablaInexistente = false, bool simularExistenciaIlegible = false,
+        bool simularFalloConsultaExistencia = false)
     {
         var dir = Path.Combine(Path.GetTempPath(), "deploy-vps-testbin-" + Guid.NewGuid());
         Directory.CreateDirectory(dir);
         EscribirEjecutable(Path.Combine(dir, "ssh"), SshFalso(
             simularDuplicados, simularFalloConsulta,
             simularFalloConsultaPaso6, simularRespuestaNoNumericaPaso6, simularFalloPolling,
-            simularFalloConectividadEstadoServicio));
+            simularFalloConectividadEstadoServicio, simularTablaInexistente, simularExistenciaIlegible,
+            simularFalloConsultaExistencia));
         EscribirEjecutable(Path.Combine(dir, "scp"), ScpFalso);
         return dir;
     }
@@ -294,12 +339,14 @@ public class DeployVpsTests
         bool simularBackupViejoPrimero = false, bool simularFalloConsulta = false,
         bool simularFalloConsultaPaso6 = false, bool simularRespuestaNoNumericaPaso6 = false,
         bool simularFalloPolling = false, bool simularFalloConectividadEstadoServicio = false,
-        IDictionary<string, string>? envExtra = null)
+        IDictionary<string, string>? envExtra = null, bool simularTablaInexistente = false,
+        bool simularExistenciaIlegible = false, bool simularFalloConsultaExistencia = false)
     {
         var testbin = CrearTestbin(
             simularDuplicados, simularFalloConsulta,
             simularFalloConsultaPaso6, simularRespuestaNoNumericaPaso6, simularFalloPolling,
-            simularFalloConectividadEstadoServicio);
+            simularFalloConectividadEstadoServicio, simularTablaInexistente, simularExistenciaIlegible,
+            simularFalloConsultaExistencia);
         var rastroSsh = Path.Combine(Path.GetTempPath(), "deploy-vps-rastro-ssh-" + Guid.NewGuid());
         var rastroScp = Path.Combine(Path.GetTempPath(), "deploy-vps-rastro-scp-" + Guid.NewGuid());
         var rastroPublish = Path.Combine(Path.GetTempPath(), "deploy-vps-rastro-publish-" + Guid.NewGuid());
@@ -528,6 +575,263 @@ public class DeployVpsTests
         finally { Directory.Delete(repo, recursive: true); }
     }
 
+    // ---------- Regla: una tabla inexistente es un resultado válido; no poder preguntar, no ----------
+
+    /// <summary>
+    /// Una base sin migrar (o anterior a un catálogo) no tiene la tabla: no hay nada que
+    /// verificar y el pre-vuelo sigue. Antes consultaba "FROM Categorias" igual, psql fallaba con
+    /// "relation does not exist" por stderr y el pre-vuelo abortaba un deploy legítimo. Con
+    /// --dry-run y exit 0 el guardián prueba que sigue; la ausencia de HAVING en lo que viajó por
+    /// stdin prueba que no se intentó la consulta de duplicados sobre una tabla que no existe.
+    /// </summary>
+    [Fact]
+    public void Prevuelo_TablaInexistente_InformaYSigue()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            var (exitCode, stdout, stderr, rastroSsh, _, _) =
+                Correr(repo, "1.0.0 --dry-run", simularTablaInexistente: true);
+
+            Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}");
+            Assert.Contains("\"Categorias\": no existe (base sin migrar)", stdout);
+            var consultas = SoloStdin(rastroSsh);
+            Assert.Equal(7, consultas.Count(c => c.Contains("to_regclass")));
+            Assert.All(consultas, c => Assert.DoesNotContain("HAVING", c));
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    /// <summary>
+    /// Una respuesta que no es exactamente 't' o 'f' (acá, un NOTICE por stdout con exit 0 y sin
+    /// stderr) no se puede interpretar: "no pude interpretar" aborta, no cae a un default.
+    /// </summary>
+    [Fact]
+    public void Prevuelo_RespuestaDeExistenciaIlegible_Aborta()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            var (exitCode, stdout, stderr, rastroSsh, rastroScp, _) =
+                Correr(repo, "1.0.0 --dry-run", simularExistenciaIlegible: true);
+
+            Assert.NotEqual(0, exitCode);
+            Assert.Contains("no se pudo verificar", stderr, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("NO PUDO CONSULTAR", stderr);
+            Assert.DoesNotContain("no existe (base sin migrar)", stdout);
+            Assert.DoesNotContain("OK. Sin duplicados", stdout + stderr);
+            Assert.Equal("", rastroScp);
+            Assert.DoesNotContain(SoloStdin(rastroSsh), c => c.Contains("HAVING"));
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    /// <summary>Hermano de <see cref="PrevueloFallaAlConsultar_AbortaSinConfundirloConSinDuplicados"/>:
+    /// el fallo (exit != 0 y stderr) en la consulta de EXISTENCIA también aborta.</summary>
+    [Fact]
+    public void PrevueloFallaLaConsultaDeExistencia_Aborta()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            var (exitCode, stdout, stderr, rastroSsh, rastroScp, rastroPublish) =
+                Correr(repo, "1.0.0", simularFalloConsultaExistencia: true);
+
+            Assert.NotEqual(0, exitCode);
+            Assert.Contains("no se pudo verificar", stderr, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("NO PUDO CONSULTAR", stderr);
+            Assert.DoesNotContain("no existe (base sin migrar)", stdout);
+            Assert.DoesNotContain("OK. Sin duplicados", stdout + stderr);
+            Assert.Equal("", rastroScp);
+            Assert.Equal("", rastroPublish);
+            Assert.DoesNotContain(SoloStdin(rastroSsh), c => c.Contains("HAVING"));
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    // ---------- Pre-vuelo contra un Postgres REAL (contenedor propio, nunca stockapp-pg) ----------
+
+    /// <summary>
+    /// docker "de test": reemplaza SOLO el argumento <c>stockapp-pg</c> por el contenedor propio de
+    /// la prueba ($CONTENEDOR_TEST) y aborta (exit 97) ante cualquier otro nombre de contenedor
+    /// de StockApp o de la otra app, o ante un subcomando que no sea ps/exec. 'ps' responde con
+    /// salida fija: el relevamiento (paso 0) no puede mirar los contenedores reales del operador.
+    /// </summary>
+    private const string DockerDeTestReal = """
+        #!/usr/bin/env bash
+        case "$1" in
+            ps)
+                printf 'NAMES\tIMAGE\tSTATUS\nstockapp-pg\tpostgres:16-alpine\tUp 1 minute\n'
+                exit 0
+                ;;
+            exec) ;;
+            *)
+                echo "docker de test: subcomando no permitido: $1" >&2
+                exit 97
+                ;;
+        esac
+        nuevos=()
+        for a in "$@"; do
+            case "$a" in
+                stockapp-pg) nuevos+=("$CONTENEDOR_TEST") ;;
+                stockapp-*|pinar*)
+                    echo "docker de test: nombre de contenedor no permitido: $a" >&2
+                    exit 97
+                    ;;
+                *) nuevos+=("$a") ;;
+            esac
+        done
+        exec "$DOCKER_REAL" "${nuevos[@]}"
+        """;
+
+    private static (int ExitCode, string Stdout, string Stderr) DockerCli(string argumentos) =>
+        EjecutorBash.Ejecutar("exec </dev/null\n" + $"docker {argumentos}");
+
+    /// <summary>Levanta un postgres:16-alpine con nombre propio, listo para aceptar consultas por TCP.</summary>
+    private static string LevantarContenedorPropio()
+    {
+        var nombre = "stockapp-test-" + Guid.NewGuid().ToString("N")[..12];
+        var run = DockerCli(
+            $"run -d --name {nombre} -e POSTGRES_USER=stockapp -e POSTGRES_PASSWORD=secreta " +
+            "-e POSTGRES_DB=stockapp postgres:16-alpine");
+        Assert.True(run.ExitCode == 0, $"docker run falló: {run.Stdout}\n{run.Stderr}");
+
+        // 'pg_isready' miente durante initdb (el servidor temporal escucha en el socket): se
+        // consulta por TCP en 127.0.0.1, que solo existe cuando la base ya terminó de inicializar.
+        var reloj = Stopwatch.StartNew();
+        while (reloj.Elapsed < TimeSpan.FromSeconds(60))
+        {
+            var r = DockerCli($"exec {nombre} psql -U stockapp -d stockapp -h 127.0.0.1 -tAc \"SELECT 1\"");
+            if (r.ExitCode == 0 && r.Stdout.Trim() == "1") return nombre;
+            Thread.Sleep(500);
+        }
+        BorrarContenedor(nombre);
+        throw new TimeoutException($"El contenedor {nombre} no aceptó consultas en 60 s.");
+    }
+
+    private static void BorrarContenedor(string nombre) => DockerCli($"rm -f -v {nombre}");
+
+    /// <summary>Corre deploy-vps.sh --dry-run con ssh que ejecuta el comando remoto LOCALMENTE.</summary>
+    private static (int ExitCode, string Stdout, string Stderr) CorrerPrevueloReal(string contenedor)
+    {
+        var repo = CrearRepoFixture();
+        var testbin = Path.Combine(Path.GetTempPath(), "deploy-vps-testbin-real-" + Guid.NewGuid());
+        Directory.CreateDirectory(testbin);
+        EscribirEjecutable(Path.Combine(testbin, "ssh"), SshReparseoRealFalso);
+        EscribirEjecutable(Path.Combine(testbin, "scp"), ScpFalso);
+        EscribirEjecutable(Path.Combine(testbin, "docker"), DockerDeTestReal);
+        EscribirEjecutable(Path.Combine(testbin, "sudo"), SudoFalso);
+        EscribirEjecutable(Path.Combine(testbin, "systemctl"), SystemctlFalso);
+        try
+        {
+            return EjecutorBash.Ejecutar(
+                "exec </dev/null\n" +
+                "unset STOCKAPP_ENV_LOCAL VPS_ADMIN_USER VPS_ADMIN_PASSWORD VPS_DIR\n" +
+                "export DOCKER_REAL=\"$(command -v docker)\"\n" +
+                $"export PATH=\"{testbin}:$PATH\"\n" +
+                $"export CONTENEDOR_TEST=\"{contenedor}\"\n" +
+                "export VPS_USER=\"operador\" VPS_HOST=\"vps.test.invalid\" VPS_SSH_PORT=\"2222\"\n" +
+                $"bash \"{repo}/deploy/deploy-vps.sh\" 1.0.0 --dry-run");
+        }
+        finally
+        {
+            Directory.Delete(repo, recursive: true);
+            Directory.Delete(testbin, recursive: true);
+        }
+    }
+
+    /// <summary>Base recién creada, sin ninguna migración: las 7 tablas no existen y no es un error.</summary>
+    [Fact]
+    public void PrevueloReal_BaseVacia_Pasa()
+    {
+        var contenedor = LevantarContenedorPropio();
+        try
+        {
+            var (exitCode, stdout, stderr) = CorrerPrevueloReal(contenedor);
+
+            Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}");
+            Assert.Equal(7, Regex.Matches(stdout, Regex.Escape("no existe (base sin migrar)")).Count);
+        }
+        finally { BorrarContenedor(contenedor); }
+    }
+
+    /// <summary>
+    /// Esquema real (dump de la base migrada del fixture) restaurado en el contenedor, sin el
+    /// índice único y con dos Categorias que difieren solo en mayúsculas: el pre-vuelo tiene que
+    /// seguir encontrando duplicados donde la tabla SÍ existe.
+    /// </summary>
+    [Fact]
+    public async Task PrevueloReal_EsquemaRealConDuplicados_Aborta()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "deploy-vps-dump-" + Guid.NewGuid().ToString("N")[..12]);
+        Directory.CreateDirectory(dir);
+        var dump = Path.Combine(dir, "real.dump");
+        var contenedor = LevantarContenedorPropio();
+        try
+        {
+            var ejecutor = new EjecutorPgDumpProceso(new ConfiguracionVacia(), NullLogger<EjecutorPgDumpProceso>.Instance);
+            var resultado = await ejecutor.EjecutarAsync(_fixture.ConnectionString, dump, CancellationToken.None);
+            Assert.True(resultado.Exitoso, $"pg_dump falló: {resultado.MensajeError}");
+
+            var restaurar = EjecutorBash.Ejecutar(
+                $"docker exec -i {contenedor} pg_restore -U stockapp -d stockapp --no-owner --no-privileges < \"{dump}\"");
+            Assert.True(restaurar.ExitCode == 0, $"pg_restore falló: {restaurar.Stdout}\n{restaurar.Stderr}");
+
+            var sufijo = Guid.NewGuid().ToString("N")[..8];
+            var sql = "DROP INDEX \"IX_Categorias_Nombre\"; " +
+                $"INSERT INTO \"Categorias\" (\"Nombre\", \"Activo\") VALUES ('Dup-{sufijo}', true), ('DUP-{sufijo}', true);";
+            var archivoSql = Path.Combine(dir, "preparar.sql");
+            File.WriteAllText(archivoSql, sql);
+            var preparar = EjecutorBash.Ejecutar(
+                $"docker exec -i {contenedor} psql -U stockapp -d stockapp -h 127.0.0.1 -v ON_ERROR_STOP=1 < \"{archivoSql}\"");
+            Assert.True(preparar.ExitCode == 0, $"preparar falló: {preparar.Stdout}\n{preparar.Stderr}");
+
+            var (exitCode, stdout, stderr) = CorrerPrevueloReal(contenedor);
+
+            Assert.NotEqual(0, exitCode);
+            Assert.Contains("DUPLICADOS en 'Categorias'", stdout);
+        }
+        finally
+        {
+            BorrarContenedor(contenedor);
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    /// <summary>Contenedor detenido: 'docker exec' falla de verdad y eso NO es "no existe" ni "sin duplicados".</summary>
+    [Fact]
+    public void PrevueloReal_DockerExecFalla_Aborta()
+    {
+        var contenedor = LevantarContenedorPropio();
+        try
+        {
+            var parar = DockerCli($"stop {contenedor}");
+            Assert.True(parar.ExitCode == 0, $"docker stop falló: {parar.Stdout}\n{parar.Stderr}");
+
+            var (exitCode, stdout, stderr) = CorrerPrevueloReal(contenedor);
+
+            Assert.NotEqual(0, exitCode);
+            Assert.Contains("NO PUDO CONSULTAR", stderr);
+            Assert.DoesNotContain("no existe (base sin migrar)", stdout);
+        }
+        finally { BorrarContenedor(contenedor); }
+    }
+
+    /// <summary>Reemplazo de <c>new ConfigurationBuilder().Build()</c> (mismo criterio que EnsayoLocalTests):
+    /// EjecutorPgDumpProceso resuelve "pg_dump" por PATH.</summary>
+    private sealed class ConfiguracionVacia : IConfiguration
+    {
+        public string? this[string key]
+        {
+            get => null;
+            set => throw new NotSupportedException();
+        }
+
+        public IEnumerable<IConfigurationSection> GetChildren() => [];
+        public IChangeToken GetReloadToken() => throw new NotSupportedException();
+        public IConfigurationSection GetSection(string key) => throw new NotSupportedException();
+    }
+
     // ---------- Regla: la SQL del pre-vuelo viaja por stdin, nunca por argv (guardián del quoting) ----------
 
     /// <summary>
@@ -573,6 +877,7 @@ public class DeployVpsTests
                 printf '\n'
             } >> "${RASTRO_DOCKER:?}"
             case "$entrada" in
+                *"to_regclass"*) echo "t" ;;
                 *"__EFMigrationsHistory"*) echo "5" ;;
             esac
         fi
@@ -669,8 +974,8 @@ public class DeployVpsTests
             // un fragmento suelto de la SQL como argumento extra).
             var lineasArgvPsql = docker.Split('\n')
                 .Where(l => l.StartsWith("ARGV(") && l.Contains("-tA")).ToList();
-            Assert.True(lineasArgvPsql.Count == 7,
-                $"Se esperaban 7 invocaciones a psql (una por catálogo), hubo {lineasArgvPsql.Count}:\n{docker}");
+            Assert.True(lineasArgvPsql.Count == 14,
+                $"Se esperaban 14 invocaciones a psql (por catálogo: una de existencia y una de duplicados), hubo {lineasArgvPsql.Count}:\n{docker}");
             Assert.All(lineasArgvPsql, l => Assert.StartsWith("ARGV(11):", l));
             // La SQL NUNCA aparece en el argv -- solo pudo llegar por stdin.
             Assert.All(lineasArgvPsql, l => Assert.DoesNotContain("STRING_AGG", l));
@@ -735,14 +1040,14 @@ public class DeployVpsTests
             Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}\ndocker={docker}");
             Assert.Contains("Migraciones aplicadas: 5", stdout + stderr);
 
-            // Las 7 del pre-vuelo (paso 1) + 1 del conteo de migraciones (paso 6) = 8
-            // invocaciones a psql con la forma EXACTA de 11 tokens -- el bug original corrompía
-            // esto agregando un argumento extra a docker cuando la SQL interpolada tenía una
-            // comilla simple embebida.
+            // Las 14 del pre-vuelo (paso 1: 7 de existencia + 7 de duplicados) + 1 del conteo de
+            // migraciones (paso 6) = 15 invocaciones a psql con la forma EXACTA de 11 tokens -- el
+            // bug original corrompía esto agregando un argumento extra a docker cuando la SQL
+            // interpolada tenía una comilla simple embebida.
             var lineasArgvPsql = docker.Split('\n')
                 .Where(l => l.StartsWith("ARGV(") && l.Contains("-tA")).ToList();
-            Assert.True(lineasArgvPsql.Count == 8,
-                $"Se esperaban 8 invocaciones a psql (7 del pre-vuelo + 1 del conteo de migraciones), hubo {lineasArgvPsql.Count}:\n{docker}");
+            Assert.True(lineasArgvPsql.Count == 15,
+                $"Se esperaban 15 invocaciones a psql (14 del pre-vuelo + 1 del conteo de migraciones), hubo {lineasArgvPsql.Count}:\n{docker}");
             Assert.All(lineasArgvPsql, l => Assert.StartsWith("ARGV(11):", l));
 
             // La SQL del conteo de migraciones NUNCA aparece en el argv -- solo pudo llegar por
@@ -1023,7 +1328,7 @@ public class DeployVpsTests
             // por argv -- "__EFMigrationsHistory" ya no puede aparecer en el rastro de ARGS de
             // ssh (eso sería el mismo bug de antes). Lo que sí tiene que verse es el conteo real
             // que devolvió el stub ("25") reportado en la salida.
-            Assert.DoesNotContain("__EFMigrationsHistory", rastroSsh);
+            Assert.DoesNotContain("__EFMigrationsHistory", SoloArgs(rastroSsh));
             Assert.Contains("Migraciones aplicadas: 25", salida);
             // %q escapa los espacios con '\ ' al volcar el rastro -- normalizamos antes de
             // buscar una substring con espacios.
@@ -1392,7 +1697,10 @@ public class DeployVpsTests
                 envExtra: new Dictionary<string, string> { ["STOCKAPP_ENV_LOCAL"] = otro });
 
             Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}");
-            var lineas = rastroSsh.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            // Solo las líneas de invocación: el rastro también lleva las líneas STDIN: de las
+            // consultas psql, que no tienen destino.
+            var lineas = rastroSsh.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Where(l => l.StartsWith("ARGS:")).ToArray();
             Assert.NotEmpty(lineas);
             Assert.All(lineas, l => Assert.Contains("operador@otro.test.invalid", l));
             Assert.DoesNotContain("vps.test.invalid", rastroSsh.Replace("otro.test.invalid", ""));

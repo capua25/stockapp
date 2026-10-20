@@ -20,7 +20,10 @@ set -euo pipefail
 # VPS compartido sin relevar antes de operar es un riesgo que el plan no cubría):
 #   0. Relevamiento READ-ONLY (informativo, no bloqueante salvo disco lleno).
 #   1. Pre-vuelo de migraciones (SOLO LECTURA). Duplicados case-insensitive -> ABORTA
-#      mostrando una remediación sugerida, NUNCA la ejecuta (Decisión 11).
+#      mostrando una remediación sugerida, NUNCA la ejecuta (Decisión 11). Una tabla que no
+#      existe (base sin migrar o anterior a ese catálogo) no tiene nada que verificar: se
+#      informa y se sigue. NO poder consultar (exit != 0, stderr, o una respuesta que no es
+#      exactamente 't' o 'f') sigue abortando.
 #   2. Backup con la versión vieja viva + scp de bajada, verificado en tamaño.
 #   3. publish-api.sh <version>.
 #   4. scp del tarball; install.sh/.service SOLO si cambiaron desde el último deploy.
@@ -276,6 +279,47 @@ paso1_prevuelo_migraciones() {
     local remediacion=""
 
     for tabla in "${TABLAS_CON_NOMBRE_UNICO[@]}"; do
+        local cmd_remoto
+        cmd_remoto="docker exec -i stockapp-pg psql -U \"${POSTGRES_USER}\" -d \"${POSTGRES_DB}\" -h 127.0.0.1 -tA"
+
+        # ¿Existe la tabla? Una base sin migrar (o anterior a este catálogo) no la tiene, y
+        # consultar "FROM tabla" igual haría fallar a psql con "relation does not exist" por
+        # stderr: abortaría un deploy legítimo. Misma pregunta que restaurar-backup.sh. Mismo
+        # criterio de siempre para no confundir fallo con resultado: se capturan por separado el
+        # código de salida y el stderr, y solo 't' o 'f' EXACTOS son una respuesta; cualquier otra
+        # cosa (o un fallo) es "no pude consultar", nunca "no existe" ni "sin duplicados".
+        local sql_existe
+        sql_existe="SELECT to_regclass('public.\"${tabla}\"') IS NOT NULL;"
+        local archivo_stderr_existe
+        archivo_stderr_existe="$(mktemp)"
+        local existe
+        local codigo_salida_existe=0
+        existe="$(printf '%s' "$sql_existe" | ssh_vps "$cmd_remoto" 2>"$archivo_stderr_existe")" || codigo_salida_existe=$?
+        local error_existe
+        error_existe="$(cat "$archivo_stderr_existe")"
+        rm -f "$archivo_stderr_existe"
+
+        if [[ "$codigo_salida_existe" -ne 0 ]] || [[ -n "$error_existe" ]] ||
+            { [[ "$existe" != "t" ]] && [[ "$existe" != "f" ]]; }; then
+            echo >&2
+            echo "ERROR: no se pudo verificar si existe '${tabla}' (código de salida: ${codigo_salida_existe})." >&2
+            echo "       ESTO NO ES 'no existe' ni 'sin duplicados' -- es que el pre-vuelo NO PUDO CONSULTAR la base." >&2
+            echo "       Un pre-vuelo que no puede verificar no es un pre-vuelo exitoso: ABORTO en vez" >&2
+            echo "       de seguir como si no hubiera nada que verificar." >&2
+            if [[ -n "$error_existe" ]]; then
+                echo "       stderr de la consulta remota:" >&2
+                echo "$error_existe" >&2
+            elif [[ "$codigo_salida_existe" -eq 0 ]]; then
+                echo "       Respuesta inesperada (se esperaba exactamente 't' o 'f'): '${existe}'" >&2
+            fi
+            exit 1
+        fi
+
+        if [[ "$existe" == "f" ]]; then
+            echo "  \"${tabla}\": no existe (base sin migrar): nada que verificar"
+            continue
+        fi
+
         local sql
         sql=$(cat <<'SQL'
 SELECT LOWER("Nombre") AS nombre_normalizado, STRING_AGG("Id"::text, ', ' ORDER BY "Id") AS ids, COUNT(*) AS cantidad FROM "TABLA_PLACEHOLDER" GROUP BY LOWER("Nombre") HAVING COUNT(*) > 1;
@@ -295,9 +339,6 @@ SQL
         # nunca pasa por argv ni por un reparseo de shell (mismo criterio que
         # ssh_vps_autenticado más arriba para los secretos: lo que no viaja por argv no se
         # puede corromper al reparsearse).
-        local cmd_remoto
-        cmd_remoto="docker exec -i stockapp-pg psql -U \"${POSTGRES_USER}\" -d \"${POSTGRES_DB}\" -h 127.0.0.1 -tA"
-
         # "consulté y no hay duplicados" (salida vacía, exit 0, sin stderr) y "no pude
         # consultar" (exit != 0 y/o stderr con contenido) antes producían la MISMA señal --
         # salida vacía -- porque el '|| true' de la versión vieja se tragaba el código de
