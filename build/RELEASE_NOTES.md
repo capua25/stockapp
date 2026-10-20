@@ -1,12 +1,9 @@
-severity: normal
+severity: important
 
-# Gestión Municipal 0.5.1
-
-Novedades:
-- En el listado de productos, la columna Estado se reemplazó por un filtro "Estado" (Activos / Inactivos). Por defecto se muestran los productos activos.
+# Gestión Municipal 0.5.2
 
 Mejoras:
-- Nuevo ícono de la aplicación.
+- Mejoras internas de estabilidad del sistema de actualizaciones.
 
 ---
 <!-- INSTRUCCIONES PARA EL PUBLICADOR — leer antes de empaquetar:
