@@ -587,6 +587,20 @@ deploy):
 VPS_HOST=<IP-del-VPS> VPS_USER=usuario VPS_SSH_PORT=<puerto-SSH> deploy/deploy-vps.sh 1.5.0
 ```
 
+**Con más de un VPS (p. ej. durante la migración):** `deploy-vps.sh` y `build/publicar-release.sh`
+cargan `deploy/.env` por defecto. `STOCKAPP_ENV_LOCAL` elige otro archivo del operador:
+
+```bash
+STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/deploy-vps.sh 1.5.0
+```
+
+Como el `.env` se carga con `source` **después** del entorno, exportar `VPS_HOST` no alcanza: un
+`VPS_HOST` definido en el archivo lo pisa. Si `STOCKAPP_ENV_LOCAL` apunta a un archivo que no existe,
+el script aborta antes de abrir ninguna conexión. El marcador del último deploy es **por host**
+(`deploy/dist/.ultimo-deploy-vps-commit-<host>`): el primer deploy a un host nuevo siempre copia
+`install.sh`, aunque ese archivo no haya cambiado desde el último deploy a otro. Ver
+`deploy/MIGRACION-VPS.md` para la migración completa a un servidor nuevo.
+
 Camino manual:
 
 ```bash

@@ -46,13 +46,23 @@ public class MigracionVpsSincroniaTests
         return datos;
     }
 
+    private const string Runbook = "deploy/MIGRACION-VPS.md";
+
+    /// <summary>Los scripts nuevos más el runbook: ninguno puede traer un host cableado.</summary>
+    public static TheoryData<string> CasosSinHosts()
+    {
+        var datos = CasosScriptsNuevos();
+        datos.Add(Runbook);
+        return datos;
+    }
+
     private static string Texto(string relativo) => File.ReadAllText(Path.Combine(RaizRepo(), relativo));
 
     private static readonly Regex Ipv4 = new(@"\b(?:\d{1,3}\.){3}\d{1,3}\b");
     private static readonly Regex Dominio = new(@"\b[a-z0-9-]+(\.[a-z0-9-]+)*\.(dev|com|net|org|uy|ar|io|app)\b");
 
     [Theory]
-    [MemberData(nameof(CasosScriptsNuevos))]
+    [MemberData(nameof(CasosSinHosts))]
     public void ScriptsNuevos_SinHostsNiIpsCableados(string script)
     {
         var texto = Texto(script);
@@ -61,7 +71,9 @@ public class MigracionVpsSincroniaTests
             .Where(ip => ip is not "127.0.0.1" and not "0.0.0.0").ToList();
         Assert.True(ips.Count == 0, $"{script} tiene IPs cableadas: {string.Join(", ", ips)}");
 
-        var dominios = Dominio.Matches(texto).Select(m => m.Value).ToList();
+        // Única excepción, explícita y mínima (ruling F8): docker.io es el NOMBRE DEL PAQUETE apt
+        // que pide el runbook (P4), no un host del VPS. Sin comodines.
+        var dominios = Dominio.Matches(texto).Select(m => m.Value).Where(d => d != "docker.io").ToList();
         Assert.True(dominios.Count == 0, $"{script} tiene dominios cableados: {string.Join(", ", dominios)}");
     }
 
@@ -148,5 +160,152 @@ public class MigracionVpsSincroniaTests
 
         Assert.Contains("information_schema.tables", restaurar);
         Assert.Equal(restaurar, volcado);
+    }
+
+    // ---------- Runbook y documentación ----------
+
+    private static readonly string[] IdsDelRunbook =
+    [
+        "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "E1", "E2",
+        "C0", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
+        "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10", "R-A", "R-B",
+    ];
+
+    public static TheoryData<string> CasosIdsDelRunbook()
+    {
+        var datos = new TheoryData<string>();
+        foreach (var id in IdsDelRunbook) datos.Add(id);
+        return datos;
+    }
+
+    /// <summary>
+    /// Cada paso de la spec tiene que aparecer como encabezado o como casilla (`- [ ] **C5.**`):
+    /// un paso que no está en el runbook es un paso que el operador se saltea el día del corte.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(CasosIdsDelRunbook))]
+    public void Runbook_CubreCadaPasoDeLaSpec(string id)
+    {
+        var texto = Texto(Runbook);
+
+        var patron = $@"^(#{{1,4}}\s+|- \[ \]\s+)\**{Regex.Escape(id)}(?![0-9A-Za-z])";
+        Assert.True(Regex.IsMatch(texto, patron, RegexOptions.Multiline),
+            $"{Runbook} no tiene un encabezado o una casilla para '{id}'.");
+    }
+
+    [Theory]
+    [InlineData("deploy/restaurar-backup.sh")]
+    [InlineData("deploy/volcado-final-vps.sh")]
+    [InlineData("deploy/bajar-backup-vps.sh")]
+    [InlineData("deploy/ensayo/ensayo-local.sh")]
+    [InlineData("--verificar-post-arranque")]
+    [InlineData("--recrear-base stockapp")]
+    [InlineData("--dir-seguridad ~/stockapp-deploy/migracion")]
+    [InlineData("STOCKAPP_ENV_LOCAL")]
+    [InlineData("systemctl mask stockapp-api")]
+    [InlineData("certbot renew --force-renewal")]
+    [InlineData("sudo install -m 0755 deploy/tls/stockapp-tls-deploy-hook.sh /usr/local/sbin/")]
+    [InlineData("--ensayo")]
+    [InlineData("build/publicar-release.sh 0.5.3")]
+    [InlineData("deploy/deploy-vps.sh 0.5.3 --sin-backup")]
+    public void Runbook_MencionaElComandoExacto(string fragmento)
+    {
+        Assert.Contains(fragmento, Texto(Runbook));
+    }
+
+    /// <summary>
+    /// Lo que se arrastra de las reviews de las Tasks 6 a 8: si el runbook no lo dice, el
+    /// operador lo descubre el día del corte.
+    /// </summary>
+    [Theory]
+    [InlineData("stockapp-api.service.congelado")]       // el congelamiento mueve la unit
+    [InlineData("systemctl daemon-reload")]
+    [InlineData("systemctl -q mask stockapp-api")]
+    [InlineData("systemctl is-enabled stockapp-api")]     // tiene que dar masked
+    [InlineData("systemctl unmask stockapp-api")]         // R-A
+    [InlineData("FragmentPath")]
+    [InlineData("Licencia__Habilitado=false")]
+    [InlineData("LICENCIA_CLAVE_PUBLICA_BASE64")]
+    [InlineData("SmartScreen")]
+    [InlineData("14 días")]
+    [InlineData("8080")]
+    [InlineData("rm -rf <trabajo>")]                       // limpieza explícita de datos reales
+    [InlineData("exit 9")]                                  // EnsayoCompleto con otro proceso de test
+    [InlineData("ReconciliarDumpHuerfanosAsync")]          // por qué se limpian los dumps del ensayo
+    [InlineData("VPS_ADMIN_PASSWORD")]
+    [InlineData("pisa")]                                    // el .env pisa al entorno
+    [InlineData("Lo que Martin tiene que cargar")]
+    [InlineData("## Tiempos")]
+    [InlineData("deploy/.env.vps-nuevo")]
+    [InlineData("~/stockapp-deploy/.env")]
+    public void Runbook_ReflejaLosHallazgosDeLasReviews(string fragmento)
+    {
+        Assert.Contains(fragmento, Texto(Runbook));
+    }
+
+    [Fact]
+    public void Runbook_NuncaUsaComandosGlobalesNiRmRfSobreVariables()
+    {
+        var texto = Texto(Runbook);
+
+        Assert.DoesNotMatch(@"docker volume rm (?!stockapp_)", texto);
+        Assert.DoesNotContain("docker compose down -v", texto);
+        Assert.DoesNotContain("rm -rf $", texto);
+        Assert.DoesNotContain("rm -rf \"$", texto);
+        Assert.DoesNotContain("systemctl restart nginx", texto);
+        Assert.DoesNotMatch(@"certbot delete(?!.*--cert-name)", texto);
+        // Nada global de Docker, de systemd ni de certbot, ni siquiera "de referencia".
+        Assert.DoesNotContain("docker system prune", texto);
+        Assert.DoesNotContain("volume prune", texto);
+        Assert.DoesNotContain("docker stop $(", texto);
+        Assert.DoesNotContain("pkill", texto);
+    }
+
+    [Fact]
+    public void Runbook_AdviertePorQueDeployVpsNoSeCorreContraElViejo()
+    {
+        var texto = Texto(Runbook);
+
+        Assert.Contains("/tmp", texto);
+        Assert.Matches(@"(?is)deploy-vps\.sh.{0,600}NUNCA.{0,100}VPS viejo", texto);
+    }
+
+    private static string Seccion8DeDeploy()
+    {
+        var texto = Texto("deploy/DEPLOY.md");
+        var inicio = texto.IndexOf("## 8. Actualizar a una versión nueva", StringComparison.Ordinal);
+        Assert.True(inicio >= 0, "No se encontró la sección 8 de DEPLOY.md.");
+        var fin = texto.IndexOf("\n## Rollback", inicio, StringComparison.Ordinal);
+        Assert.True(fin > inicio, "No se encontró el fin de la sección 8 de DEPLOY.md.");
+        return texto[inicio..fin];
+    }
+
+    [Fact]
+    public void Deploy_Seccion8DocumentaStockappEnvLocalYElMarcadorPorHost()
+    {
+        var seccion = Seccion8DeDeploy();
+
+        Assert.Contains("STOCKAPP_ENV_LOCAL", seccion);
+        Assert.Contains(".ultimo-deploy-vps-commit-", seccion);
+        Assert.Contains("MIGRACION-VPS.md", seccion);
+    }
+
+    [Fact]
+    public void Procedimientos_Paso7ApuntaARestaurarBackup()
+    {
+        var texto = Texto("deploy/PROCEDIMIENTOS.md");
+        var inicio = texto.IndexOf("### Los pasos, en orden", StringComparison.Ordinal);
+        Assert.True(inicio >= 0, "No se encontró 'Los pasos, en orden' del Procedimiento 3.");
+        var fin = texto.IndexOf("### El costo real de este escenario", inicio, StringComparison.Ordinal);
+        Assert.True(fin > inicio);
+        var pasos = texto[inicio..fin];
+
+        var paso7 = Regex.Match(pasos, @"^7\.(?<t>.*?)(?=^\S|\z)", RegexOptions.Multiline | RegexOptions.Singleline);
+        Assert.True(paso7.Success, "No se encontró el paso 7 del Procedimiento 3.");
+        Assert.Contains("deploy/restaurar-backup.sh", paso7.Value);
+        Assert.Contains("--recrear-base", paso7.Value);
+        Assert.Contains("--env /etc/stockapp/.env", paso7.Value);
+        Assert.Contains("MIGRACION-VPS.md", paso7.Value);
+        Assert.DoesNotContain("siguiendo el respaldo bajado en el Procedimiento 1, con\n   ayuda del proveedor", paso7.Value);
     }
 }

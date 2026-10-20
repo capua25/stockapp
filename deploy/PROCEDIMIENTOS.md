@@ -236,8 +236,20 @@ solo**: hace falta que alguien contacte al proveedor.
 
 6. Confirmar que el programa de escritorio deja de mostrar la pantalla de bloqueo.
 7. Si además se perdió la base de datos (disco roto, no solo reinstalación), restaurar el
-   backup más reciente disponible siguiendo el respaldo bajado en el Procedimiento 1, con
-   ayuda del proveedor.
+   backup más reciente bajado en el Procedimiento 1 con `deploy/restaurar-backup.sh` (se copia
+   solo al servidor, sin el resto del repo). Con la API detenida y el backup en el servidor:
+
+   ```bash
+   sudo systemctl stop stockapp-api
+   ./restaurar-backup.sh backup_<fecha>.dump --env /etc/stockapp/.env --recrear-base stockapp \
+     --dir-seguridad ~/restauracion
+   ```
+
+   `--recrear-base` hace falta porque la instalación del paso 1 ya dejó la base creada y
+   sembrada; antes de borrarla el script guarda un dump de seguridad en `~/restauracion` y
+   no arranca la API. Con exit 0, el siguiente paso es `sudo systemctl start stockapp-api`.
+   Los códigos de salida y qué hacer con cada uno están en `deploy/MIGRACION-VPS.md` (paso C5),
+   el mismo procedimiento que se usa para mudar los datos a un servidor nuevo.
 
 ### El costo real de este escenario, sin adornos
 
