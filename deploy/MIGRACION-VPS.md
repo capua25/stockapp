@@ -8,6 +8,9 @@ esperado y qué hacer si no coincide.
 **Estado:** E1 (ensayo local) lo corre un agente y deja sus tiempos abajo. E2 (ensayo general en
 el VPS nuevo) y el corte quedan **pendientes**: necesitan el VPS nuevo, el dominio y la fecha.
 
+**Todos los comandos se corren desde la raíz del repo** (las rutas de `STOCKAPP_ENV_LOCAL=deploy/...` y
+`deploy/*.sh` son relativas al directorio actual).
+
 Marcadores usados en este documento: `<dominio-nuevo>`, `<ip-nueva>`, `<puerto-nuevo>` (SSH del
 VPS nuevo), `<usuario>` (usuario SSH del VPS nuevo), `<fecha>` (AAAAMMDD) y `<ts>` (el timestamp
 UTC que lleva el nombre del volcado). Ningún valor real vive en el repo.
@@ -345,7 +348,7 @@ deploy/restaurar-backup.sh "$TRABAJO/e1/salida/volcado-<ts>.dump" --manifiesto "
   --contenedor stockapp-ensayo-pg --base stockapp --usuario stockapp --verificar-post-arranque
 ```
 
-Esperado: exit 0 (`CorridasBackup` puede crecer; `LogsAuditoria` ≥ manifiesto).
+Esperado: exit 0 (`CorridasBackup` puede variar; `LogsAuditoria` ≥ manifiesto).
 
 - [ ] **E1.6** Limpieza verificada. La API se mata **por PID exacto** y se confirma:
 
@@ -400,8 +403,14 @@ deploy/volcado-final-vps.sh --salida ~/stockapp-backups-vps/ensayo-e2-<fecha>/ -
 ```
 
 Esperado: exit 0, y después `systemctl is-active stockapp-api` en el viejo → `active` (no enmascara).
-- [ ] **E2.2** C4 y C5 (copiar y restaurar). La base del VPS nuevo está vacía, así que alcanza sin `--recrear-base`.
-- [ ] **E2.3** C6 (historial).
+- [ ] **E2.2** C4 y C5 (copiar y restaurar). La base del VPS nuevo está vacía, así que alcanza sin `--recrear-base`. En E2 el directorio de destino
+  es `~/stockapp-deploy/migracion/ensayo-e2-<fecha>/` (en lugar de `corte-<fecha>/`).
+- [ ] **E2.3** C6 (historial). En un VPS en blanco `.local/share/StockApp` todavía no existe (lo crea
+  `install.sh` recién en E2.4), así que antes del `tar -C` del C6:
+
+```bash
+sudo install -d -o stockapp -g stockapp -m 750 /var/lib/stockapp/.local /var/lib/stockapp/.local/share /var/lib/stockapp/.local/share/StockApp
+```
 - [ ] **E2.4** En lugar de C7: el **primer** deploy contra el VPS nuevo. Su paso 2 necesita una API viva con
   login y en un VPS en blanco no la hay, por eso `--sin-backup`:
 
@@ -442,6 +451,9 @@ systemctl is-active stockapp-api
 
 Esperado: `inactive`. Si dice otra cosa, no sigas: una API viva escribiría sobre la base que vas a recrear.
 
+**Entre C1 y C7 no renueves certificados ni reinicies el VPS nuevo**: un `certbot renew` o un reboot
+arrancaría la API (el hook de TLS la reinicia; systemd la levanta) sobre una base a medio restaurar.
+
 ### C2. VPS nuevo: limpiar los restos del ensayo
 
 - [ ] **C2.** Solo los `backup_*.dump` y `*.tmp` de la carpeta de backups, por patrón y dentro de esa ruta.
@@ -455,6 +467,32 @@ sudo find /var/lib/stockapp/.local/share/StockApp/backups -maxdepth 1 -type f \(
 ```
 
 Esperado: la segunda corrida no imprime nada al repetir la primera.
+
+- [ ] **C2.b** Los volcados que dejó E2 en el servidor **no pueden quedar donde el corte los confunda**:
+  si el operador restaurara el par de E2 en C5, pasarían todos los chequeos (sha, conteos, V6, el smoke
+  de la GUI) y se perdería en silencio todo lo escrito entre E2 y el corte. Se apartan, no se borran
+  (el post-corte los elimina):
+
+```bash
+mkdir -p -m 700 ~/stockapp-deploy/migracion/ensayo-e2
+find ~/stockapp-deploy/migracion -maxdepth 1 -type f \( -name 'volcado-*' -o -name 'backups-historial.tar' \) -exec mv -t ~/stockapp-deploy/migracion/ensayo-e2/ {} +
+ls ~/stockapp-deploy/migracion
+```
+
+Esperado: el `ls` no muestra ningún `volcado-*` (solo `ensayo-e2/` y lo que quede de `pre-recrear-*`).
+
+- [ ] **C2.c** Máquina del operador, **antes de C3**: guardá la lista de contenedores del VPS viejo (solo
+  lectura, acotada: V10 la compara al final).
+
+```bash
+unset STOCKAPP_ENV_LOCAL     # el default es deploy/.env = el VPS VIEJO
+( set -a; source deploy/.env; set +a; set -o pipefail
+  ssh -p "$VPS_SSH_PORT" -o BatchMode=yes "${VPS_USER}@${VPS_HOST}" 'docker ps --format "{{.Names}}"' \
+    | LC_ALL=C sort > ~/stockapp-backups-vps/contenedores-viejo-<fecha>.txt ) && wc -l ~/stockapp-backups-vps/contenedores-viejo-<fecha>.txt
+```
+
+Esperado: un número de líneas > 0 (los de StockApp y los de la otra app). Un archivo vacío o un error
+de ssh es "no se pudo consultar", no "no hay contenedores": no sigas.
 
 ### C3. Máquina del operador, contra el VPS viejo: congelar y volcar
 
@@ -491,15 +529,16 @@ cada fallo posterior al `stop` y en el final feliz: guardá esa salida.
 
 ### C4. Copiar al VPS nuevo
 
-- [ ] **C4.**
+- [ ] **C4.** El corte se copia a un directorio **nuevo y propio**, `~/stockapp-deploy/migracion/corte-<fecha>/`,
+  nunca al mismo lugar que E2 (ahí E2 usó `ensayo-e2-<fecha>/`). Usá el `<ts>` que **imprimió C3**.
 
 ```bash
-ssh -p <puerto-nuevo> <usuario>@<ip-nueva> 'mkdir -p -m 700 ~/stockapp-deploy/migracion'
+ssh -p <puerto-nuevo> <usuario>@<ip-nueva> 'mkdir -m 700 -p ~/stockapp-deploy/migracion && mkdir -m 700 ~/stockapp-deploy/migracion/corte-<fecha>'
 scp -P <puerto-nuevo> ~/stockapp-backups-vps/migracion-<fecha>/volcado-<ts>.dump \
   ~/stockapp-backups-vps/migracion-<fecha>/volcado-<ts>.manifiesto \
   ~/stockapp-backups-vps/migracion-<fecha>/backups-historial.tar \
-  deploy/restaurar-backup.sh <usuario>@<ip-nueva>:~/stockapp-deploy/migracion/
-ssh -p <puerto-nuevo> <usuario>@<ip-nueva> 'cd ~/stockapp-deploy/migracion && chmod 600 volcado-* backups-historial.tar && chmod 755 restaurar-backup.sh'
+  deploy/restaurar-backup.sh <usuario>@<ip-nueva>:~/stockapp-deploy/migracion/corte-<fecha>/
+ssh -p <puerto-nuevo> <usuario>@<ip-nueva> 'cd ~/stockapp-deploy/migracion/corte-<fecha> && chmod 600 volcado-* backups-historial.tar && chmod 755 restaurar-backup.sh'
 ```
 
 Esperado: sin errores. `restaurar-backup.sh` es autocontenido (se copia solo, sin el repo) y verifica
@@ -510,11 +549,17 @@ el sha256 y el tamaño contra el manifiesto **antes** de tocar nada.
 - [ ] **C5.** La base trae los datos del ensayo, así que `--recrear-base` toma primero un dump de
   seguridad. Con la API detenida (C1):
 
+  Usá **exactamente el `<ts>` que imprimió C3** y comprobá antes que la `fecha_utc` del manifiesto es la
+  del corte (la de hoy, de unos minutos atrás), no la de E2:
+
 ```bash
 cd ~/stockapp-deploy
-./migracion/restaurar-backup.sh migracion/volcado-<ts>.dump --manifiesto migracion/volcado-<ts>.manifiesto \
+grep '^fecha_utc=' migracion/corte-<fecha>/volcado-<ts>.manifiesto
+./migracion/corte-<fecha>/restaurar-backup.sh migracion/corte-<fecha>/volcado-<ts>.dump --manifiesto migracion/corte-<fecha>/volcado-<ts>.manifiesto \
   --recrear-base stockapp --dir-seguridad ~/stockapp-deploy/migracion
 ```
+
+El script también imprime la `fecha_utc` del manifiesto en grande antes de restaurar: si no es la del corte, cortá ahí (Ctrl+C).
 
 Esperado: exit 0, el resumen con conteos idénticos al manifiesto, secuencias OK, sin duplicados, y
 "API NO arrancada". El script **nunca** arranca la API.
@@ -533,7 +578,7 @@ Esperado: exit 0, el resumen con conteos idénticos al manifiesto, secuencias OK
 - [ ] **C6.**
 
 ```bash
-sudo tar -C /var/lib/stockapp/.local/share/StockApp -xpf ~/stockapp-deploy/migracion/backups-historial.tar
+sudo tar -C /var/lib/stockapp/.local/share/StockApp -xpf ~/stockapp-deploy/migracion/corte-<fecha>/backups-historial.tar
 sudo chown -R stockapp:stockapp /var/lib/stockapp/.local/share/StockApp/backups
 ```
 
@@ -591,11 +636,11 @@ Esperado: `active`, un conteo `0` (el `grep` sale con 1 cuando no encuentra nada
 `curl -fsS https://<dominio-nuevo>:8080/` → `{"status":"ok","service":"StockApp.Api"}`, con certificado válido para el dominio nuevo.
 - [ ] **V4.** `curl -fsS https://<dominio-nuevo>:8080/licencia/estado` → `"activada":true` (`Licencia__Habilitado=false`).
 - [ ] **V5.** Login con un usuario **real** de los datos migrados. La contraseña se escribe en el momento
-  (no se guarda, no pasa por argv):
+  (no se guarda, no pasa por argv de ningún proceso: ni de `jq` ni de `curl`):
 
 ```bash
 read -rs -p 'Contraseña: ' PW; echo
-jq -n --arg u '<usuario-real>' --arg p "$PW" '{nombreUsuario:$u,contrasena:$p}' \
+PW="$PW" jq -n --arg u '<usuario-real>' '{nombreUsuario:$u,contrasena:env.PW}' \
   | curl -fsS -X POST https://<dominio-nuevo>:8080/auth/login -H 'Content-Type: application/json' --data @- \
   | jq -r .token > ~/stockapp-backups-vps/token; chmod 600 ~/stockapp-backups-vps/token; unset PW
 ```
@@ -607,7 +652,7 @@ Esperado: el archivo del token no está vacío. Al terminar: `rm -f ~/stockapp-b
 
 ```bash
 cd ~/stockapp-deploy
-./migracion/restaurar-backup.sh --verificar-post-arranque --manifiesto migracion/volcado-<ts>.manifiesto
+./migracion/corte-<fecha>/restaurar-backup.sh --verificar-post-arranque --manifiesto migracion/corte-<fecha>/volcado-<ts>.manifiesto
 ```
 
 Esperado: exit 0. Es de solo lectura.
@@ -637,10 +682,13 @@ fila a `CorridasBackup`, que V6 ya acepta).
 unset STOCKAPP_ENV_LOCAL
 ( set -a; source deploy/.env; set +a
   ssh -p "$VPS_SSH_PORT" -o BatchMode=yes "${VPS_USER}@${VPS_HOST}" \
-    'systemctl is-enabled stockapp-api; systemctl is-active stockapp-api; docker ps --format "{{.Names}}"' )
+    'systemctl is-enabled stockapp-api; systemctl is-active stockapp-api; docker ps --format "{{.Names}}"' ) > ~/stockapp-backups-vps/v10-viejo.txt
+head -n 2 ~/stockapp-backups-vps/v10-viejo.txt
+tail -n +3 ~/stockapp-backups-vps/v10-viejo.txt | LC_ALL=C sort | diff - ~/stockapp-backups-vps/contenedores-viejo-<fecha>.txt && echo IGUAL
 ```
 
-Esperado: `masked`, `inactive` y los **mismos contenedores** que el relevamiento de C3 (los de la otra app incluidos).
+Esperado: `masked`, `inactive` e `IGUAL`: los **mismos contenedores** que guardaste en C2.c antes de C3 (los de
+la otra app incluidos). Un `diff` con diferencias, o un `v10-viejo.txt` vacío, es "no verificado".
 
 ---
 
@@ -648,7 +696,8 @@ Esperado: `masked`, `inactive` y los **mismos contenedores** que el relevamiento
 
 ### R-A. Antes de C9, sin escrituras reales en el VPS nuevo
 
-- [ ] **R-A.** En el VPS **viejo**, en este orden (son los comandos que `volcado-final-vps.sh` imprime; los datos
+- [ ] **R-A.** Primero, en el VPS **nuevo**: `sudo systemctl stop stockapp-api` (si C7 ya lo arrancó, dos APIs
+  vivas podrían recibir escrituras, y las del nuevo se perderían al reintentar). Después, en el VPS **viejo**, en este orden (son los comandos que `volcado-final-vps.sh` imprime; los datos
   del viejo están intactos porque el volcado es solo de lectura):
 
 ```bash
@@ -687,4 +736,20 @@ estaba, para reintentar otro día.
   - `docker volume rm stockapp_pgdata`, solo después de confirmar que `LogsAuditoria` del VPS nuevo es ≥ al del
     manifiesto **y** de tener un dump archivado fuera del servidor;
   - `systemctl disable` solo aplica si antes se hizo `unmask`: enmascarada, la unit ya no arranca.
+- **Copias de los datos de producción (al día 14, o cuando cierre el rollback): confirmar y borrar.** Los
+  volcados contienen todo, incluidos los hashes de contraseñas. Imprimí ruta y tamaño de cada una, mostráselas
+  a Martin y borrá **solo con su confirmación**, una por una y por ruta exacta (nunca con comodines amplios):
+  1. local: `~/stockapp-backups-vps/ensayo-e2-*` y `~/stockapp-backups-vps/migracion-<fecha>/` (los volcados
+     de E2 y del corte; el archivado fuera del servidor que pide el `volume rm` de arriba se conserva aparte);
+  2. servidor nuevo: `~/stockapp-deploy/migracion/` (volcados, `ensayo-e2/`, `corte-<fecha>/` y los
+     `pre-recrear-*` de seguridad).
+
+```bash
+du -sh ~/stockapp-backups-vps/ensayo-e2-* ~/stockapp-backups-vps/migracion-<fecha>
+ssh -p <puerto-nuevo> <usuario>@<ip-nueva> 'du -sh ~/stockapp-deploy/migracion; ls -la ~/stockapp-deploy/migracion'
+# con la confirmación de Martin, por ruta exacta:
+rm -r ~/stockapp-backups-vps/ensayo-e2-<fecha> ~/stockapp-backups-vps/migracion-<fecha>
+ssh -p <puerto-nuevo> <usuario>@<ip-nueva> 'rm -r ~/stockapp-deploy/migracion'
+```
+
 - Ambiente de testing después del corte: decisión pendiente de Martin (spec §5.8).

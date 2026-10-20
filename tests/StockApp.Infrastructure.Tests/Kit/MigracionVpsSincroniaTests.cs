@@ -238,9 +238,37 @@ public class MigracionVpsSincroniaTests
     [InlineData("## Tiempos")]
     [InlineData("deploy/.env.vps-nuevo")]
     [InlineData("~/stockapp-deploy/.env")]
+    [InlineData("migracion/corte-<fecha>/")]              // el corte no comparte directorio con E2
+    [InlineData("exactamente el `<ts>` que imprimió C3")]
+    [InlineData("fecha_utc")]
+    [InlineData("-exec mv -t ~/stockapp-deploy/migracion/ensayo-e2/")]  // C2.b aparta los volcados de E2
+    [InlineData("sudo install -d -o stockapp -g stockapp -m 750 /var/lib/stockapp/.local /var/lib/stockapp/.local/share /var/lib/stockapp/.local/share/StockApp")]
+    [InlineData("PW=\"$PW\" jq -n --arg u '<usuario-real>' '{nombreUsuario:$u,contrasena:env.PW}'")]
+    [InlineData("sudo systemctl stop stockapp-api` (si C7")]  // R-A: primero se detiene el nuevo
+    [InlineData("confirmar y borrar")]                      // post-corte: copias de producción
+    [InlineData("ensayo-e2-*")]
+    [InlineData("omandos se corren desde la raíz del repo")]
+    [InlineData("contenedores-viejo-<fecha>.txt")]         // C2.c guarda, V10 compara
+    [InlineData("no renueves certificados ni reinicies el VPS nuevo")]
     public void Runbook_ReflejaLosHallazgosDeLasReviews(string fragmento)
     {
         Assert.Contains(fragmento, Texto(Runbook));
+    }
+
+    [Fact]
+    public void Runbook_NoPasaLaContrasenaPorArgvNiRestauraDelDirectorioDeE2()
+    {
+        var texto = Texto(Runbook);
+
+        Assert.DoesNotContain("--arg p ", texto);
+        Assert.DoesNotContain("migracion/volcado-<ts>", texto);
+        Assert.DoesNotContain("CorridasBackup` puede crecer", texto);
+    }
+
+    [Fact]
+    public void Procedimientos_RestaurarBackupSeCorreConSudo()
+    {
+        Assert.Contains("sudo ./restaurar-backup.sh backup_<fecha>.dump --env /etc/stockapp/.env", Texto("deploy/PROCEDIMIENTOS.md"));
     }
 
     [Fact]

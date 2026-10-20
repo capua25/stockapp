@@ -241,7 +241,7 @@ solo**: hace falta que alguien contacte al proveedor.
 
    ```bash
    sudo systemctl stop stockapp-api
-   ./restaurar-backup.sh backup_<fecha>.dump --env /etc/stockapp/.env --recrear-base stockapp \
+   sudo ./restaurar-backup.sh backup_<fecha>.dump --env /etc/stockapp/.env --recrear-base stockapp \
      --dir-seguridad ~/restauracion
    ```
 
