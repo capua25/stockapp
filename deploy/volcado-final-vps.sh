@@ -34,25 +34,40 @@
 # Pasos:
 #   1. Relevamiento: estado y habilitación de stockapp-api, contenedor corriendo, y la lista de
 #      contenedores (docker ps --format '{{.Names}}') para compararla al final.
-#   2. Congelamiento: systemctl stop stockapp-api y, en modo final, systemctl mask
-#      stockapp-api. Por qué mask: con la unit solo detenida, cualquier cosa que la arranque
-#      (un reinicio del servidor, un deploy por error, un operador que no sabe del corte)
-#      vuelve a abrir la base vieja a escrituras que ya no viajan al VPS nuevo; enmascarada no
-#      arranca hasta un unmask explícito. Después: is-active tiene que dar inactive y nadie
-#      puede estar conectado a la base (pg_stat_activity).
+#   2. Congelamiento: systemctl stop stockapp-api y, en modo final, la unit queda ENMASCARADA.
+#      Por qué mask: con la unit solo detenida, cualquier cosa que la arranque (un reinicio del
+#      servidor, el hook de renovación del certificado, un deploy por error, un operador que no
+#      sabe del corte) vuelve a abrir la base vieja a escrituras que ya no viajan al VPS nuevo;
+#      enmascarada no arranca hasta un unmask explícito.
+#      Cómo: install.sh deja la unit como ARCHIVO REGULAR en /etc/systemd/system, y ahí
+#      'systemctl mask' falla ("already exists": el symlink a /dev/null va en esa misma ruta).
+#      Por eso: se verifica con 'systemctl show -p FragmentPath' que la unit sea ese archivo, se
+#      mueve a stockapp-api.service.congelado (al lado, nunca se borra), daemon-reload (relee las
+#      units del disco; no reinicia ni cambia el estado de ningún otro servicio), 'systemctl -q
+#      mask' (sin -q, mask escribe "Created symlink" en stderr aunque funcione) y is-enabled
+#      tiene que dar masked. Después: is-active tiene que dar inactive y nadie puede estar
+#      conectado a la base (pg_stat_activity, solo procesos cliente: autovacuum no cuenta).
 #   3. Dump -Fc dentro del contenedor; sha256 y tamaño calculados ahí mismo.
-#   4. Otra vez pg_stat_activity = 0, y el manifiesto (fecha, host, versiones, sha, tamaño,
-#      última migración y conteos por tabla, con la MISMA consulta que restaurar-backup.sh).
+#   4. Otra vez pg_stat_activity = 0, y los datos del manifiesto (fecha, host, versiones, sha,
+#      tamaño, última migración y conteos por tabla, con la MISMA consulta que
+#      restaurar-backup.sh).
 #   5. Traída por el stdout de ssh; sha local == remoto y tamaño >= 1024, o se borra y aborta.
-#   6. Historial de backups (tar por stdout).
+#      Recién con el dump verificado se escribe el manifiesto.
+#   6. Historial de backups (tar por stdout), verificado con 'tar -tf'.
 #   7. Overrides de api.env: solo los NOMBRES cruzan la red, y se listan los que install.sh no
 #      escribe por su cuenta (hay que recrearlos a mano en el VPS nuevo).
 #   8. (trap) Borra el dump del contenedor; con --ensayo, arranca la API si estaba activa.
 #   9. docker ps final igual al inicial: el script no tocó ningún otro contenedor.
 #
 # Reintento: si un intento en modo final falla a mitad, la API queda detenida y enmascarada.
-# Volver a correrlo funciona igual (stop y mask son idempotentes). Este script NUNCA hace
-# start ni unmask en modo final: la vuelta atrás es una decisión del operador (runbook).
+# Volver a correrlo funciona igual: con la unit ya enmascarada no se mueve nada más. Este script
+# NUNCA hace start ni unmask en modo final: la vuelta atrás es una decisión del operador.
+# Todo fallo posterior al stop, y el final feliz, informan en qué estado quedó la API y los
+# comandos exactos para volver atrás (R-A), en el VPS viejo:
+#   sudo systemctl unmask stockapp-api
+#   sudo mv /etc/systemd/system/stockapp-api.service.congelado /etc/systemd/system/stockapp-api.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl start stockapp-api
 #
 # Códigos de salida (estables):
 #   0  OK
@@ -60,9 +75,10 @@
 #   3  precondición: config faltante o inválida, sin sudo -n, contenedor fuera de patrón o
 #      detenido, la API sigue activa tras el stop, conexiones abiertas a la base
 #   4  traída inválida: sha local ≠ remoto, tamaño < 1024 o la transferencia falló (el archivo
-#      local se borra)
+#      local se borra), o el historial de backups no es un tar legible
 #   8  no se pudo consultar (ssh/systemctl/docker/psql con error o salida ilegible): "no pude
-#      consultar" nunca es "cero" ni "vacío"; también si --ensayo no pudo rearrancar la API
+#      consultar" nunca es "cero" ni "vacío"; también si --ensayo no pudo rearrancar la API, o
+#      si la unit no está donde la deja install.sh (o ya existe un .congelado): no se toca
 #   9  alcance: la lista de contenedores al final no es la del principio
 # =======================================================================================
 
@@ -164,6 +180,8 @@ DUMP_CONTENEDOR="/tmp/${NOMBRE_DUMP}"
 DUMP_LOCAL="${SALIDA}/${NOMBRE_DUMP}"
 MANIFIESTO_LOCAL="${SALIDA}/volcado-${TS}.manifiesto"
 DIR_BACKUPS_REMOTO="${RAIZ_REMOTA}/var/lib/stockapp/.local/share/StockApp"
+UNIT_ETC="${RAIZ_REMOTA}/etc/systemd/system/stockapp-api.service"
+UNIT_CONGELADA="${UNIT_ETC}.congelado"
 API_ENV_REMOTO="${RAIZ_REMOTA}/etc/stockapp-api/api.env"
 
 # ---------------------------------------------------------------------------------------
@@ -214,7 +232,7 @@ readonly PSQL_REMOTO="docker exec -i ${CONTENEDOR} psql -U ${POSTGRES_USER} -d $
 # salida que no es un número aborta con 8.
 verificar_sin_conexiones() {
     remoto_ok "las conexiones abiertas (pg_stat_activity)" "$PSQL_REMOTO" \
-        "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid();"
+        "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND backend_type = 'client backend' AND pid <> pg_backend_pid();"
     if [[ ! "$SALIDA_REMOTA" =~ ^[0-9]+$ ]]; then
         echo "ERROR: la cuenta de conexiones no es un número: '${SALIDA_REMOTA}'. ABORTO." >&2
         exit 8
@@ -231,9 +249,37 @@ verificar_sin_conexiones() {
 # ---------------------------------------------------------------------------------------
 DUMP_EN_CONTENEDOR=0
 ARRANCAR_AL_SALIR=0
+DETENIDA=0
+UNIT_MOVIDA=0
+ENMASCARADA=0
+
+# Estado de stockapp-api en modo final y los comandos exactos para volver atrás (R-A).
+informar_estado_final() {
+    local estado="DETENIDA"
+    [[ "$UNIT_MOVIDA" -eq 0 ]] || estado+=", con la unit movida a ${UNIT_CONGELADA}"
+    [[ "$ENMASCARADA" -eq 0 ]] || estado+=" y ENMASCARADA"
+    echo "stockapp-api queda ${estado} en el VPS viejo."
+    echo "Para volver atrás (R-A), en el VPS viejo y en este orden:"
+    if [[ "$ENMASCARADA" -eq 1 ]]; then
+        echo "  sudo systemctl unmask stockapp-api"
+    fi
+    if [[ "$UNIT_MOVIDA" -eq 1 ]]; then
+        echo "  sudo mv ${UNIT_CONGELADA} ${UNIT_ETC}"
+        echo "  sudo systemctl daemon-reload"
+    fi
+    echo "  sudo systemctl start stockapp-api"
+}
+
 al_salir() {
     local rc=$?
     trap - EXIT
+    if [[ "$rc" -ne 0 && "$ENSAYO" -eq 0 && "$DETENIDA" -eq 1 ]]; then
+        {
+            echo
+            echo "ATENCIÓN: el volcado falló DESPUÉS de detener la API."
+            informar_estado_final
+        } >&2
+    fi
     if [[ "$DUMP_EN_CONTENEDOR" -eq 1 ]]; then
         remoto "docker exec ${CONTENEDOR} rm -f ${DUMP_CONTENEDOR}"
         if [[ "$RC_REMOTO" -ne 0 ]]; then
@@ -265,8 +311,12 @@ umask 077
 mkdir -p "$SALIDA"
 chmod 700 "$SALIDA"
 
+# Con stderr no vacío también aborta (aunque el rc sea 0): una advertencia de sudo (p. ej. "unable
+# to resolve host") aparece en CADA sudo, y remoto_ok la tomaría como fallo recién DESPUÉS del
+# stop, con la API ya detenida. Mejor frenar acá, sin haber tocado nada, que aceptar una lista
+# de advertencias "conocidas" que nunca va a estar completa.
 remoto "sudo -n true"
-if [[ "$RC_REMOTO" -ne 0 ]]; then
+if [[ "$RC_REMOTO" -ne 0 || -n "$ERROR_REMOTO" ]]; then
     echo "ERROR: '${VPS_USER}' no puede usar sudo sin contraseña en el VPS (o el ssh falló, código ${RC_REMOTO})." >&2
     [[ -z "$ERROR_REMOTO" ]] || printf '       stderr: %s\n' "$ERROR_REMOTO" >&2
     exit 3
@@ -303,9 +353,57 @@ fi
 # Paso 2 -- Congelamiento
 # ---------------------------------------------------------------------------------------
 echo "== Paso 2: congelamiento de stockapp-api =="
+
+# congelar_unit: deja stockapp-api enmascarada aunque install.sh la haya instalado como archivo
+# regular en /etc/systemd/system (ver el encabezado). Con la unit ya enmascarada (reintento) no
+# toca nada.
+congelar_unit() {
+    remoto "systemctl is-enabled stockapp-api"
+    [[ "$SALIDA_REMOTA" =~ ^[a-z-]+$ ]] || no_pude "la habilitación de stockapp-api (systemctl is-enabled)"
+    if [[ "$SALIDA_REMOTA" == "masked" ]]; then
+        ENMASCARADA=1
+        remoto "sudo test -e ${UNIT_CONGELADA}"
+        if [[ "$RC_REMOTO" -eq 0 && -z "$ERROR_REMOTO" ]]; then
+            UNIT_MOVIDA=1
+        elif [[ "$RC_REMOTO" -ne 1 || -n "$ERROR_REMOTO" ]]; then
+            no_pude "si existe ${UNIT_CONGELADA}"
+        fi
+        echo "  stockapp-api ya estaba enmascarada (reintento): no se mueve nada."
+        return
+    fi
+
+    remoto_ok "la ruta de la unit (systemctl show -p FragmentPath)" "systemctl show -p FragmentPath stockapp-api"
+    if [[ "$SALIDA_REMOTA" != "FragmentPath=${UNIT_ETC}" ]]; then
+        echo "ERROR: la unit stockapp-api no es '${UNIT_ETC}' (la que deja install.sh): systemd dice '${SALIDA_REMOTA}'." >&2
+        echo "       No se mueve ni se enmascara un archivo que este script no conoce. ABORTO." >&2
+        exit 8
+    fi
+    remoto "sudo test -e ${UNIT_CONGELADA}"
+    if [[ "$RC_REMOTO" -eq 0 && -z "$ERROR_REMOTO" ]]; then
+        echo "ERROR: ya existe '${UNIT_CONGELADA}' (¿un intento anterior a medias?). No se pisa. ABORTO." >&2
+        exit 8
+    elif [[ "$RC_REMOTO" -ne 1 || -n "$ERROR_REMOTO" ]]; then
+        no_pude "si existe ${UNIT_CONGELADA}"
+    fi
+
+    remoto_ok "el mv de la unit a ${UNIT_CONGELADA}" "sudo mv ${UNIT_ETC} ${UNIT_CONGELADA}"
+    UNIT_MOVIDA=1
+    remoto_ok "el daemon-reload" "sudo systemctl daemon-reload"
+    remoto_ok "el mask de stockapp-api" "sudo systemctl -q mask stockapp-api"
+    ENMASCARADA=1
+    remoto "systemctl is-enabled stockapp-api"
+    [[ -n "$SALIDA_REMOTA" ]] || no_pude "la habilitación de stockapp-api tras el mask"
+    if [[ "$SALIDA_REMOTA" != "masked" ]]; then
+        echo "ERROR: tras el mask, stockapp-api está '${SALIDA_REMOTA}' (se esperaba masked). ABORTO sin volcar." >&2
+        exit 3
+    fi
+}
+
+# Desde acá, en modo final, todo fallo informa el estado de la API (al_salir).
+[[ "$ENSAYO" -eq 1 ]] || DETENIDA=1
 remoto_ok "el stop de stockapp-api" "sudo systemctl stop stockapp-api"
 if [[ "$ENSAYO" -eq 0 ]]; then
-    remoto_ok "el mask de stockapp-api" "sudo systemctl mask stockapp-api"
+    congelar_unit
 fi
 remoto "systemctl is-active stockapp-api"
 [[ -n "$SALIDA_REMOTA" ]] || no_pude "el estado de stockapp-api tras el stop"
@@ -370,22 +468,23 @@ VERSION_PG_DUMP="$SALIDA_REMOTA"
 remoto_ok "el hostname del VPS" "hostname"
 HOST_ORIGEN="$SALIDA_REMOTA"
 
-{
-    echo "# manifiesto-migracion v1"
-    echo "fecha_utc=${FECHA_DUMP}"
-    echo "host_origen=${HOST_ORIGEN}"
-    echo "version_servidor=${VERSION_SERVIDOR}"
-    echo "version_pg_dump=${VERSION_PG_DUMP}"
-    echo "base=${POSTGRES_DB}"
-    echo "dump=${NOMBRE_DUMP}"
-    echo "sha256=${SHA_REMOTO}"
-    echo "tamano_bytes=${TAMANO_REMOTO}"
-    echo "ultima_migracion=${ULTIMA_MIGRACION}"
-    echo "[conteos]"
-    printf '%s\n' "$CONTEOS" | tr '|' '\t'
-} > "$MANIFIESTO_LOCAL"
-chmod 600 "$MANIFIESTO_LOCAL"
-echo "  ${MANIFIESTO_LOCAL}"
+escribir_manifiesto() {
+    {
+        echo "# manifiesto-migracion v1"
+        echo "fecha_utc=${FECHA_DUMP}"
+        echo "host_origen=${HOST_ORIGEN}"
+        echo "version_servidor=${VERSION_SERVIDOR}"
+        echo "version_pg_dump=${VERSION_PG_DUMP}"
+        echo "base=${POSTGRES_DB}"
+        echo "dump=${NOMBRE_DUMP}"
+        echo "sha256=${SHA_REMOTO}"
+        echo "tamano_bytes=${TAMANO_REMOTO}"
+        echo "ultima_migracion=${ULTIMA_MIGRACION}"
+        echo "[conteos]"
+        printf '%s\n' "$CONTEOS" | tr '|' '\t'
+    } > "$MANIFIESTO_LOCAL"
+    chmod 600 "$MANIFIESTO_LOCAL"
+}
 
 # ---------------------------------------------------------------------------------------
 # Paso 5 -- Traída por el stdout de ssh, verificada
@@ -415,6 +514,9 @@ if [[ "$TAMANO_LOCAL" -lt 1024 ]]; then
     descartar_dump_local
 fi
 echo "  sha256 local == remoto, ${TAMANO_LOCAL} bytes."
+# El manifiesto se escribe recién ahora: nunca queda uno describiendo un dump que se descartó.
+escribir_manifiesto
+echo "  ${MANIFIESTO_LOCAL}"
 
 # ---------------------------------------------------------------------------------------
 # Paso 6 -- Historial de backups
@@ -428,6 +530,11 @@ if [[ "$RC_TAR" -ne 0 ]]; then
     rm -f "$TAR_LOCAL"
     echo "ERROR: no se pudo traer el historial de backups de ${DIR_BACKUPS_REMOTO}/backups (código ${RC_TAR})." >&2
     exit 8
+fi
+if ! tar -tf "$TAR_LOCAL" >/dev/null; then
+    rm -f "$TAR_LOCAL"
+    echo "ERROR: el historial de backups traído no es un tar legible ('tar -tf' falla). Se borró." >&2
+    exit 4
 fi
 echo "  ${TAR_LOCAL}"
 
@@ -472,5 +579,6 @@ echo "OK: volcado en ${SALIDA}"
 echo "  dump:       ${NOMBRE_DUMP} (${TAMANO_LOCAL} bytes, sha256 ${SHA_LOCAL})"
 echo "  manifiesto: $(basename "$MANIFIESTO_LOCAL")"
 if [[ "$ENSAYO" -eq 0 ]]; then
-    echo "  stockapp-api queda DETENIDA y ENMASCARADA en el VPS viejo (no hay vuelta atrás automática)."
+    echo
+    informar_estado_final
 fi

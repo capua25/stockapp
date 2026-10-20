@@ -156,6 +156,17 @@ Corre en la **máquina del operador**, como `deploy-vps.sh`. Reutiliza la carga 
    - Se corre `sudo systemctl stop stockapp-api` y se verifica que `systemctl is-active stockapp-api` devuelva `inactive`. Un fallo de la consulta **no** cuenta como inactivo.
    - **En modo final** (sin `--ensayo`), además se corre `sudo systemctl mask stockapp-api`.
    - **Por qué `mask` (decisión del asistente):** el deploy-hook de certbot del VPS viejo hace `restart` de `stockapp-api` al renovar (está registrado en la memoria del proyecto), y un `restart` sobre una unit detenida **la arranca**. Con la unit enmascarada, el hook falla sin efecto, y tampoco la levanta un reboot ni un `install.sh` corrido por error.
+   - **Nota 2026-10-20 (review de la implementación, ruling del controller): `mask` directo no funciona.**
+     - Por qué: `install.sh` deja la unit como archivo regular en `/etc/systemd/system/stockapp-api.service`, y en ese caso `systemctl mask` falla con rc 1 y `already exists`. Pasa lo mismo con `--force`, y `--runtime` no tiene efecto. Verificado con systemd 255 (`systemctl --root`). En el VPS de testing, `systemctl show -p FragmentPath stockapp-api` devuelve exactamente esa ruta.
+     - Además, `mask` sin `-q` escribe `Created symlink` en stderr aunque funcione.
+     - En modo final, después del `stop`, la secuencia queda así:
+       1. `systemctl show -p FragmentPath stockapp-api` tiene que ser esa ruta; si no, se aborta con 8.
+       2. `sudo mv /etc/systemd/system/stockapp-api.service /etc/systemd/system/stockapp-api.service.congelado`. Si el `.congelado` ya existe, se aborta con 8 sin pisarlo.
+       3. `sudo systemctl daemon-reload`, que no reinicia ni cambia el estado de otro servicio.
+       4. `sudo systemctl -q mask stockapp-api`.
+       5. `systemctl is-enabled stockapp-api` tiene que dar `masked`.
+     - En un reintento con la unit ya enmascarada no se mueve nada.
+     - Todo fallo posterior al `stop`, y también el final feliz, informan en stderr/stdout en qué estado quedó la API y los comandos de R-A (ver la nota en R-A).
    - Después se verifica que no queden conexiones a la base: `SELECT count(*) FROM pg_stat_activity WHERE datname = '<db>' AND pid <> pg_backend_pid()` tiene que dar `0`. Si da otra cosa, hay otro escritor, y el script aborta en vez de seguir. En modo final, deja la API enmascarada e informa.
 3. **Dump dentro del contenedor.**
    ```
@@ -238,6 +249,7 @@ Es un documento operativo con comandos exactos y una casilla por paso, en el est
 
 **Rollback:**
 - **R-A. Antes de C9, sin escrituras reales en el nuevo.** En el VPS viejo: `sudo systemctl unmask stockapp-api && sudo systemctl enable --now stockapp-api`. Los datos del viejo están intactos, porque el volcado es solo de lectura. El VPS nuevo queda como estaba, para reintentar otro día.
+  - **Nota 2026-10-20 (con el cambio de §5.4 paso 2):** con la unit movida, R-A pasa a ser, en este orden: `sudo systemctl unmask stockapp-api`, `sudo mv /etc/systemd/system/stockapp-api.service.congelado /etc/systemd/system/stockapp-api.service`, `sudo systemctl daemon-reload` y `sudo systemctl start stockapp-api`. `volcado-final-vps.sh` imprime estos comandos, según hasta dónde llegó.
 - **R-B. Después de C9.** Corregir hacia adelante es lo preferido. Si el VPS nuevo resulta irrecuperable, se hace la **migración inversa con las mismas piezas**: `volcado-final-vps.sh` contra el nuevo y `restaurar-backup.sh --recrear-base` en el viejo, con el `.env` del operador viejo. El dump de seguridad de `--recrear-base` conserva lo que tenía el viejo. Las PCs se repuntan con el Configurador. El runbook lo describe, pero deja claro que es el último recurso.
 
 **Post-corte:**
@@ -370,6 +382,7 @@ El VPS nuevo queda en ese estado hasta el corte, que repite C1 a C8 con `--recre
 
 - **R1. Escritura en el VPS viejo después del dump.** La mitigan el `stop` + `mask` antes del dump, la verificación de `pg_stat_activity` antes y después, y el hecho de que ninguna PC del municipio apunta al viejo. Lo que escriba un tester con la API caída simplemente no ocurre.
 - **R2. Que el deploy-hook de certbot del viejo resucite la API.** Lo mitiga `mask` (§5.4, paso 2). Sin `mask`, el riesgo sería real.
+  - **Nota 2026-10-20:** el `mask` directo fallaba sobre la unit de `install.sh`: la API quedaba detenida pero NO enmascarada, y el riesgo seguía abierto. La mitigación ahora es mover la unit a `.congelado`, hacer `daemon-reload` y `mask -q`, verificando `is-enabled` = `masked` (§5.4, nota del paso 2).
 - **R3. El marcador de deploy por repo saltea `install.sh` en el VPS nuevo.** Mitigación en §5.6.2.
 - **R4. El hook de TLS existe solo en el VPS viejo.** Si ese servidor se pierde antes de P5.a, hay que reescribirlo. Se trae y se versiona en la preparación.
 - **R5. Restos del ensayo adoptados como backups válidos** por `ReconciliarDumpHuerfanosAsync`. Mitigación: C2.

@@ -38,7 +38,15 @@ public class VolcadoFinalVpsTests : IDisposable
     /// STUB_ACTIVA_TRAS_STOP, STUB_CONEXIONES (default 0; 'x' = salida basura),
     /// STUB_FALLAR_CONEXIONES, STUB_SHA_REMOTO (default: sha real del contenido que devuelve 'cat'),
     /// STUB_TAMANO_DUMP (default 2048; manda el tamaño que reporta 'stat' Y los bytes de 'cat'),
-    /// STUB_DOCKER_PS_FINAL_DISTINTO, STUB_SUDO_FALLA.
+    /// STUB_DOCKER_PS_FINAL_DISTINTO, STUB_SUDO_FALLA, STUB_SUDO_ADVIERTE (todo 'sudo …' escribe una
+    /// advertencia en stderr, como un host que no resuelve su propio nombre), STUB_WORKERS (procesos
+    /// que no son clientes conectados a la base: autovacuum y similares), STUB_FRAGMENT (FragmentPath
+    /// que reporta systemd), STUB_CONGELADO_EXISTE, STUB_TAR_CORRUPTO.
+    ///
+    /// Fiel a systemd real en lo que importa para el congelamiento (verificado con systemd 255):
+    /// install.sh deja la unit como ARCHIVO REGULAR en /etc/systemd/system, y 'systemctl mask' sobre
+    /// eso falla con rc 1 y "already exists"; mask sin -q escribe "Created symlink" en STDERR aunque
+    /// funcione. El layout vive en $STUB_UNIT: 'regular' (en /etc) o 'movida' (.congelado).
     /// </summary>
     private const string SshFalso = """
         #!/usr/bin/env bash
@@ -51,6 +59,11 @@ public class VolcadoFinalVpsTests : IDisposable
         args=("$@")
         cmd="${args[-1]}"
         contenido() { head -c "${STUB_TAMANO_DUMP:-2048}" /dev/zero | tr '\0' 'A'; }
+        unit_fragmento="/etc/systemd/system/stockapp-api.service"
+
+        if [[ -n "${STUB_SUDO_ADVIERTE:-}" && "$cmd" == sudo* ]]; then
+            echo 'sudo: unable to resolve host vps-viejo: Name or service not known' >&2
+        fi
 
         case "$cmd" in
             "sudo -n true")
@@ -73,8 +86,36 @@ public class VolcadoFinalVpsTests : IDisposable
                 [[ -n "${STUB_ACTIVA_TRAS_STOP:-}" ]] || echo inactive > "$STUB_ESTADO"
                 exit 0
                 ;;
-            *"systemctl mask stockapp-api"*)
+            *"systemctl show -p FragmentPath stockapp-api"*)
+                if [[ "$(cat "$STUB_UNIT")" == regular ]]; then
+                    echo "FragmentPath=${STUB_FRAGMENT:-$unit_fragmento}"
+                else
+                    echo "FragmentPath="
+                fi
+                exit 0
+                ;;
+            *"systemctl daemon-reload"*)
+                exit 0
+                ;;
+            *"systemctl"*"mask stockapp-api"*)
+                if [[ "$(cat "$STUB_UNIT")" == regular ]]; then
+                    echo "Failed to mask unit, file \"$unit_fragmento\" already exists." >&2
+                    exit 1
+                fi
                 echo masked > "$STUB_MASCARA"
+                [[ "$cmd" == *" -q "* ]] || echo "Created symlink $unit_fragmento → /dev/null." >&2
+                exit 0
+                ;;
+            *"test -e $unit_fragmento.congelado"*)
+                [[ -n "${STUB_CONGELADO_EXISTE:-}" || "$(cat "$STUB_UNIT")" == movida ]] && exit 0
+                exit 1
+                ;;
+            *"mv $unit_fragmento $unit_fragmento.congelado"*)
+                if [[ "$(cat "$STUB_UNIT")" != regular ]]; then
+                    echo "mv: cannot stat '$unit_fragmento': No such file or directory" >&2
+                    exit 1
+                fi
+                echo movida > "$STUB_UNIT"
                 exit 0
                 ;;
             *"systemctl start stockapp-api"*)
@@ -104,7 +145,11 @@ public class VolcadoFinalVpsTests : IDisposable
                             echo 'psql: error: connection to server failed (simulado)' >&2
                             exit 2
                         fi
-                        echo "${STUB_CONEXIONES:-0}"
+                        if [[ "$entrada" == *"backend_type = 'client backend'"* ]]; then
+                            echo "${STUB_CONEXIONES:-0}"
+                        else
+                            echo "$(( ${STUB_CONEXIONES:-0} + ${STUB_WORKERS:-0} ))"
+                        fi
                         ;;
                     *"version()"*) echo 'PostgreSQL 16.4 on x86_64-pc-linux-musl (simulado)' ;;
                     *MigrationId*) echo '20261001000000_UltimaSimulada' ;;
@@ -141,6 +186,7 @@ public class VolcadoFinalVpsTests : IDisposable
                 exit 0
                 ;;
             *"tar -C"*)
+                if [[ -n "${STUB_TAR_CORRUPTO:-}" ]]; then echo 'esto no es un tar'; exit 0; fi
                 tar -C "$STUB_DIR_TAR" -cpf - backups
                 exit 0
                 ;;
@@ -161,8 +207,9 @@ public class VolcadoFinalVpsTests : IDisposable
         exit 0
         """;
 
-    private sealed record Resultado(int ExitCode, string Stdout, string Stderr, string Rastro, string Salida)
+    private sealed record Resultado(int ExitCode, string Stdout, string Stderr, string Rastro, string Salida, string Dir)
     {
+        public string Estado(string archivo) => File.ReadAllText(Path.Combine(Dir, archivo)).Trim();
         public string[] LineasRastro => Rastro.Split('\n', StringSplitOptions.RemoveEmptyEntries);
         public string Diag => $"exit={ExitCode}\nstdout={Stdout}\nstderr={Stderr}\nrastro=\n{Rastro}";
     }
@@ -197,6 +244,7 @@ public class VolcadoFinalVpsTests : IDisposable
         File.WriteAllText(Path.Combine(dir, "estado"), estadoInicial == "masked" ? "inactive\n" : estadoInicial + "\n");
         File.WriteAllText(Path.Combine(dir, "mascara"), estadoInicial == "masked" ? "masked\n" : "enabled\n");
         File.WriteAllText(Path.Combine(dir, "ps-contador"), "0\n");
+        File.WriteAllText(Path.Combine(dir, "unit"), estadoInicial == "masked" ? "movida\n" : "regular\n");
         var rastro = Path.Combine(dir, "rastro");
         var salida = Path.Combine(dir, "salida");
 
@@ -213,7 +261,7 @@ public class VolcadoFinalVpsTests : IDisposable
             "for v in $(compgen -v VPS_); do unset \"$v\"; done\n" +
             $"export PATH=\"{testbin}:$PATH\"\n" +
             $"export RASTRO=\"{rastro}\"\n" +
-            $"export STUB_ESTADO=\"{dir}/estado\" STUB_MASCARA=\"{dir}/mascara\" STUB_PS_CONTADOR=\"{dir}/ps-contador\"\n" +
+            $"export STUB_ESTADO=\"{dir}/estado\" STUB_MASCARA=\"{dir}/mascara\" STUB_PS_CONTADOR=\"{dir}/ps-contador\" STUB_UNIT=\"{dir}/unit\"\n" +
             $"export STUB_DIR_TAR=\"{dirTar}\"\n" +
             $"export STOCKAPP_ENV_LOCAL=\"{envLocal ?? archivoEnv}\"\n" +
             string.Concat(vps.Select(kv => $"export {kv.Key}=\"{kv.Value}\"\n")) +
@@ -221,7 +269,7 @@ public class VolcadoFinalVpsTests : IDisposable
             $"bash \"{RutaScriptReal()}\" --salida \"{salida}\" {args}";
         var (exit, stdout, stderr) = EjecutorBash.Ejecutar(script);
         var textoRastro = File.Exists(rastro) ? File.ReadAllText(rastro) : "";
-        return new Resultado(exit, stdout, stderr, textoRastro, salida);
+        return new Resultado(exit, stdout, stderr, textoRastro, salida, dir);
     }
 
     private static int IndiceDe(Resultado r, string fragmento) =>
@@ -247,7 +295,7 @@ public class VolcadoFinalVpsTests : IDisposable
 
         Assert.True(r.ExitCode == 0, r.Diag);
         var stop = IndiceDe(r, "systemctl stop stockapp-api");
-        var mask = IndiceDe(r, "systemctl mask stockapp-api");
+        var mask = IndiceDe(r, "systemctl -q mask stockapp-api");
         var dump = Array.FindIndex(r.LineasRastro, l => l.Contains("pg_dump") && !l.Contains("--version"));
         Assert.True(stop >= 0 && mask >= 0 && dump >= 0, r.Diag);
         Assert.True(stop < dump && mask < dump, r.Diag);
@@ -299,6 +347,7 @@ public class VolcadoFinalVpsTests : IDisposable
 
         Assert.True(r.ExitCode == 4, r.Diag);
         Assert.Empty(Directory.Exists(r.Salida) ? Directory.GetFiles(r.Salida, "volcado-*.dump") : []);
+        Assert.Empty(Directory.Exists(r.Salida) ? Directory.GetFiles(r.Salida, "volcado-*.manifiesto") : []);
         Assert.DoesNotContain("OK", r.Stdout);
     }
 
@@ -309,6 +358,7 @@ public class VolcadoFinalVpsTests : IDisposable
 
         Assert.True(r.ExitCode == 4, r.Diag);
         Assert.Empty(Directory.Exists(r.Salida) ? Directory.GetFiles(r.Salida, "volcado-*.dump") : []);
+        Assert.Empty(Directory.Exists(r.Salida) ? Directory.GetFiles(r.Salida, "volcado-*.manifiesto") : []);
     }
 
     // ---------- --ensayo: el trap deja la API como la encontró ----------
@@ -354,6 +404,8 @@ public class VolcadoFinalVpsTests : IDisposable
         var r = Correr(estadoInicial: "masked");
 
         Assert.True(r.ExitCode == 0, r.Diag);
+        Assert.DoesNotContain("sudo mv", r.Rastro);
+        Assert.Equal("masked", r.Estado("mascara"));
         Assert.DoesNotContain("unmask", r.Rastro);
         Assert.DoesNotContain("systemctl start", r.Rastro);
         Assert.Single(Directory.GetFiles(r.Salida, "volcado-*.dump"));
@@ -364,10 +416,16 @@ public class VolcadoFinalVpsTests : IDisposable
     [Fact]
     public void TodoSystemctlNombraStockappApi_YTodoDockerNombraElContenedor()
     {
-        var r = Correr("--ensayo");
+        foreach (var r in new[] { Correr("--ensayo"), Correr() })
+            AfirmarAlcance(r);
+    }
 
+    private static void AfirmarAlcance(Resultado r)
+    {
         Assert.True(r.ExitCode == 0, r.Diag);
-        foreach (var l in r.LineasRastro.Where(l => l.Contains("systemctl")))
+        // Única excepción: 'daemon-reload' (relee las units del disco tras mover la de StockApp; no
+        // cambia el estado de ninguna otra).
+        foreach (var l in r.LineasRastro.Where(l => l.Contains("systemctl") && !l.EndsWith("sudo systemctl daemon-reload")))
             Assert.Contains("stockapp-api", l);
         foreach (var l in r.LineasRastro.Where(l => l.Contains("docker exec") || l.Contains("docker inspect")))
             Assert.Contains("stockapp-pg", l);
@@ -516,5 +574,162 @@ public class VolcadoFinalVpsTests : IDisposable
         Assert.Contains("STOCKAPP_ENV_LOCAL", r.Stderr);
         Assert.Contains(inexistente, r.Stderr);
         Assert.Equal("", r.Rastro);
+    }
+
+    // ---------- Congelamiento real: la unit de install.sh es un archivo regular en /etc ----------
+
+    private const string UnitEtc = "/etc/systemd/system/stockapp-api.service";
+
+    /// <summary>
+    /// Lo que hacía la primera versión (mask directo) contra el layout que deja install.sh: el
+    /// stub, fiel a systemd 255, lo rechaza. Este test fija esa fidelidad: si el stub vuelve a
+    /// aceptar el mask directo, los tests de congelamiento vuelven a mentir.
+    /// </summary>
+    [Fact]
+    public void StubFiel_MaskDirectoSobreUnitRegularFalla_ComoSystemd()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "volcado-stub-" + Guid.NewGuid().ToString("N")[..12]);
+        _directorios.Add(dir);
+        Directory.CreateDirectory(dir);
+        EscribirEjecutable(Path.Combine(dir, "ssh"), SshFalso);
+        File.WriteAllText(Path.Combine(dir, "unit"), "regular\n");
+        File.WriteAllText(Path.Combine(dir, "mascara"), "enabled\n");
+
+        var (exit, _, stderr) = EjecutorBash.Ejecutar(
+            $"export RASTRO=/dev/null STUB_UNIT=\"{dir}/unit\" STUB_MASCARA=\"{dir}/mascara\"\n" +
+            $"\"{dir}/ssh\" -p 1 x@y.invalid 'sudo systemctl mask stockapp-api' </dev/null");
+
+        Assert.Equal(1, exit);
+        Assert.Contains("already exists", stderr);
+        Assert.Equal("enabled", File.ReadAllText(Path.Combine(dir, "mascara")).Trim());
+    }
+
+    [Fact]
+    public void ModoFinal_MueveLaUnitRecargaYEnmascara_AntesDelDump()
+    {
+        var r = Correr();
+
+        Assert.True(r.ExitCode == 0, r.Diag);
+        Assert.Equal("masked", r.Estado("mascara"));
+        Assert.Equal("movida", r.Estado("unit"));
+        var orden = new[]
+        {
+            "systemctl stop stockapp-api",
+            "systemctl show -p FragmentPath stockapp-api",
+            $"sudo mv {UnitEtc} {UnitEtc}.congelado",
+            "sudo systemctl daemon-reload",
+            "sudo systemctl -q mask stockapp-api",
+        }.Select(f => IndiceDe(r, f)).ToList();
+        Assert.True(orden.All(i => i >= 0), r.Diag);
+        Assert.Equal(orden.OrderBy(i => i).ToList(), orden);
+        var dump = Array.FindIndex(r.LineasRastro, l => l.Contains("pg_dump") && !l.Contains("--version"));
+        Assert.True(orden.Last() < dump, r.Diag);
+        // Al terminar, el operador sabe en qué estado quedó la API y cómo volver atrás.
+        Assert.Contains("sudo systemctl unmask stockapp-api", r.Stdout);
+    }
+
+    [Fact]
+    public void FragmentPathDistinto_Aborta8SinMoverNiEnmascarar()
+    {
+        var r = Correr(env: Env(("STUB_FRAGMENT", "/usr/lib/systemd/system/stockapp-api.service")));
+
+        Assert.True(r.ExitCode == 8, r.Diag);
+        Assert.DoesNotContain("sudo mv", r.Rastro);
+        Assert.DoesNotContain("mask stockapp-api", r.Rastro);
+        Assert.False(HuboPgDump(r), r.Diag);
+        Assert.Contains("/usr/lib/systemd/system/stockapp-api.service", r.Stderr);
+    }
+
+    [Fact]
+    public void CongeladoYaExiste_Aborta8SinPisarlo()
+    {
+        var r = Correr(env: Env(("STUB_CONGELADO_EXISTE", "1")));
+
+        Assert.True(r.ExitCode == 8, r.Diag);
+        Assert.DoesNotContain("sudo mv", r.Rastro);
+        Assert.False(HuboPgDump(r), r.Diag);
+    }
+
+    // ---------- I1: en modo final, todo fallo después del stop informa el estado y R-A ----------
+
+    public static TheoryData<string, string, bool> FallosDespuesDelStop() => new()
+    {
+        // (variable del stub, valor, ¿la unit llegó a moverse y enmascararse?)
+        { "STUB_FRAGMENT", "/usr/lib/systemd/system/stockapp-api.service", false },
+        { "STUB_ACTIVA_TRAS_STOP", "1", true },
+        { "STUB_CONEXIONES", "2", true },
+        { "STUB_SHA_REMOTO", new string('0', 64), true },
+        { "STUB_TAMANO_DUMP", "100", true },
+        { "STUB_TAR_CORRUPTO", "1", true },
+        { "STUB_DOCKER_PS_FINAL_DISTINTO", "1", true },
+    };
+
+    [Theory]
+    [MemberData(nameof(FallosDespuesDelStop))]
+    public void ModoFinal_FalloDespuesDelStop_InformaEstadoYComandosDeVueltaAtras(string variable, string valor, bool congelada)
+    {
+        var r = Correr(env: Env((variable, valor)));
+
+        Assert.True(r.ExitCode != 0, r.Diag);
+        Assert.Contains("stockapp-api queda DETENIDA", r.Stderr);
+        Assert.Contains("sudo systemctl start stockapp-api", r.Stderr);
+        if (congelada)
+        {
+            Assert.Contains("ENMASCARADA", r.Stderr);
+            Assert.Contains("sudo systemctl unmask stockapp-api", r.Stderr);
+            Assert.Contains($"sudo mv {UnitEtc}.congelado {UnitEtc}", r.Stderr);
+            Assert.Contains("sudo systemctl daemon-reload", r.Stderr);
+        }
+        else
+        {
+            Assert.DoesNotContain("unmask", r.Stderr);
+        }
+    }
+
+    [Fact]
+    public void FalloAntesDelStop_NoHablaDeVueltaAtras()
+    {
+        var r = Correr(env: Env(("STUB_SUDO_FALLA", "1")));
+
+        Assert.True(r.ExitCode == 3, r.Diag);
+        Assert.DoesNotContain("queda DETENIDA", r.Stderr);
+    }
+
+    [Fact]
+    public void Ensayo_Fallo_NoHablaDeVueltaAtras()
+    {
+        var r = Correr("--ensayo", env: Env(("STUB_SHA_REMOTO", ShaDistinto)));
+
+        Assert.True(r.ExitCode == 4, r.Diag);
+        Assert.DoesNotContain("queda DETENIDA", r.Stderr);
+    }
+
+    // ---------- Menores ----------
+
+    [Fact]
+    public void WorkerQueNoEsCliente_NoDaExit3()
+    {
+        var r = Correr(env: Env(("STUB_WORKERS", "1")));
+
+        Assert.True(r.ExitCode == 0, r.Diag);
+    }
+
+    [Fact]
+    public void SudoConAdvertenciaEnStderr_Aborta3SinStop()
+    {
+        var r = Correr(env: Env(("STUB_SUDO_ADVIERTE", "1")));
+
+        Assert.True(r.ExitCode == 3, r.Diag);
+        Assert.DoesNotContain("systemctl stop", r.Rastro);
+        Assert.Contains("unable to resolve host", r.Stderr);
+    }
+
+    [Fact]
+    public void HistorialTarIlegible_Aborta4YLoBorra()
+    {
+        var r = Correr(env: Env(("STUB_TAR_CORRUPTO", "1")));
+
+        Assert.True(r.ExitCode == 4, r.Diag);
+        Assert.False(File.Exists(Path.Combine(r.Salida, "backups-historial.tar")));
     }
 }
