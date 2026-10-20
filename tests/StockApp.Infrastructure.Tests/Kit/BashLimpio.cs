@@ -10,8 +10,9 @@ namespace StockApp.Infrastructure.Tests.Kit;
 /// heredado de quien corre la suite habría hecho fallar (o peor, pasar) un test al azar.
 ///
 /// Lo que limpia: stdin (nunca se cuelga leyendo el teclado de quien corre la suite),
-/// STOCKAPP_ENV_LOCAL, REPO_ROOT y toda variable que empiece con VPS_, ENSAYO_, STOCKAPP_ENSAYO_
-/// u ORQ_. Opcionalmente fija HOME en un directorio temporal del test.
+/// STOCKAPP_ENV_LOCAL, REPO_ROOT y toda variable que empiece con VPS_, ENSAYO_, STOCKAPP_ENSAYO_,
+/// ORQ_, VIEJO_ o NUEVO_ (los prefijos con que los orquestadores leen los dos .env).
+/// Opcionalmente fija HOME en un directorio temporal del test.
 /// </summary>
 internal static class BashLimpio
 {
@@ -27,7 +28,7 @@ internal static class BashLimpio
         EjecutorBash.Ejecutar(
             "exec </dev/null\n" +
             "unset STOCKAPP_ENV_LOCAL REPO_ROOT\n" +
-            "for v in $(compgen -v VPS_) $(compgen -v ENSAYO_) $(compgen -v STOCKAPP_ENSAYO_) $(compgen -v ORQ_); do unset \"$v\"; done\n" +
+            "for v in $(compgen -v VPS_) $(compgen -v ENSAYO_) $(compgen -v STOCKAPP_ENSAYO_) $(compgen -v ORQ_) $(compgen -v VIEJO_) $(compgen -v NUEVO_); do unset \"$v\"; done\n" +
             (home is null ? "" : $"export HOME='{home}'\n") +
             script);
 

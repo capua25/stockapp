@@ -84,6 +84,20 @@ public class OrquestacionLibTests : IDisposable
     }
 
     [Fact]
+    public void LeerEnv_ClaveAusente_NoUsaLaHeredadaDelEntorno()
+    {
+        // Un export olvidado en la shell del operador no puede satisfacer el "falta la clave".
+        var env = ArchivoEnv("VPS_USER=operador\n");
+
+        var r = Correr("export V_VPS_HOST=produccion.ejemplo\n" +
+            $"orq_leer_env '{env}' V VPS_HOST VPS_USER\n" +
+            "echo \"HOST=[${V_VPS_HOST+definida}]\"\necho \"USER=$V_VPS_USER\"");
+
+        Assert.True(r.ExitCode == 0, Diag(r));
+        Assert.Equal("HOST=[]\nUSER=operador", r.Stdout);
+    }
+
+    [Fact]
     public void LeerEnv_LaUltimaGana_YElValorConservaElIgual()
     {
         var env = ArchivoEnv("TOKEN=viejo\nTOKEN=a=b=c\n");
@@ -413,6 +427,22 @@ public class OrquestacionLibTests : IDisposable
 
         Assert.True(r.ExitCode == 3, Diag(r));
         Assert.DoesNotContain("no-debia-llegar", r.Stdout);
+    }
+
+    [Fact]
+    public void Bloque_NoConsumeElStdinDelOrquestador_YLaConfirmacionSigueLeyendo()
+    {
+        var r = CorrerSinTerminal("ORQ_ENSAYO=1\n" + BloqueFalso("lee.sh",
+                "if IFS= read -r x; then echo \"leyo=[$x]\"; else echo sin-stdin; fi\n") +
+            "{\n" +
+            "    orq_bloque deploy/lee.sh /nada\n" +
+            "    orq_confirmar CONGELAR 'texto'\n" +
+            "    echo confirmado\n" +
+            "} <<< CONGELAR");
+
+        Assert.True(r.ExitCode == 0, Diag(r));
+        Assert.Contains("    │ sin-stdin", r.Stdout);
+        Assert.Contains("confirmado", r.Stdout);
     }
 
     // ---------- orq_ssh ----------

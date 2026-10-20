@@ -85,6 +85,8 @@ orq_leer_env() {
             echo "orq_leer_env: clave inválida '$clave'" >&2
             exit 2
         fi
+        # Lo que haya en el entorno no cuenta: una clave que el archivo no trae queda sin definir.
+        unset "${prefijo}_${clave}"
         lineas="$(sed -n "/^${clave}=/p" "$archivo")" || {
             echo "configuración: no puedo leer $archivo" >&2
             exit 3
@@ -470,7 +472,8 @@ orq_confirmar() {
 # salida (stdout y stderr juntos) en vivo y sangrada. El código del bloque queda en
 # ORQ_RC_BLOQUE; el llamador lo clasifica, así que acá no se sale por un exit distinto de cero:
 # se apaga errexit solo alrededor del pipeline y se deja como se lo encontró. El fd 9 (lock) se
-# cierra en el hijo.
+# cierra en el hijo, y su stdin es /dev/null: ningún bloque lee stdin, y con ORQ_ENSAYO=1 un
+# hijo podría consumir la palabra de confirmación que el orquestador todavía tiene que leer.
 orq_bloque() {
     local ruta="${1:-}" archivo_env="${2:-}" tenia_errexit=0 estados
     if [[ $# -lt 2 ]]; then
@@ -482,7 +485,7 @@ orq_bloque() {
         tenia_errexit=1
     fi
     set +e
-    STOCKAPP_ENV_LOCAL="$archivo_env" "$REPO_ROOT/$ruta" "$@" 9>&- 2>&1 | sed -u 's/^/    │ /'
+    STOCKAPP_ENV_LOCAL="$archivo_env" "$REPO_ROOT/$ruta" "$@" </dev/null 9>&- 2>&1 | sed -u 's/^/    │ /'
     estados=("${PIPESTATUS[@]}")
     if [[ "$tenia_errexit" -eq 1 ]]; then
         set -e
