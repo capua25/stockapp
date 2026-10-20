@@ -29,6 +29,7 @@ public class MigracionVpsSincroniaTests
         "deploy/ensayo/shims/ssh",
         "deploy/ensayo/shims/sudo",
         "deploy/ensayo/shims/systemctl",
+        "deploy/lib/orquestacion.sh",
         HookTls,
     ];
 

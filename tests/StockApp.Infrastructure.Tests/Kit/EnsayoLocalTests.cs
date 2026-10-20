@@ -64,15 +64,12 @@ public class EnsayoLocalTests : IDisposable
     }
 
     /// <summary>
-    /// Corre bash con higiene de entorno (ruling F2): nada de STOCKAPP_ENV_LOCAL, VPS_* ni
-    /// ENSAYO_* de quien corre la suite se cuela en la corrida.
+    /// Corre bash con higiene de entorno (ruling F2, compartida en <see cref="BashLimpio"/>): nada de
+    /// STOCKAPP_ENV_LOCAL, VPS_*, ENSAYO_*, STOCKAPP_ENSAYO_* ni ORQ_* de quien corre la suite se
+    /// cuela en la corrida.
     /// </summary>
     private static (int ExitCode, string Stdout, string Stderr) Bash(string script) =>
-        EjecutorBash.Ejecutar(
-            "exec </dev/null\n" +
-            "unset STOCKAPP_ENV_LOCAL\n" +
-            "for v in $(compgen -v VPS_) $(compgen -v ENSAYO_); do unset \"$v\"; done\n" +
-            script);
+        BashLimpio.Ejecutar(script);
 
     private static string Diag((int ExitCode, string Stdout, string Stderr) r) =>
         $"exit={r.ExitCode}\nstdout={r.Stdout}\nstderr={r.Stderr}";
