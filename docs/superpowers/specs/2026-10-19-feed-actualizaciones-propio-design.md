@@ -294,3 +294,7 @@ Esto se agrega como caso nuevo en `build/VALIDACION-MANUAL-faseA.md`.
 - **R7. Un aviso crítico en sesión que el usuario ignora todo el día.** Es intencional: el bloqueo llega en el próximo arranque. Martin lo aceptó a cambio de no perder trabajo (A1).
 - **R8. La versión de `RELEASE_NOTES.md` (0.2.0) no coincide con la del csproj (0.4.0).** Si se empaqueta sin corregirla, las notas anunciarían la versión equivocada. Queda anotado para la próxima release, y este diseño no decide su contenido.
 - **R9. Una instalación vieja que todavía apunta a GitHub. CERRADO (decidido por Martin, 2026-10-19).** No hay instalaciones reales hechas con el `Setup.exe` de Velopack, solo los zips de testers, que no tienen actualizador. Por eso no hace falta publicar una release de transición en GitHub, y la primera versión con el feed propio se publica solo en el VPS.
+
+---
+
+**Nota 2026-10-20.** Martin cambió el intervalo del chequeo en sesión de 1 hora a **15 minutos** (`CoordinadorActualizacion.IntervaloChequeo`). Las menciones a "chequeo horario" de este documento se conservan como historia de la decisión original; el comportamiento de la tabla de §5.4 no cambia, solo la frecuencia.

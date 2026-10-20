@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 namespace StockApp.Presentation.Actualizaciones;
 
 /// <summary>
-/// Espera entre dos chequeos horarios. Existe para que los tests avancen el tiempo sin reloj real.
+/// Espera entre dos chequeos periódicos. Existe para que los tests avancen el tiempo sin reloj real.
 /// </summary>
 public interface IEsperaChequeo
 {

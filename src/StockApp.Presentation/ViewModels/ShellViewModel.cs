@@ -152,18 +152,18 @@ public partial class ShellViewModel : ViewModelBase, IDisposable
 
         _uiDispatcher.Post(() => OverlayActualizacion = overlay);
 
-        // El chequeo horario arranca siempre, también si el de arranque falló o no halló nada.
+        // El chequeo periódico arranca siempre, también si el de arranque falló o no halló nada.
         _tareaChequeoHorario = Task.Run(() => BucleChequeoHorarioAsync(_cts.Token));
     }
 
     /// <summary>
-    /// Tarea del bucle horario. Internal para que los tests verifiquen que termina al
+    /// Tarea del bucle periódico. Internal para que los tests verifiquen que termina al
     /// disponer el ViewModel.
     /// </summary>
     internal Task _tareaChequeoHorario = Task.CompletedTask;
 
     /// <summary>
-    /// Busca actualizaciones cada <see cref="CoordinadorActualizacion.IntervaloChequeoHorario"/>
+    /// Busca actualizaciones cada <see cref="CoordinadorActualizacion.IntervaloChequeo"/>
     /// mientras la app está abierta. Falla en silencio: un tick con error nunca mata los
     /// siguientes ni interrumpe la sesión.
     /// </summary>
@@ -177,7 +177,7 @@ public partial class ShellViewModel : ViewModelBase, IDisposable
                 // el catch genérico lo traga y el bucle gira sin esperar (lazo caliente). Hoy no
                 // ocurre (Task.Delay solo lanza por cancelación), pero una espera nueva debe
                 // respetar esa regla.
-                await _esperaChequeo.EsperarAsync(CoordinadorActualizacion.IntervaloChequeoHorario, ct);
+                await _esperaChequeo.EsperarAsync(CoordinadorActualizacion.IntervaloChequeo, ct);
 
                 var accion = await _coordinadorActualizacion.EvaluarEnSesionAsync();
                 if (accion is null)
@@ -210,7 +210,7 @@ public partial class ShellViewModel : ViewModelBase, IDisposable
     }
 
     /// <summary>
-    /// Decide si un overlay hallado por el chequeo horario puede reemplazar al actual.
+    /// Decide si un overlay hallado por el chequeo periódico puede reemplazar al actual.
     /// Nunca se pisa un bloqueo (o degradado). Un aviso crítico reemplaza a cualquier otro
     /// overlay que no sea un bloqueo: nada, un banner, un modal abierto y también otro aviso
     /// crítico (el nuevo es de una versión más nueva, porque cada versión se notifica una sola
@@ -226,7 +226,7 @@ public partial class ShellViewModel : ViewModelBase, IDisposable
         return true;
     }
 
-    /// <summary>Cancela el bucle del chequeo horario (el contenedor lo dispone al salir).</summary>
+    /// <summary>Cancela el bucle del chequeo periódico (el contenedor lo dispone al salir).</summary>
     public void Dispose() => _cts.Cancel();
 
     /// <summary>

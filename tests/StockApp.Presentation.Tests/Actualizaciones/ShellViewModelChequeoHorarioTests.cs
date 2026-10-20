@@ -125,34 +125,34 @@ public class ShellViewModelChequeoHorarioTests
     }
 
     [Fact]
-    public async Task PrimerTick_PideUnaHora()
+    public async Task PrimerTick_PideQuinceMinutos()
     {
         var (vm, _, espera, _) = Crear(UpdateCheckResult.SinUpdate);
         await ArrancarAsync(vm, espera);
 
-        Assert.Equal(TimeSpan.FromHours(1), Assert.Single(espera.Pedidos));
+        Assert.Equal(TimeSpan.FromMinutes(15), Assert.Single(espera.Pedidos));
         vm.Dispose();
     }
 
     [Fact]
-    public async Task Avanzar59Minutos_NoBusca()
+    public async Task Avanzar14Minutos_NoBusca()
     {
         var (vm, update, espera, _) = Crear(UpdateCheckResult.SinUpdate);
         await ArrancarAsync(vm, espera);
 
-        espera.Avanzar(TimeSpan.FromMinutes(59));
+        espera.Avanzar(TimeSpan.FromMinutes(14));
 
         update.Verify(s => s.BuscarAsync(default), Times.Once);
         vm.Dispose();
     }
 
     [Fact]
-    public async Task Avanzar60Minutos_BuscaUnaVez()
+    public async Task Avanzar15Minutos_BuscaUnaVez()
     {
         var (vm, update, espera, _) = Crear(UpdateCheckResult.SinUpdate);
         await ArrancarAsync(vm, espera);
 
-        espera.Avanzar(TimeSpan.FromMinutes(59));
+        espera.Avanzar(TimeSpan.FromMinutes(14));
         espera.Avanzar(TimeSpan.FromMinutes(1));
         await espera.SiguienteEsperaAsync();
 

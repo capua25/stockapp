@@ -19,7 +19,7 @@ public sealed class CoordinadorActualizacion
     private readonly PoliticaUxActualizacion _politica;
 
     /// <summary>Cada cuánto se repite la búsqueda con la app abierta.</summary>
-    public static readonly TimeSpan IntervaloChequeoHorario = TimeSpan.FromHours(1);
+    public static readonly TimeSpan IntervaloChequeo = TimeSpan.FromMinutes(15);
 
     // Un único cerrojo para arranque, chequeo horario y aplicar: nunca dos BuscarAsync/DescargarAsync
     // a la vez (el UltimoFeed de la fuente es compartido). Todo acceso a _notificadas y

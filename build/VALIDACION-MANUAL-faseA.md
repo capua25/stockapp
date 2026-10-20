@@ -55,7 +55,7 @@ Si `vpk` no aparece en el PATH después de `dotnet tool install -g vpk`, agregar
 | V9 | Threading del overlay | ✅ Validable |
 | V10 | Corrida en dev (no empaquetado) | ✅ Validable |
 | V11 | Fallback de fuente | ➖ Sin objeto (ya no existe fallback: el feed propio es la única fuente) |
-| V12 | Feed propio y chequeo horario end-to-end en Windows real | 🔲 PENDIENTE (requiere Windows real) |
+| V12 | Feed propio y chequeo periódico (cada 15 min) end-to-end en Windows real | 🔲 PENDIENTE (requiere Windows real) |
 
 **Resumen: 6 validables ahora, 1 parcial, 3 pendientes por entorno (V4, V6, V12), 1 sin objeto (V11).**
 
@@ -245,7 +245,7 @@ Si `vpk` no aparece en el PATH después de `dotnet tool install -g vpk`, agregar
 
 ---
 
-### V12. Feed propio y chequeo horario end-to-end (Windows real)
+### V12. Feed propio y chequeo periódico (cada 15 min) end-to-end (Windows real)
 
 - **Aplica a**: Windows
 - **Estado en esta ronda**: 🔲 PENDIENTE (requiere Windows real). Verificado hasta el VPS: el 2026-10-19 se publicó la 0.2.0 en el VPS de testing y se comprobó con curl (feed, nupkg, 404s); el ciclo real de Velopack (`VelopackGatewayReal`, descarga y aplicación) sigue SIN validar.
@@ -254,9 +254,9 @@ Si `vpk` no aparece en el PATH después de `dotnet tool install -g vpk`, agregar
   1. Instalar la versión N (0.2.0) con `GestionMunicipal-win-Setup.exe`.
   2. Publicar N+1 con `severity: normal` y ver el banner al arrancar.
   3. Repetir con `important` (modal) y `critical` (bloqueo), y con la red cortada en el arranque (modo degradado).
-  4. Con la app **abierta**, publicar N+2 y esperar el chequeo horario (o bajar `CoordinadorActualizacion.IntervaloChequeoHorario` en un build de prueba). Ver el banner con `important` y la franja roja fija con `critical` (ocupa su propia fila y empuja el contenido 56 px). Confirmar que no se repite en el siguiente tick, que "Actualizar ahora" aplica la actualización y reinicia, y que en el próximo arranque llega el bloqueo.
+  4. Con la app **abierta**, publicar N+2 y esperar el chequeo periódico (cada 15 min) (o bajar `CoordinadorActualizacion.IntervaloChequeo` en un build de prueba). Ver el banner con `important` y la franja roja fija con `critical` (ocupa su propia fila y empuja el contenido 56 px). Confirmar que no se repite en el siguiente tick, que "Actualizar ahora" aplica la actualización y reinicia, y que en el próximo arranque llega el bloqueo.
   5. Verificar que una instalación con la licencia sin activar también se actualiza.
-- **Resultado esperado**: cada severidad muestra su UX; el chequeo horario avisa una sola vez por versión; la app queda en la versión nueva (verificar en "Acerca de").
+- **Resultado esperado**: cada severidad muestra su UX; el chequeo periódico (cada 15 min) avisa una sola vez por versión; la app queda en la versión nueva (verificar en "Acerca de").
 - **Resultado**: [ ] PASA  [ ] FALLA
   - Notas: ______________________________________
 
