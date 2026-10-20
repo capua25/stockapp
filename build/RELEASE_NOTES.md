@@ -1,9 +1,9 @@
-severity: important
+severity: critical
 
-# Gestión Municipal 0.5.2
+# Gestión Municipal 0.5.3
 
 Mejoras:
-- Mejoras internas de estabilidad del sistema de actualizaciones.
+- Ahora la aplicación busca actualizaciones cada 15 minutos mientras está abierta (antes lo hacía una vez por hora), para que las correcciones importantes lleguen más rápido.
 
 ---
 <!-- INSTRUCCIONES PARA EL PUBLICADOR — leer antes de empaquetar:
