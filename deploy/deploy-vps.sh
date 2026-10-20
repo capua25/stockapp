@@ -208,7 +208,11 @@ readonly TABLAS_CON_NOMBRE_UNICO=(
     DimensionesTematicas OrganismosResponsables OrigenesFinanciamiento
 )
 
-MARCADOR_ULTIMO_DEPLOY="${REPO_ROOT}/deploy/dist/.ultimo-deploy-vps-commit"
+# El marcador es POR HOST: uno global hacía que, tras desplegar al VPS A, un deploy al VPS B (nuevo,
+# sin install.sh) saltara la copia de install.sh. El marcador viejo sin sufijo se ignora a
+# propósito (no se borra ni se migra): con él se arriesga saltear la copia en un host nuevo.
+VPS_HOST_SEGURO="${VPS_HOST//[^A-Za-z0-9._-]/_}"
+MARCADOR_ULTIMO_DEPLOY="${REPO_ROOT}/deploy/dist/.ultimo-deploy-vps-commit-${VPS_HOST_SEGURO}"
 
 # ---------------------------------------------------------------------------------------
 # Paso 0 — Relevamiento READ-ONLY (AGREGADO, el plan no lo pedía)
@@ -597,11 +601,11 @@ paso4_copiar_artefactos() {
     fi
 
     if [[ "$copiar_install" -eq 1 ]]; then
-        echo "  install.sh/stockapp-api.service cambiaron (o es el primer deploy conocido) -- copiando." >&2
+        echo "  install.sh/stockapp-api.service cambiaron (o es el primer deploy conocido a ${VPS_HOST}) -- copiando." >&2
         scp_vps "${REPO_ROOT}/deploy/install.sh" "${REPO_ROOT}/deploy/stockapp-api.service" \
             "${REPO_ROOT}/deploy/wait-for-postgres.sh" "${VPS_USER}@${VPS_HOST}:${VPS_DIR}/"
     else
-        echo "  install.sh/stockapp-api.service sin cambios desde el último deploy -- no se copian de nuevo." >&2
+        echo "  install.sh/stockapp-api.service sin cambios desde el último deploy a ${VPS_HOST} -- no se copian de nuevo." >&2
     fi
 
     # CRÍTICO: esta función se llama como "NOMBRE_TARBALL=\"\$(paso4_copiar_artefactos ...)\"" --

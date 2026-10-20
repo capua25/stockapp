@@ -1437,4 +1437,122 @@ public class DeployVpsTests
         }
         finally { Directory.Delete(repo, recursive: true); }
     }
+
+    // ---------- El marcador de último deploy es POR HOST ----------
+    // Un único marcador global hacía que, tras desplegar al VPS A, un deploy al VPS B (nuevo,
+    // sin install.sh) saltara la copia de install.sh: justo el bug que esto corrige.
+
+    private static string HeadDe(string repo)
+    {
+        var (exit, stdout, stderr) = EjecutorBash.Ejecutar($"git -C '{repo}' rev-parse HEAD");
+        Assert.True(exit == 0, stderr);
+        return stdout.Trim();
+    }
+
+    private static string EscribirMarcador(string repo, string sufijo)
+    {
+        var dist = Path.Combine(repo, "deploy", "dist");
+        Directory.CreateDirectory(dist);
+        var ruta = Path.Combine(dist, ".ultimo-deploy-vps-commit" + sufijo);
+        File.WriteAllText(ruta, HeadDe(repo));
+        return ruta;
+    }
+
+    [Fact]
+    public void MarcadorDeOtroHost_CopiaInstallSh()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            EscribirMarcador(repo, "-otro.test.invalid");
+
+            var (exitCode, stdout, stderr, _, rastroScp, _) = Correr(repo, "1.0.0");
+
+            Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}");
+            Assert.Contains("install.sh", rastroScp);
+            Assert.Contains("stockapp-api.service", rastroScp);
+            Assert.Contains("wait-for-postgres.sh", rastroScp);
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    [Fact]
+    public void MarcadorViejoSinHost_CopiaInstallSh()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            EscribirMarcador(repo, "");
+
+            var (exitCode, stdout, stderr, _, rastroScp, _) = Correr(repo, "1.0.0");
+
+            Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}");
+            Assert.Contains("install.sh", rastroScp);
+            Assert.Contains("stockapp-api.service", rastroScp);
+            Assert.Contains("wait-for-postgres.sh", rastroScp);
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    [Fact]
+    public void MarcadorDelMismoHostSinCambios_NoCopiaInstallSh()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            EscribirMarcador(repo, "-vps.test.invalid");
+
+            var (exitCode, stdout, stderr, _, rastroScp, _) = Correr(repo, "1.0.0");
+
+            Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}");
+            Assert.NotEqual("", rastroScp); // el tarball sí se copia
+            Assert.DoesNotContain("install.sh", rastroScp);
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    [Fact]
+    public void CaminoFeliz_EscribeElMarcadorDelHost()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            var (exitCode, stdout, stderr, _, _, _) = Correr(repo, "1.0.0");
+
+            Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}");
+            var dist = Path.Combine(repo, "deploy", "dist");
+            var marcador = Path.Combine(dist, ".ultimo-deploy-vps-commit-vps.test.invalid");
+            Assert.True(File.Exists(marcador), "falta el marcador por host");
+            Assert.Equal(HeadDe(repo), File.ReadAllText(marcador).Trim());
+            Assert.False(File.Exists(Path.Combine(dist, ".ultimo-deploy-vps-commit")),
+                "no debe existir el marcador sin sufijo");
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    /// <summary>
+    /// El escenario real del bug: se despliega al VPS A (escribe SU marcador) y después al VPS B
+    /// con el MISMO checkout. B no tiene install.sh y tiene que recibirlo. Con un marcador global
+    /// (o sin el sufijo del host) la segunda corrida lo saltea -- este test lo agarra, a diferencia
+    /// de MarcadorDeOtroHost_CopiaInstallSh, que con un marcador global pasaría igual (el archivo
+    /// "de otro host" simplemente no se miraría).
+    /// </summary>
+    [Fact]
+    public void DeployAUnHostYLuegoAOtro_ElSegundoRecibeInstallSh()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            var (exitA, outA, errA, _, scpA, _) = Correr(repo, "1.0.0", vpsHost: "a.test.invalid");
+            Assert.True(exitA == 0, $"stdout={outA}\nstderr={errA}");
+            Assert.Contains("install.sh", scpA);
+
+            var (exitB, outB, errB, _, scpB, _) = Correr(repo, "1.0.0", vpsHost: "b.test.invalid");
+            Assert.True(exitB == 0, $"stdout={outB}\nstderr={errB}");
+            Assert.Contains("install.sh", scpB);
+            Assert.Contains("stockapp-api.service", scpB);
+            Assert.Contains("wait-for-postgres.sh", scpB);
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
 }
