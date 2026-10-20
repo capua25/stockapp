@@ -1,28 +1,12 @@
 severity: normal
 
-# Gestión Municipal 0.5.0
+# Gestión Municipal 0.5.1
 
 Novedades:
-- Nuevo diseño de toda la aplicación (versión 2): pantallas más claras y ordenadas, con el mismo estilo en Inicio, Productos, Movimientos, Finanzas, Reportes, Documentos, Tareas, Usuarios, Catálogos y Mantenimiento.
-- Las actualizaciones ahora se descargan del servidor del municipio. La aplicación busca versiones nuevas cada una hora, sin interrumpir lo que estés haciendo.
-- Si aparece una actualización crítica mientras trabajás, se muestra un aviso rojo fijo en la parte de arriba que no tapa el contenido.
-- Reportes: nueva pantalla de entrada que reúne los seis reportes, y el Log de auditoría ahora muestra la acción en un texto entendible.
-- Libro de caja: se puede ver y exportar a PDF el año completo, con el saldo inicial y final del año y el nombre de cada mes.
-- Catálogos: ahora hay una única sección con todos los catálogos, con búsqueda y acceso directo a cada uno.
+- En el listado de productos, la columna Estado se reemplazó por un filtro "Estado" (Activos / Inactivos). Por defecto se muestran los productos activos.
 
 Mejoras:
-- Todas las pantallas indican cuando se está cargando, cuando no hay conexión con el servidor (con botón Reintentar) y cuando falta permiso, en vez de mostrar "No hay datos".
-- En Gastos, Ingresos de caja y Calendario de pagos, los filtros se aplican solos al cambiar; ya no hace falta apretar Filtrar.
-- Los formularios de gastos, ingresos y pagos marcan el error en cada campo y no dejan guardar hasta corregirlo.
-- Un gasto anulado queda en solo lectura: no se pueden agregarle adjuntos ni modificarlo, y no se puede anular dos veces.
-- Al quitar un adjunto, la aplicación pide confirmación.
-- Registrar entrada y salida: el precio solo es obligatorio en las compras y se oculta en uso o consumo; en una salida nunca se pide.
-- No se puede dar de baja una categoría que tiene productos activos.
-- Las columnas de las tablas se ajustan al contenido y los textos largos muestran el detalle al pasar el mouse.
-- Inicio: las métricas indican cuando no hay dato, y el panel de tareas muestra hasta 4 filas con acceso a Ver todas.
-- Si cambian tus permisos, los botones y el menú lateral se actualizan sin tener que reabrir las pantallas.
-- Los códigos de rubro y los ejercicios del POA ahora se ordenan por número y no como texto.
-- En Documentos, el historial muestra el estado en palabras (por ejemplo, "En proceso").
+- Nuevo ícono de la aplicación.
 
 ---
 <!-- INSTRUCCIONES PARA EL PUBLICADOR — leer antes de empaquetar:
