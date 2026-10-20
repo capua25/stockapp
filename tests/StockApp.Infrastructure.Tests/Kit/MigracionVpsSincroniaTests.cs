@@ -23,6 +23,7 @@ public class MigracionVpsSincroniaTests
     public static readonly string[] ScriptsNuevos =
     [
         "deploy/restaurar-backup.sh",
+        "deploy/volcado-final-vps.sh",
     ];
 
     public static TheoryData<string> CasosScriptsNuevos()
@@ -107,5 +108,32 @@ public class MigracionVpsSincroniaTests
             $"deploy-vps.sh difiere de C#: [{string.Join(", ", ArrayBash("deploy/deploy-vps.sh"))}]");
         Assert.True(csharp.SetEquals(ArrayBash("deploy/restaurar-backup.sh")),
             $"restaurar-backup.sh difiere de C#: [{string.Join(", ", ArrayBash("deploy/restaurar-backup.sh"))}]");
+    }
+
+    // ---------- La consulta de conteos: una sola, en el volcado y en la restauración ----------
+
+    private static string BloqueEntreMarcadores(string relativo)
+    {
+        var lineas = Texto(relativo).Split('\n');
+        var inicio = Array.FindIndex(lineas, l => l.Trim() == "# >>> SQL-CONTEOS");
+        var fin = Array.FindIndex(lineas, l => l.Trim() == "# <<< SQL-CONTEOS");
+        Assert.True(inicio >= 0 && fin > inicio, $"No se encontraron los marcadores SQL-CONTEOS en {relativo}.");
+        return string.Join('\n', lineas[(inicio + 1)..fin]);
+    }
+
+    /// <summary>
+    /// El manifiesto lleva los conteos que calcula volcado-final-vps.sh, y restaurar-backup.sh los
+    /// compara contra los que calcula él. Si las dos consultas divergen (otro filtro, otro orden,
+    /// otra forma de contar), la comparación deja de medir lo mismo: el texto entre los
+    /// marcadores tiene que ser IDÉNTICO.
+    /// </summary>
+    [Fact]
+    public void SqlDeConteos_IdenticaEnVolcadoYRestaurar()
+    {
+        var volcado = BloqueEntreMarcadores("deploy/volcado-final-vps.sh");
+        var restaurar = BloqueEntreMarcadores("deploy/restaurar-backup.sh");
+
+        Assert.Contains("information_schema.tables", restaurar);
+        Assert.Equal(restaurar, volcado);
     }
 }
