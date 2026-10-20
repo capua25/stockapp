@@ -29,6 +29,14 @@ if [[ -z "${ENSAYO_RAIZ:-}" || ! -d "${ENSAYO_RAIZ}" ]]; then
     echo "ensayo: systemctl necesita ENSAYO_RAIZ (raíz del VPS viejo simulado)" >&2
     exit 1
 fi
+# La raíz tiene que ser la del ensayo (<trabajo>/vps-viejo, al lado de <trabajo>/estado, como la
+# arma ensayo-local.sh preparar): nunca '/' ni otro directorio, así el mask/unmask simulado no
+# puede tocar el /etc real ni nada fuera del directorio de trabajo.
+RAIZ_ESPERADA="$(realpath -e -- "$(dirname -- "$ENSAYO_ESTADO")")/vps-viejo"
+if [[ "$ENSAYO_RAIZ" == "/" || "$(realpath -e -- "$ENSAYO_RAIZ")" != "$RAIZ_ESPERADA" ]]; then
+    echo "ensayo: ENSAYO_RAIZ='${ENSAYO_RAIZ}' no es la raíz del ensayo (${RAIZ_ESPERADA})" >&2
+    exit 1
+fi
 
 ACTIVO="${ENSAYO_ESTADO}/${UNIT}.activo"
 HABILITADO="${ENSAYO_ESTADO}/${UNIT}.habilitado"

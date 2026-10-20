@@ -218,6 +218,34 @@ public class EnsayoLocalTests : IDisposable
         Assert.Equal("enabled", Bash(EnvShims(estado, raiz) + $"{systemctl} is-enabled stockapp-api").Stdout.Trim());
     }
 
+    /// <summary>
+    /// La seguridad del shim: sin una raíz del ensayo válida no corre NADA (nunca cae al /etc
+    /// real). La raíz tiene que ser &lt;trabajo&gt;/vps-viejo, al lado del estado.
+    /// </summary>
+    [Theory]
+    [InlineData("sin-variable")]
+    [InlineData("vacia")]
+    [InlineData("barra")]
+    [InlineData("fuera-del-trabajo")]
+    public void ShimSystemctl_SinEnsayoRaiz_Rechaza1(string caso)
+    {
+        var (estado, _) = VpsViejoSimulado();
+        var otra = DirectorioNuevo("ensayo-otra-raiz-");
+        var entorno = caso switch
+        {
+            "sin-variable" => $"export ENSAYO_ESTADO=\"{estado}\"\n",
+            "vacia" => $"export ENSAYO_ESTADO=\"{estado}\" ENSAYO_RAIZ=\n",
+            "barra" => $"export ENSAYO_ESTADO=\"{estado}\" ENSAYO_RAIZ=/\n",
+            _ => $"export ENSAYO_ESTADO=\"{estado}\" ENSAYO_RAIZ=\"{otra}\"\n",
+        };
+
+        var r = Bash(entorno + $"\"{Shim("systemctl")}\" is-active stockapp-api");
+
+        Assert.True(r.ExitCode == 1, Diag(r));
+        Assert.Equal("", r.Stdout.Trim());
+        Assert.Contains("ENSAYO_RAIZ", r.Stderr);
+    }
+
     // ---------- shims/sudo ----------
 
     [Fact]
@@ -316,6 +344,99 @@ public class EnsayoLocalTests : IDisposable
         {
             ocupado.Stop();
         }
+    }
+
+    /// <summary>
+    /// El directorio de trabajo recibe datos reales (Task 11): nunca dentro del repo (se
+    /// commitearía) ni bajo /mnt/ (drvfs de WSL ignora el chmod 700).
+    /// </summary>
+    [Theory]
+    [InlineData("repo")]
+    [InlineData("dentro-del-repo")]
+    [InlineData("mnt")]
+    public void Preparar_TrabajoDentroDelRepoOBajoMnt_Rechaza2(string caso)
+    {
+        var sufijo = Guid.NewGuid().ToString("N")[..8];
+        var dump = Path.Combine(DirectorioNuevo("ensayo-dump-"), "real.dump");
+        File.WriteAllText(dump, "no importa: aborta antes de mirarlo");
+        var trabajo = caso switch
+        {
+            "repo" => RaizRepo(),
+            "dentro-del-repo" => Path.Combine(RaizRepo(), "ensayo-trabajo-" + sufijo),
+            _ => "/mnt/c/ensayo-trabajo-" + sufijo,
+        };
+
+        try
+        {
+            var r = Bash($"\"{Script}\" preparar \"{dump}\" --trabajo \"{trabajo}\" --sufijo {sufijo} --puerto {PuertoLibre()}");
+
+            Assert.True(r.ExitCode == 2, Diag(r));
+            if (caso != "repo") Assert.False(Directory.Exists(trabajo), "se creó el directorio de trabajo");
+            Assert.Equal("", Bash(
+                $"docker ps -a --format '{{{{.Names}}}}' | grep -e '-{sufijo}$' || true").Stdout.Trim());
+        }
+        finally
+        {
+            // Si el guardián faltara, preparar habría creado todo esto: se borra por nombre exacto.
+            Bash($"docker rm -f -v stockapp-ensayo-pg-{sufijo} stockapp-ensayo-origen-pg-{sufijo} 2>/dev/null; " +
+                 $"docker volume rm stockapp_ensayo_origen_pgdata_{sufijo} stockapp_ensayo_pgdata_{sufijo} 2>/dev/null; true");
+            if (caso != "repo" && Directory.Exists(trabajo)) Directory.Delete(trabajo, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Un preparar que falla DESPUÉS de crear los contenedores (acá: el dump no es un dump) no deja
+    /// nada: el trap borra por nombre exacto lo de este sufijo.
+    /// </summary>
+    [Fact]
+    public void Preparar_FallaAMitad_BorraLoQueCreo()
+    {
+        var sufijo = Guid.NewGuid().ToString("N")[..8];
+        var trabajo = Path.Combine(DirectorioNuevo("ensayo-pre-"), "trabajo");
+        var dump = Path.Combine(DirectorioNuevo("ensayo-dump-"), "real.dump");
+        File.WriteAllText(dump, "esto no es un dump de pg_dump");
+        try
+        {
+            var r = Bash($"\"{Script}\" preparar \"{dump}\" --trabajo \"{trabajo}\" --sufijo {sufijo} --puerto {PuertoLibre()}");
+
+            Assert.True(r.ExitCode != 0, Diag(r));
+            Assert.Contains("== Dump real en el origen ==", r.Stdout);
+            Assert.Equal("", Bash(
+                $"docker ps -a --format '{{{{.Names}}}}' | grep -e '-{sufijo}$' || true").Stdout.Trim());
+            Assert.Equal("", Bash(
+                $"docker volume ls --format '{{{{.Name}}}}' | grep -e '_{sufijo}$' || true").Stdout.Trim());
+        }
+        finally
+        {
+            Bash($"docker rm -f -v stockapp-ensayo-pg-{sufijo} stockapp-ensayo-origen-pg-{sufijo} 2>/dev/null; " +
+                 $"docker volume rm stockapp_ensayo_origen_pgdata_{sufijo} stockapp_ensayo_pgdata_{sufijo} 2>/dev/null; true");
+        }
+    }
+
+    /// <summary>
+    /// limpiar recuerda SIEMPRE dónde quedan los datos y cuánto ocupan, también cuando sale ≠ 0.
+    /// </summary>
+    [Theory]
+    [InlineData("ps-distinto", 9)]
+    [InlineData("sin-ps-antes", 3)]
+    public void Limpiar_ConSalidaNoCero_IgualRecuerdaElDirectorioDeDatos(string caso, int exitEsperado)
+    {
+        var sufijo = Guid.NewGuid().ToString("N")[..8];
+        var trabajo = Path.Combine(DirectorioNuevo("ensayo-limpiar-"), "trabajo");
+        Directory.CreateDirectory(trabajo);
+        File.WriteAllText(Path.Combine(trabajo, "config"), $"SUFIJO={sufijo}\nPUERTO=5434\n");
+        File.WriteAllText(Path.Combine(trabajo, "datos.dump"), new string('x', 50_000));
+        if (caso == "ps-distinto")
+            File.WriteAllText(Path.Combine(trabajo, "docker-ps-antes.txt"), $"no-existe-{sufijo}\n");
+        var tamano = Bash($"du -sh \"{trabajo}\" | cut -f1").Stdout.Trim();
+
+        var r = Bash($"\"{Script}\" limpiar --trabajo \"{trabajo}\"");
+
+        Assert.True(r.ExitCode == exitEsperado, Diag(r));
+        var salida = r.Stdout + r.Stderr;
+        Assert.Contains(trabajo, salida);
+        Assert.Contains($"({tamano})", salida);
+        Assert.Contains("borralo a mano", salida);
     }
 
     private static int PuertoLibre()

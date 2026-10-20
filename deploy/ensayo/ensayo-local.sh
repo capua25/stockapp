@@ -12,7 +12,8 @@
 #   deploy/ensayo/ensayo-local.sh restaurar --trabajo <dir> [--recrear-base]
 #   deploy/ensayo/ensayo-local.sh limpiar   --trabajo <dir>
 #
-#   --trabajo    directorio del ensayo (700). 'preparar' lo exige vacío o inexistente.
+#   --trabajo    directorio del ensayo (700). 'preparar' lo exige vacío o inexistente. Nunca
+#                dentro del repo ni bajo /mnt/ (ahí no rigen los permisos): exit 2.
 #   --historial  backups que hacen de historial del VPS viejo (repetible).
 #   --sufijo     ^[a-z0-9]{0,12}$, default vacío: se agrega como -<s> / _<s> a los nombres de
 #                abajo, para que dos ensayos (o los tests) no choquen.
@@ -29,6 +30,8 @@
 #              restaurar-backup.sh; arma la raíz del VPS viejo (<trabajo>/vps-viejo: historial,
 #              api.env y la unit como archivo regular, como la deja install.sh), el estado de la
 #              API (active/enabled) y el .env del operador apuntando a vps-viejo.ensayo.invalid.
+#              Si falla después de escribir la config, borra al salir (por nombre exacto) los
+#              contenedores y volúmenes de este sufijo que se alcanzaron a crear.
 #   volcar     volcado-final-vps.sh en modo FINAL (stop + mask) contra el origen, con los shims
 #              de ssh/sudo/systemctl al frente del PATH (el ssh falso rechaza todo host que no
 #              sea *.invalid).
@@ -43,7 +46,8 @@
 # aplicaciones.
 #
 # El directorio de trabajo queda con una COPIA DE LOS DATOS del dump: 'limpiar' no lo borra
-# (el operador puede querer revisar la salida); borralo a mano al terminar.
+# (el operador puede querer revisar la salida); borralo a mano al terminar. 'preparar' (al
+# terminar bien) y 'limpiar' (salga como salga) recuerdan la ruta y cuánto ocupa.
 #
 # Códigos de salida:
 #   0  OK
@@ -72,12 +76,36 @@ error_uso() {
 
 SUBCOMANDO=""
 INICIO=$SECONDS
-informar_duracion() {
+TRABAJO=""
+CONFIG_ESCRITA=0
+
+# recordar_datos: dónde quedan los datos del ensayo y cuánto ocupan. El directorio de trabajo
+# tiene una copia de los datos del dump (en el corte, datos REALES de producción).
+recordar_datos() {
+    [[ -n "$TRABAJO" && -d "$TRABAJO" ]] || return 0
+    local tamano
+    tamano="$(du -sh -- "$TRABAJO" 2>/dev/null | cut -f1)" || tamano=""
+    [[ -n "$tamano" ]] || tamano="tamaño desconocido: du falló"
+    echo "Datos del ensayo en '${TRABAJO}' (${tamano}): tienen una copia de los datos del dump, borralo a mano al terminar."
+}
+
+al_salir() {
     local rc=$?
+    trap - EXIT
+    # preparar que falla después de escribir la config: se borra lo que se alcanzó a crear.
+    if [[ "$SUBCOMANDO" == "preparar" && "$rc" -ne 0 && "$CONFIG_ESCRITA" -eq 1 ]]; then
+        if borrar_recursos; then
+            echo "  preparar falló: se borraron los contenedores y volúmenes de este ensayo." >&2
+        else
+            echo "ATENCIÓN: no se pudo borrar todo; corré: $0 limpiar --trabajo ${TRABAJO}" >&2
+        fi
+    fi
+    # limpiar recuerda los datos en TODOS sus caminos de salida, también con error.
+    [[ "$SUBCOMANDO" != "limpiar" ]] || recordar_datos
     [[ -z "$SUBCOMANDO" ]] || echo "ensayo-local ${SUBCOMANDO}: $(( SECONDS - INICIO )) s"
     exit "$rc"
 }
-trap informar_duracion EXIT
+trap al_salir EXIT
 
 # ---------------------------------------------------------------------------------------
 # Argumentos
@@ -89,7 +117,6 @@ case "$1" in
     *) error_uso "subcomando desconocido: $1" ;;
 esac
 
-TRABAJO=""
 DUMP_REAL=""
 HISTORIAL=()
 SUFIJO=""
@@ -131,6 +158,15 @@ TRABAJO="$(realpath -m -- "$TRABAJO")"
 # este patrón.
 [[ "$TRABAJO" =~ ^/[A-Za-z0-9._/-]+$ && "$TRABAJO" != *..* ]] \
     || error_uso "--trabajo '${TRABAJO}' tiene que matchear ^/[A-Za-z0-9._/-]+$ (sin '..')."
+# Va a tener datos reales: nunca dentro del repo (terminaría en un commit) ni bajo /mnt/ (el
+# disco de Windows en WSL ignora el chmod 700: cualquiera los podría leer).
+REPO_REAL="$(realpath -m -- "$REPO_ROOT")"
+if [[ "$TRABAJO" == "$REPO_REAL" || "$TRABAJO" == "$REPO_REAL"/* ]]; then
+    error_uso "--trabajo '${TRABAJO}' está dentro del repo: elegí un directorio fuera de '${REPO_REAL}'."
+fi
+if [[ "$TRABAJO" == /mnt || "$TRABAJO" == /mnt/* ]]; then
+    error_uso "--trabajo '${TRABAJO}' está bajo /mnt/, donde no rigen los permisos 700/600."
+fi
 
 CONFIG="${TRABAJO}/config"
 ESTADO="${TRABAJO}/estado"
@@ -224,10 +260,9 @@ esperar_postgres() {
 # ---------------------------------------------------------------------------------------
 # preparar
 # ---------------------------------------------------------------------------------------
-# Desde que se escribe la config, todo fallo deja algo que 'limpiar' sabe borrar.
+# Desde que se escribe la config, un fallo lo atrapa al_salir y borra lo que se creó.
 fallo_preparar() {
     echo "ERROR: $2" >&2
-    echo "       Para borrar lo que se haya creado: $0 limpiar --trabajo ${TRABAJO}" >&2
     exit "$1"
 }
 
@@ -270,6 +305,7 @@ preparar() {
     chmod 700 "$TRABAJO"
     printf 'SUFIJO=%s\nPUERTO=%s\n' "$SUFIJO" "$PUERTO" > "$CONFIG"
     chmod 600 "$CONFIG"
+    CONFIG_ESCRITA=1
     contenedores_ps > "$PS_ANTES"
     head -c 24 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' > "${TRABAJO}/pg-password"
     chmod 600 "${TRABAJO}/pg-password"
@@ -311,6 +347,7 @@ preparar() {
         "POSTGRES_USER=stockapp" "POSTGRES_DB=stockapp" > "$ENV_OPERADOR"
     echo "  ${RAIZ} (historial: ${#HISTORIAL[@]} backup(s)); stockapp-api active/enabled"
     echo "OK: ensayo preparado en ${TRABAJO}"
+    recordar_datos
 }
 
 # ---------------------------------------------------------------------------------------
@@ -358,7 +395,9 @@ restaurar() {
 # ---------------------------------------------------------------------------------------
 # limpiar
 # ---------------------------------------------------------------------------------------
-limpiar() {
+# borrar_recursos: los dos contenedores (con -v) y los dos volúmenes de este sufijo, por nombre
+# EXACTO y solo si existen; después verifica que no quede ninguno. Devuelve 0 u 8.
+borrar_recursos() {
     local rc=0
     lista_docker "los contenedores (docker ps -a)" docker ps -a --format '{{.Names}}'
     if contiene "$ORIGEN"; then
@@ -385,6 +424,12 @@ limpiar() {
     for n in "$VOL_ORIGEN" "$VOL_DESTINO"; do
         if contiene "$n"; then echo "ERROR: el volumen '${n}' sigue existiendo." >&2; rc=8; fi
     done
+    return "$rc"
+}
+
+limpiar() {
+    local rc=0
+    borrar_recursos || rc=$?
     [[ "$rc" -eq 0 ]] || exit "$rc"
     echo "  Contenedores y volúmenes del ensayo borrados."
 
@@ -401,7 +446,6 @@ limpiar() {
         exit 9
     fi
     echo "OK: contenedores corriendo iguales a los de antes del ensayo."
-    echo "Recordá borrar '${TRABAJO}' a mano: tiene una copia de los datos del dump."
 }
 
 "$SUBCOMANDO"
