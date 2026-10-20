@@ -134,10 +134,10 @@ public class RestaurarBackupTests
             return afuera;
         }
 
-        /// <summary>Restaura un dump del host en una base nueva del contenedor (pg_restore adentro).</summary>
-        public void RestaurarEnBase(string dumpHost, string @base)
+        /// <summary>Restaura un dump del host en una base del contenedor (pg_restore adentro).</summary>
+        public void RestaurarEnBase(string dumpHost, string @base, bool crear = true)
         {
-            Psql($"CREATE DATABASE {@base};");
+            if (crear) Psql($"CREATE DATABASE {@base};");
             var dentro = $"/tmp/restaurar-en-{@base}.dump";
             var (exit, _, stderr) = EjecutorBash.Ejecutar($"docker cp \"{dumpHost}\" {Nombre}:{dentro}");
             if (exit != 0) throw new InvalidOperationException($"docker cp falló: {stderr}");
@@ -503,6 +503,237 @@ public class RestaurarBackupTests
             var ok = Correr($"\"{d.Ruta}\" {Base(c)}");
             Assert.True(ok.ExitCode == 0, Diag(ok));
             Assert.DoesNotContain("restaurar-", c.Exec("sh -c 'ls /tmp'"));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    // =====================================================================================
+    // Manifiesto, conteos, secuencias y catálogos
+    // =====================================================================================
+
+    /// <summary>
+    /// Escribe un manifiesto v1 (contrato compartido con volcado-final-vps.sh) a partir del dump
+    /// real, con alteraciones opcionales para los casos de falla.
+    /// </summary>
+    internal static void EscribirManifiesto(
+        string ruta, DumpReal d, Action<Dictionary<string, long>>? alterarConteos = null,
+        string? ultimaMigracion = null, string? sha = null, long? tamano = null)
+    {
+        var conteos = new Dictionary<string, long>(d.Conteos);
+        alterarConteos?.Invoke(conteos);
+        var texto = new System.Text.StringBuilder();
+        texto.Append("# manifiesto-migracion v1\n");
+        texto.Append("fecha_utc=2026-10-20T13:05:00Z\n");
+        texto.Append("host_origen=origen-de-prueba\n");
+        texto.Append("version_servidor=PostgreSQL 16\n");
+        texto.Append("version_pg_dump=pg_dump (PostgreSQL) 16\n");
+        texto.Append("base=stockapp\n");
+        texto.Append($"dump={Path.GetFileName(d.Ruta)}\n");
+        texto.Append($"sha256={sha ?? d.Sha256}\n");
+        texto.Append($"tamano_bytes={tamano ?? d.Tamano}\n");
+        texto.Append($"ultima_migracion={ultimaMigracion ?? d.UltimaMigracion}\n");
+        texto.Append("[conteos]\n");
+        foreach (var (tabla, filas) in conteos) texto.Append($"{tabla}\t{filas}\n");
+        File.WriteAllText(ruta, texto.ToString());
+    }
+
+    [Fact]
+    public async Task ManifiestoCorrecto_Restaura0ConConteosIdenticos()
+    {
+        var d = await DumpEsquemaReal();
+        using var c = new ContenedorPg();
+        var dir = NuevoDirectorio();
+        try
+        {
+            var manifiesto = Path.Combine(dir, "m.manifiesto");
+            EscribirManifiesto(manifiesto, d);
+
+            var r = Correr($"\"{d.Ruta}\" --manifiesto \"{manifiesto}\" {Base(c)}");
+
+            Assert.True(r.ExitCode == 0, Diag(r));
+            Assert.Equal(d.Conteos, ParsearSnapshot(c.Snapshot()));
+            foreach (var tabla in d.Conteos.Keys)
+                Assert.Matches(new System.Text.RegularExpressions.Regex(
+                    $@"^\s*{System.Text.RegularExpressions.Regex.Escape(tabla)}\s.*\bOK\b",
+                    System.Text.RegularExpressions.RegexOptions.Multiline), r.Stdout);
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task ManifiestoConConteoAlterado_Falla6YLaBaseQuedaRestaurada()
+    {
+        var d = await DumpEsquemaReal();
+        using var c = new ContenedorPg();
+        var dir = NuevoDirectorio();
+        try
+        {
+            var manifiesto = Path.Combine(dir, "m.manifiesto");
+            EscribirManifiesto(manifiesto, d, conteos => conteos["Categorias"] += 1);
+
+            var r = Correr($"\"{d.Ruta}\" --manifiesto \"{manifiesto}\" {Base(c)}");
+
+            Assert.True(r.ExitCode == 6, Diag(r));
+            Assert.Contains($"Categorias: esperado {d.Conteos["Categorias"] + 1}, real {d.Conteos["Categorias"]}", r.Stderr);
+            Assert.True(c.TablasEnPublic() > 0, "La base tiene que quedar restaurada (no se revierte).");
+            Assert.Contains("API NO arrancada", r.Stderr + r.Stdout);
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task ManifiestoConMigracionDistinta_Falla6()
+    {
+        var d = await DumpEsquemaReal();
+        using var c = new ContenedorPg();
+        var dir = NuevoDirectorio();
+        try
+        {
+            var manifiesto = Path.Combine(dir, "m.manifiesto");
+            EscribirManifiesto(manifiesto, d, ultimaMigracion: "20991231000000_MigracionQueNoExiste");
+
+            var r = Correr($"\"{d.Ruta}\" --manifiesto \"{manifiesto}\" {Base(c)}");
+
+            Assert.True(r.ExitCode == 6, Diag(r));
+            Assert.Contains("20991231000000_MigracionQueNoExiste", r.Stderr);
+            Assert.Contains(d.UltimaMigracion, r.Stderr);
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task ShaDistinto_Aborta4AntesDelDockerCp()
+    {
+        var d = await DumpEsquemaReal();
+        using var c = new ContenedorPg();
+        var dir = NuevoDirectorio();
+        try
+        {
+            var manifiesto = Path.Combine(dir, "m.manifiesto");
+            EscribirManifiesto(manifiesto, d, sha: new string('0', 64));
+
+            var r = Correr($"\"{d.Ruta}\" --manifiesto \"{manifiesto}\" {Base(c)}");
+
+            Assert.True(r.ExitCode == 4, Diag(r));
+            Assert.DoesNotContain(" cp ", r.RastroDocker);
+            Assert.Equal(0, c.TablasEnPublic());
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task TamanoDistinto_Aborta4()
+    {
+        var d = await DumpEsquemaReal();
+        using var c = new ContenedorPg();
+        var dir = NuevoDirectorio();
+        try
+        {
+            var manifiesto = Path.Combine(dir, "m.manifiesto");
+            EscribirManifiesto(manifiesto, d, tamano: d.Tamano + 1);
+
+            var r = Correr($"\"{d.Ruta}\" --manifiesto \"{manifiesto}\" {Base(c)}");
+
+            Assert.True(r.ExitCode == 4, Diag(r));
+            Assert.DoesNotContain(" cp ", r.RastroDocker);
+            Assert.Equal(0, c.TablasEnPublic());
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task TablasDelListNoCoincidenConElManifiesto_Aborta4()
+    {
+        var d = await DumpEsquemaReal();
+        using var c = new ContenedorPg();
+        var dir = NuevoDirectorio();
+        try
+        {
+            var manifiesto = Path.Combine(dir, "m.manifiesto");
+            EscribirManifiesto(manifiesto, d, conteos => conteos["Fantasma"] = 0);
+
+            var r = Correr($"\"{d.Ruta}\" --manifiesto \"{manifiesto}\" {Base(c)}");
+
+            Assert.True(r.ExitCode == 4, Diag(r));
+            Assert.Contains("Fantasma", r.Stderr);
+            Assert.DoesNotContain("--single-transaction", r.RastroDocker);
+            Assert.Equal(0, c.TablasEnPublic());
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task ManifiestoMalFormado_Aborta2()
+    {
+        var d = await DumpEsquemaReal();
+        var dir = NuevoDirectorio();
+        try
+        {
+            var manifiesto = Path.Combine(dir, "m.manifiesto");
+            EscribirManifiesto(manifiesto, d);
+            File.WriteAllLines(manifiesto, File.ReadAllLines(manifiesto).Where(l => l != "[conteos]"));
+
+            var r = Correr($"\"{d.Ruta}\" --manifiesto \"{manifiesto}\" --contenedor stockapp-test-nadie --base stockapp --usuario stockapp");
+
+            Assert.True(r.ExitCode == 2, Diag(r));
+            Assert.Equal("", r.RastroDocker);
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    /// <summary>
+    /// Origen con el esquema real, una Categoria más y la secuencia de Categorias.Id un paso
+    /// por DETRÁS del máximo: el primer alta tras la migración chocaría con la PK.
+    /// </summary>
+    [Fact]
+    public async Task SecuenciaAtrasada_Falla6()
+    {
+        var d = await DumpEsquemaReal();
+        using var c = new ContenedorPg();
+        var dir = NuevoDirectorio();
+        try
+        {
+            var g = Guid.NewGuid().ToString("N")[..8];
+            var dump = c.DumpDeOrigen(dir, cont =>
+            {
+                cont.RestaurarEnBase(d.Ruta, "origen", crear: false);
+                cont.Psql(
+                    $"INSERT INTO \"Categorias\"(\"Nombre\") VALUES ('SeqA-{g}'), ('SeqB-{g}');" +
+                    "SELECT setval(pg_get_serial_sequence('\"Categorias\"', 'Id'), (SELECT max(\"Id\") FROM \"Categorias\") - 1);",
+                    "origen");
+            });
+
+            var r = Correr($"\"{dump}\" {Base(c)}");
+
+            Assert.True(r.ExitCode == 6, Diag(r));
+            Assert.Contains("Categorias.Id", r.Stderr);
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task DuplicadosEnCatalogo_Falla7ConRemediacionSinEjecutarla()
+    {
+        var d = await DumpEsquemaReal();
+        using var c = new ContenedorPg();
+        var dir = NuevoDirectorio();
+        try
+        {
+            var dump = c.DumpDeOrigen(dir, cont =>
+            {
+                cont.RestaurarEnBase(d.Ruta, "origen", crear: false);
+                cont.Psql(
+                    "DROP INDEX \"IX_Categorias_Nombre\";" +
+                    "INSERT INTO \"Categorias\"(\"Nombre\") VALUES ('Tornillos'), ('tornillos');",
+                    "origen");
+            });
+
+            var r = Correr($"\"{dump}\" {Base(c)}");
+
+            Assert.True(r.ExitCode == 7, Diag(r));
+            Assert.Contains("UPDATE \"Categorias\"", r.Stderr);
+            Assert.Contains("NO se ejecuta", r.Stderr);
+            Assert.Equal("2", c.Psql("SELECT count(*) FROM \"Categorias\" WHERE lower(\"Nombre\") = 'tornillos';"));
         }
         finally { Directory.Delete(dir, recursive: true); }
     }

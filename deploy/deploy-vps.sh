@@ -200,9 +200,11 @@ VPS_ADMIN_USER="${VPS_ADMIN_USER:-${BOOTSTRAP_ADMIN_USER:-admin}}"
 VPS_ADMIN_PASSWORD="${VPS_ADMIN_PASSWORD:-${BOOTSTRAP_PASSWORD:-}}"
 
 # Los 7 catálogos con índice único sobre Nombre (comparación case-insensitive) — mismo
-# array que src/StockApp.Infrastructure/Migrations/NormalizacionCatalogosSql.cs. Si ese
-# archivo agrega/saca un catálogo, este array tiene que actualizarse a mano (no hay forma
-# de compartir la fuente entre C# y bash sin un tercer artefacto).
+# array que src/StockApp.Infrastructure/Migrations/NormalizacionCatalogosSql.cs y que
+# deploy/restaurar-backup.sh (tercera copia: ese script es autocontenido, se copia solo al
+# servidor). Si se agrega/saca un catálogo, las tres copias se actualizan a mano (no hay forma
+# de compartir la fuente entre C# y bash sin otro artefacto); MigracionVpsSincroniaTests
+# compara las tres.
 readonly TABLAS_CON_NOMBRE_UNICO=(
     Categorias Proveedores UnidadesMedida Zonas
     DimensionesTematicas OrganismosResponsables OrigenesFinanciamiento

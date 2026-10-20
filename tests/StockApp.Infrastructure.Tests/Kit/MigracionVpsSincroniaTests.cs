@@ -79,4 +79,33 @@ public class MigracionVpsSincroniaTests
         Assert.DoesNotContain("certbot", texto);
         Assert.DoesNotContain("rm -rf \"$", texto);
     }
+
+    // ---------- Los 7 catálogos con Nombre único: tres copias, un solo conjunto ----------
+
+    private static HashSet<string> ArrayBash(string relativo)
+    {
+        var m = Regex.Match(Texto(relativo), @"TABLAS_CON_NOMBRE_UNICO=\(([^)]*)\)");
+        Assert.True(m.Success, $"No se encontró TABLAS_CON_NOMBRE_UNICO=( ... ) en {relativo}.");
+        return m.Groups[1].Value.Split((char[])[' ', '\n', '\t', '\r'], StringSplitOptions.RemoveEmptyEntries).ToHashSet();
+    }
+
+    /// <summary>
+    /// restaurar-backup.sh es autocontenido (se copia solo al servidor), así que el array de
+    /// catálogos queda triplicado: la migración en C#, deploy-vps.sh y restaurar-backup.sh. Si
+    /// alguno agrega o saca un catálogo sin los otros, este test se pone rojo.
+    /// </summary>
+    [Fact]
+    public void CatalogosConNombreUnico_IgualesEnCSharpDeployVpsYRestaurar()
+    {
+        var sqlCSharp = StockApp.Infrastructure.Migrations.NormalizacionCatalogosSql.GuardiaColisionesDeNombre;
+        var arrayCSharp = Regex.Match(sqlCSharp, @"ARRAY\[([^\]]*)\]");
+        Assert.True(arrayCSharp.Success, "No se encontró ARRAY[ ... ] en NormalizacionCatalogosSql.GuardiaColisionesDeNombre.");
+        var csharp = Regex.Matches(arrayCSharp.Groups[1].Value, @"'([^']+)'").Select(x => x.Groups[1].Value).ToHashSet();
+
+        Assert.Equal(7, csharp.Count);
+        Assert.True(csharp.SetEquals(ArrayBash("deploy/deploy-vps.sh")),
+            $"deploy-vps.sh difiere de C#: [{string.Join(", ", ArrayBash("deploy/deploy-vps.sh"))}]");
+        Assert.True(csharp.SetEquals(ArrayBash("deploy/restaurar-backup.sh")),
+            $"restaurar-backup.sh difiere de C#: [{string.Join(", ", ArrayBash("deploy/restaurar-backup.sh"))}]");
+    }
 }
