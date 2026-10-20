@@ -196,14 +196,16 @@ build/publicar-release.sh 0.2.0 --origen /ruta/win   # pack-win.ps1 corrio en ot
 Configuracion: `deploy/.env` local o entorno. `VPS_HOST`, `VPS_USER` y `VPS_SSH_PORT` son
 **obligatorios y no tienen default** (un default subiria el feed al servidor equivocado en
 silencio). Opcionales: `VPS_DIR` (staging del usuario SSH, default `~/stockapp-deploy`),
-`API_SCHEME`/`API_HOSTNAME`/`API_PORT` (como `deploy/deploy-vps.sh`). Hace falta `jq` local y
+`API_SCHEME`/`API_HOSTNAME`/`API_PORT` (como `deploy/deploy-vps.sh`) y `FEED_VERSIONES_MAX`
+(default `5`, entero positivo; ver "Poda del feed"). Hace falta `jq` local y
 `sudo` sin contrasena para el usuario SSH. El script publica solo el canal Windows
 (`releases.win.json`).
 
 Orden que sigue el script (el feed va **ultimo**, asi nunca apunta a paquetes que todavia no estan):
 
-1. Valida local: `<version>` es el `Full` de mayor version del `releases.win.json`; cada `.nupkg`
-   existe en el origen con el `Size` del feed y un nombre seguro.
+1. Valida local: `<version>` es el `Full` de mayor version del `releases.win.json`; **poda el feed**
+   (ver "Poda del feed") y, sobre el feed podado, cada `.nupkg` existe en el origen con el `Size` y
+   un nombre seguro.
 2. Releva el servidor (nombres, tamanos y sha256) y lee el `releases.win.json` que sirve hoy. Si no
    puede relevar, aborta sin subir nada. Si `<version>` es **menor** que la que sirve el servidor,
    aborta (ver `--forzar` abajo).
@@ -218,11 +220,28 @@ Orden que sigue el script (el feed va **ultimo**, asi nunca apunta a paquetes qu
    feed servido contiene la version y que el full responde 200 con el `Content-Length` correcto.
    La API no se reinicia.
 
+### Poda del feed
+
+El `releases.win.json` lleva las notas de cada version y crece sin parar (~35 KB con 3 versiones);
+el cliente lo baja entero en cada chequeo (ahora cada 15 minutos). Por eso el script publica una
+copia **podada** que conserva solo los assets (`Full` y `Delta`) de las `FEED_VERSIONES_MAX`
+versiones mayores (default 5, orden `sort -V`). Detalles:
+
+- Es **no destructiva**: no se borra ningun archivo del servidor; los `.nupkg` de versiones viejas
+  siguen ahi, solo dejan de figurar en el feed.
+- La poda se hace en un temporal: el `releases.win.json` de `--origen` no se modifica. Con
+  `FEED_VERSIONES_MAX` o menos versiones el feed se publica byte a byte igual.
+- Todo lo posterior (que cada paquete exista en el origen, el re-relevamiento de tamano y sha256
+  del paso 5, la subida) opera sobre el feed podado.
+- Un cliente mas viejo que la ventana conservada no tiene delta hacia la version actual y
+  descarga el ultimo `Full`.
+- `FEED_VERSIONES_MAX` invalido (no entero positivo) aborta antes de relevar o subir nada.
+
 Reglas:
 
 - **Conservar `releases/win` entre versiones.** Sin esa carpeta la proxima version sale solo con
   `full` (~53 MB por cliente en vez de un delta) y el script exige que todos los paquetes del feed
-  existan en el origen.
+  (ya podado) existan en el origen.
 - **Retirar una version mala = publicar la ultima buena con un numero MAYOR.** Velopack no hace
   downgrade: re-empaquetar el codigo bueno con una version nueva (ej. la mala es 0.3.0, la buena es
   0.2.0 -> publicar 0.3.1) y correr el script. Por eso el script **se niega** a publicar una

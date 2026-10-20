@@ -19,14 +19,17 @@ set -euo pipefail
 #   VPS_HOST, VPS_USER, VPS_SSH_PORT
 # Opcionales: VPS_DIR (default ~/stockapp-deploy, carpeta de staging del usuario SSH),
 #   API_SCHEME (http|https), API_HOSTNAME, API_PORT (default 8080) -- igual que deploy-vps.sh.
+#   FEED_VERSIONES_MAX (default 5, entero positivo): cuántas versiones (las MAYORES por
+#   sort -V) conserva el releases.win.json que se publica; ver "Poda del feed" abajo.
 #
 # ⚠️  EL VPS PUEDE SER COMPARTIDO: todo lo remoto está acotado por nombre a las rutas de
 # StockApp (/var/lib/stockapp/updates y <VPS_DIR>/updates-staging). Nunca se toca nginx ni
 # se reinicia la API. Se asume sudo sin contraseña para el usuario SSH, como deploy-vps.sh.
 #
 # Pasos, en este orden:
-#   1. Validación LOCAL con jq: <version> es el Full de mayor versión del releases.win.json y
-#      cada FileName (nombre seguro, existe en --origen con su Size).
+#   1. Validación LOCAL con jq: <version> es el Full de mayor versión del releases.win.json,
+#      poda del feed (ver abajo) y, sobre el feed PODADO, cada FileName (nombre seguro,
+#      existe en --origen con su Size).
 #   2. Relevamiento del servidor (nombres + tamaños + sha256) y lectura del releases.win.json
 #      vigente. Salida vacía = primera publicación; ssh que falla = "no pude relevar" ->
 #      aborta sin subir nada. Si la versión nueva es MENOR que la que sirve el servidor,
@@ -41,6 +44,14 @@ set -euo pipefail
 #      apunte a paquetes que todavía no están.
 #   7. Verificación final por HTTP: el feed publicado dice <version> y el full responde 200
 #      con su Content-Length.
+#
+# Poda del feed: el releases.win.json crece con las notas de cada versión. Se publica una
+# copia PODADA (en un temporal; el archivo de --origen NO se modifica) que conserva solo los
+# assets (Full y Delta) de las FEED_VERSIONES_MAX versiones mayores (sort -V; con
+# prerelease el orden es el de sort -V, no el de SemVer). Es NO destructiva: nunca se borra
+# ningún archivo del servidor, los paquetes viejos siguen ahí. Todo lo posterior (relevamiento,
+# verificación de tamaño+sha256 del paso 5, subida) opera sobre el feed podado. Un cliente
+# más viejo que la ventana no tiene delta hacia la versión actual y baja el último Full.
 #
 # Retirar una versión mala: Velopack no hace downgrade. Se republica la última versión BUENA
 # con un número MAYOR (empaquetar de nuevo desde ese código con una versión nueva). Por eso
@@ -116,6 +127,12 @@ if [[ ! "$VPS_DIR" =~ ^[A-Za-z0-9._~/-]+$ ]]; then
     exit 1
 fi
 
+FEED_VERSIONES_MAX="${FEED_VERSIONES_MAX:-5}"
+if [[ ! "$FEED_VERSIONES_MAX" =~ ^[1-9][0-9]*$ ]]; then
+    echo "ERROR: FEED_VERSIONES_MAX ('${FEED_VERSIONES_MAX}') no es válido -- debe ser un entero positivo." >&2
+    exit 1
+fi
+
 API_PORT="${API_PORT:-8080}"
 if [[ -z "${API_SCHEME+x}" ]]; then
     API_SCHEME="http"
@@ -157,7 +174,11 @@ scp_vps() {
 # El staging remoto se borra pase lo que pase (trap EXIT, también en falla). Si el borrado
 # falla se avisa, pero no se pisa el código de salida del script.
 STAGING_TOCADO=0
+DIR_PODADO=""
 limpiar_staging_remoto() {
+    if [[ -n "$DIR_PODADO" ]]; then
+        rm -rf -- "$DIR_PODADO"
+    fi
     if [[ "$STAGING_TOCADO" -eq 1 ]]; then
         if ! ssh_vps "rm -rf -- ${STAGING}"; then
             echo "AVISO: no se pudo borrar el staging remoto '${STAGING}'; borralo a mano." >&2
@@ -180,6 +201,8 @@ TAMANOS=()
 HASHES=()
 FULL_NUEVO=""
 FULL_NUEVO_TAMANO=""
+# Feed que se publica de verdad: copia podada del de --origen (que no se toca).
+JSON_PUBLICAR=""
 
 paso1_validar_local() {
     local json="${ORIGEN}/${JSON_NOMBRE}"
@@ -194,6 +217,26 @@ paso1_validar_local() {
     if [[ "$mayor" != "$VERSION" ]]; then
         fallar "la versión pedida '${VERSION}' no es la mayor del feed (Full de mayor versión: '${mayor:-ninguna}')."
     fi
+
+    # Poda: solo las FEED_VERSIONES_MAX versiones mayores (por sus Full) quedan en el feed.
+    local conservar
+    conservar="$(printf '%s\n' "$versiones" | sort -uV | tail -n "$FEED_VERSIONES_MAX" | jq -R . | jq -s .)" \
+        || fallar "no se pudo calcular las versiones a conservar de '${json}'."
+    DIR_PODADO="$(mktemp -d)" || fallar "no se pudo crear el directorio temporal para el feed podado."
+    JSON_PUBLICAR="${DIR_PODADO}/${JSON_NOMBRE}"
+    jq --argjson conservar "$conservar" '.Assets |= map(select(.Version as $v | $conservar | index($v)))' "$json" >"$JSON_PUBLICAR" \
+        || fallar "no se pudo podar '${json}'."
+    # Sin nada que podar se publica el archivo de --origen tal cual (byte a byte), no el
+    # re-serializado por jq.
+    local antes despues
+    antes="$(jq '.Assets | length' "$json")" || fallar "no se pudo contar los paquetes de '${json}'."
+    despues="$(jq '.Assets | length' "$JSON_PUBLICAR")" || fallar "no se pudo contar los paquetes del feed podado."
+    if [[ "$antes" == "$despues" ]]; then
+        cp -- "$json" "$JSON_PUBLICAR" || fallar "no se pudo copiar '${json}' al temporal."
+    else
+        echo "[publicar] feed podado a las ${FEED_VERSIONES_MAX} versiones mayores: ${despues} de ${antes} paquetes (no se borra nada del servidor)."
+    fi
+    json="$JSON_PUBLICAR"
 
     # FileName y SHA256 vacíos se rechazan ACÁ: en el TSV de abajo un campo vacío se colapsa
     # (el tab es IFS-whitespace) y correría los demás en silencio.
@@ -336,7 +379,7 @@ paso3_subir_a_staging() {
             || fallar "falló el scp de '${nombre}'. El feed vigente no se tocó."
     done
     echo "[publicar] subiendo ${JSON_NOMBRE}"
-    scp_vps "${ORIGEN}/${JSON_NOMBRE}" "${VPS_USER}@${VPS_HOST}:${STAGING}/" \
+    scp_vps "${JSON_PUBLICAR}" "${VPS_USER}@${VPS_HOST}:${STAGING}/" \
         || fallar "falló el scp de '${JSON_NOMBRE}'. El feed vigente no se tocó."
 }
 

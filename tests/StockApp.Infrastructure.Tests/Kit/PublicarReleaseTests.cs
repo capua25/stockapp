@@ -559,6 +559,127 @@ public class PublicarReleaseTests
         Assert.Contains("se omite la verificación desde la máquina del operador", r.Stdout);
     }
 
+    // ---------- Poda del feed (FEED_VERSIONES_MAX) ----------
+
+    // 0.10.0 y 0.11.0 en la mezcla: ordenar como texto conservaría 0.9/0.8/0.7/0.6/0.5.
+    private static readonly string[] SieteVersiones = ["0.5.0", "0.6.0", "0.7.0", "0.8.0", "0.9.0", "0.10.0", "0.11.0"];
+
+    private static string NombrePaquete(string version, string tipo) => $"GestionMunicipal-{version}-{tipo}.nupkg";
+
+    // Reemplaza el feed y los paquetes de --origen por Full+Delta de cada versión dada.
+    private static void PrepararOrigenConVersiones(Entorno e, string[] versiones)
+    {
+        foreach (var f in Directory.GetFiles(e.Origen)) File.Delete(f);
+        var assets = new List<string>();
+        for (var i = 0; i < versiones.Length; i++)
+        {
+            foreach (var (tipo, tamano) in new[] { ("full", 100 + i), ("delta", 30 + i) })
+            {
+                var nombre = NombrePaquete(versiones[i], tipo);
+                File.WriteAllBytes(Path.Combine(e.Origen, nombre), new byte[tamano]);
+                var sha = Convert.ToHexString(SHA256.HashData(new byte[tamano]));
+                assets.Add($"{{\"PackageId\":\"GestionMunicipal\",\"Version\":\"{versiones[i]}\",\"Type\":\"{(tipo == "full" ? "Full" : "Delta")}\",\"FileName\":\"{nombre}\",\"SHA1\":\"a\",\"SHA256\":\"{sha}\",\"Size\":{tamano},\"NotesMarkdown\":\"notas {versiones[i]}\"}}");
+            }
+        }
+        File.WriteAllText(Path.Combine(e.Origen, "releases.win.json"), "{\"Assets\":[" + string.Join(",", assets) + "]}");
+    }
+
+    private static string[] NombresDelFeedServido(Entorno e)
+    {
+        using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(e.CarpetaFeed, "releases.win.json")));
+        return doc.RootElement.GetProperty("Assets").EnumerateArray()
+            .Select(a => a.GetProperty("FileName").GetString()!).OrderBy(x => x).ToArray();
+    }
+
+    [Fact]
+    public void SieteVersiones_PublicaSoloLasCincoMayores_ConFullYDelta()
+    {
+        using var e = new Entorno();
+        PrepararOrigenConVersiones(e, SieteVersiones);
+        var feedOrigenAntes = File.ReadAllText(Path.Combine(e.Origen, "releases.win.json"));
+        // El servidor ya tiene los paquetes de las versiones que van a salir de la ventana.
+        e.PonerEnServidor(NombrePaquete("0.5.0", "full"), new byte[100]);
+        e.PonerEnServidor(NombrePaquete("0.6.0", "full"), new byte[101]);
+
+        var r = e.Correr("0.11.0");
+
+        Assert.True(r.ExitCode == 0, Diagnostico(r));
+        var esperados = new[] { "0.7.0", "0.8.0", "0.9.0", "0.10.0", "0.11.0" }
+            .SelectMany(v => new[] { NombrePaquete(v, "full"), NombrePaquete(v, "delta") }).OrderBy(x => x).ToArray();
+        Assert.Equal(esperados, NombresDelFeedServido(e));
+        Assert.DoesNotContain("0.5.0", File.ReadAllText(Path.Combine(e.CarpetaFeed, "releases.win.json")));
+        Assert.DoesNotContain("0.6.0", File.ReadAllText(Path.Combine(e.CarpetaFeed, "releases.win.json")));
+        // No destructivo: lo viejo sigue en el servidor, y no se subió.
+        Assert.True(File.Exists(Path.Combine(e.CarpetaFeed, NombrePaquete("0.5.0", "full"))));
+        Assert.True(File.Exists(Path.Combine(e.CarpetaFeed, NombrePaquete("0.6.0", "full"))));
+        Assert.DoesNotContain(r.Scp, l => l.Contains("0.5.0") || l.Contains("0.6.0"));
+        Assert.DoesNotContain(r.Ssh, l => l.Contains("rm ") && l.Contains(".nupkg"));
+        // El archivo de --origen no se modifica.
+        Assert.Equal(feedOrigenAntes, File.ReadAllText(Path.Combine(e.Origen, "releases.win.json")));
+    }
+
+    [Fact]
+    public void Poda_LaVerificacionDelPaso5OperaSobreElFeedPodado()
+    {
+        using var e = new Entorno();
+        PrepararOrigenConVersiones(e, SieteVersiones);
+        // El paquete viejo no existe en --origen: con el feed sin podar la validación local abortaría.
+        File.Delete(Path.Combine(e.Origen, NombrePaquete("0.5.0", "full")));
+
+        var r = e.Correr("0.11.0");
+
+        Assert.True(r.ExitCode == 0, Diagnostico(r));
+        Assert.False(File.Exists(Path.Combine(e.CarpetaFeed, NombrePaquete("0.5.0", "full"))));
+    }
+
+    [Fact]
+    public void TresVersiones_ElFeedSePublicaSinCambios()
+    {
+        using var e = new Entorno();
+        PrepararOrigenConVersiones(e, ["0.5.0", "0.6.0", "0.7.0"]);
+
+        var r = e.Correr("0.7.0");
+
+        Assert.True(r.ExitCode == 0, Diagnostico(r));
+        Assert.Equal(File.ReadAllText(Path.Combine(e.Origen, "releases.win.json")),
+            File.ReadAllText(Path.Combine(e.CarpetaFeed, "releases.win.json")));
+        Assert.Equal(6, NombresDelFeedServido(e).Length);
+    }
+
+    [Fact]
+    public void FeedVersionesMax_ConfigurableAMano()
+    {
+        using var e = new Entorno();
+        PrepararOrigenConVersiones(e, SieteVersiones);
+
+        var r = e.Correr("0.11.0", new Dictionary<string, string> { ["FEED_VERSIONES_MAX"] = "2" });
+
+        Assert.True(r.ExitCode == 0, Diagnostico(r));
+        Assert.Equal(
+            new[] { NombrePaquete("0.10.0", "delta"), NombrePaquete("0.10.0", "full"), NombrePaquete("0.11.0", "delta"), NombrePaquete("0.11.0", "full") },
+            NombresDelFeedServido(e));
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData("abc")]
+    [InlineData("2.5")]
+    [InlineData("05")]
+    public void FeedVersionesMaxInvalido_AbortaAntesDeCualquierSubida(string valor)
+    {
+        using var e = new Entorno();
+        PrepararOrigenConVersiones(e, SieteVersiones);
+
+        var r = e.Correr("0.11.0", new Dictionary<string, string> { ["FEED_VERSIONES_MAX"] = valor });
+
+        Assert.NotEqual(0, r.ExitCode);
+        Assert.Contains("FEED_VERSIONES_MAX", r.Stderr);
+        Assert.Empty(r.Scp);
+        Assert.Empty(r.Ssh);
+        Assert.Empty(e.ArchivosEnServidor());
+    }
+
     // ---------- No retroceder el feed ----------
 
     private static void PonerFeedServido(Entorno e, string version) =>
