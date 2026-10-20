@@ -20,13 +20,23 @@
   /* Anchos medidos en headless con el tema v2, estos datos y las columnas que miden su contenido (CÓDIGO, COSTO,
      UNIDAD); STOCK fijo; NOMBRE y CATEGORÍA proporcionales. Iguales a 1280 y a 1366: CÓDIGO crece de
      81 a 85 por la reserva de la flecha de orden, COSTO queda en su mínimo
-     de 100 y CATEGORÍA en el piso de 160 de las columnas *; NOMBRE (2*) se lleva el resto (286 a 1280, 372 a 1366). */
+     de 100; a 1280 CATEGORÍA queda en el piso de 160 de las columnas * y NOMBRE (2*) se lleva el resto (286). A 1366
+     las dos estrellas se reparten 2:1 sin tocar el piso (NOMBRE 354,67 y CATEGORÍA 177,33 medidos en headless; el mockup
+     copia las celdas que dibuja Avalonia, redondeadas a píxel entero y solapadas 1 px: NOMBRE 355, COSTO 101, STOCK 221,
+     UNIDAD 98 y CATEGORÍA 178, cada una con su margen de -1 px). */
   .col-codigo { flex: 0 0 85px; }
   .col-nombre { flex: 2 1 0; min-width: 0; }
   .col-costo { flex: 0 0 100px; }
   .col-stock { flex: 0 0 220px; }
   .col-unidad { flex: 0 0 97px; }
   .col-categoria { flex: 0 0 160px; }
+  @media (min-width: 1366px) {
+    .col-nombre { flex: 0 0 355px; }
+    .col-costo { flex-basis: 101px; margin-right: -1px; }
+    .col-stock { flex-basis: 221px; margin-right: -1px; }
+    .col-unidad { flex-basis: 98px; margin-right: -1px; }
+    .col-categoria { flex-basis: 178px; }
+  }
   /* Celda de Stock: Grid con la insignia a la izquierda y el número a la derecha (no es .v2-num: lleva
      dos elementos); cifras tabulares y ancho del número redondeado hacia arriba como un TextBlock. */
   .celda-stock { font-variant-numeric: tabular-nums; }

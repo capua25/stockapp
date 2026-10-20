@@ -31,6 +31,13 @@ public class ProductosComparacionTests
         Comparar(DatosProductos.ConProductos(), "inventario/productos.html", TamanoLienzo.Municipio);
 
     [AvaloniaFact]
+    public void ProductosInactivos_IgualAlMockup() => Comparar(DatosProductos.ConProductosInactivos(), "inventario/productos-inactivos.html");
+
+    [AvaloniaFact]
+    public void ProductosInactivos_IgualAlMockup_1366x768() =>
+        Comparar(DatosProductos.ConProductosInactivos(), "inventario/productos-inactivos.html", TamanoLienzo.Municipio);
+
+    [AvaloniaFact]
     public void ProductosVacio_IgualAlMockup() => Comparar(DatosProductos.SinProductos(), "inventario/productos-vacio.html");
 
     [AvaloniaFact]

@@ -132,6 +132,14 @@ public static class DatosProductos
 
     public static ShellMainViewModel ConProductos() => EnShell(Listado(Productos));
 
+    /// <summary>Los mismos 12 con el filtro de Estado en "Inactivos": queda solo la fila inactiva (productos-inactivos.html).</summary>
+    public static ShellMainViewModel ConProductosInactivos()
+    {
+        var vm = Listado(Productos);
+        vm.FiltroEstado = vm.FiltrosEstado.Single(o => o.Nombre == "Inactivos");
+        return EnShell(vm);
+    }
+
     public static ShellMainViewModel SinProductos() => EnShell(Listado([]));
 
     public static ShellMainViewModel Nuevo() => EnShell(Formulario());
