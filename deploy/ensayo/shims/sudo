@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# =======================================================================================
+# deploy/ensayo/shims/sudo -- sudo FALSO del ensayo local: NUNCA eleva privilegios.
+# =======================================================================================
+#
+# Descarta -n. 'sudo systemctl ...' va al systemctl falso de este directorio; cualquier otro
+# comando (mv, test, tar, sed sobre la raíz del VPS viejo simulado) corre tal cual, con el
+# usuario de quien ensaya: lo que el ensayo no puede hacer sin privilegios, no lo hace.
+# =======================================================================================
+
+set -euo pipefail
+
+while [[ "${1:-}" == "-n" ]]; do
+    shift
+done
+if [[ $# -eq 0 ]]; then
+    echo "ensayo: sudo sin comando" >&2
+    exit 1
+fi
+
+DIR_SHIMS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ "$1" == "systemctl" ]]; then
+    shift
+    exec "${DIR_SHIMS}/systemctl" "$@"
+fi
+exec "$@"

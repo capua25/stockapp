@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# =======================================================================================
+# deploy/ensayo/shims/ssh -- ssh FALSO del ensayo local: el "VPS viejo" es esta máquina.
+# =======================================================================================
+#
+# Lo pone ensayo-local.sh al frente del PATH para que volcado-final-vps.sh opere el VPS viejo
+# simulado. Ignora -p N y -o X; toma user@host y SOLO acepta hosts que terminan en .invalid
+# (TLD reservado, RFC 2606): cualquier otro host sale con 255 sin correr nada, así un error
+# de configuración del ensayo nunca puede llegar a un servidor real.
+#
+# Como el ssh real, une el resto de los argumentos con espacios y lo corre con 'bash -c', con
+# stdin/stdout heredados y los shims de este directorio al frente del PATH (el sudo y el
+# systemctl "remotos" también son los del ensayo).
+# =======================================================================================
+
+set -euo pipefail
+
+destino=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -p|-o)
+            if [[ $# -lt 2 ]]; then
+                echo "ensayo: falta el valor de $1" >&2
+                exit 255
+            fi
+            shift 2
+            ;;
+        -*)
+            echo "ensayo: opción de ssh no simulada: $1" >&2
+            exit 255
+            ;;
+        *)
+            destino="$1"
+            shift
+            break
+            ;;
+    esac
+done
+
+host="${destino#*@}"
+if [[ -z "$host" || "$host" != *.invalid ]]; then
+    echo "ensayo: host no permitido: '${host}' (el ensayo solo acepta hosts *.invalid)" >&2
+    exit 255
+fi
+if [[ $# -eq 0 ]]; then
+    echo "ensayo: falta el comando remoto (el ensayo no abre sesiones interactivas)" >&2
+    exit 255
+fi
+
+DIR_SHIMS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PATH="${DIR_SHIMS}:${PATH}" exec bash -c "$*"

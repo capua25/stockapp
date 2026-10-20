@@ -1,0 +1,146 @@
+#!/usr/bin/env bash
+# =======================================================================================
+# deploy/ensayo/shims/systemctl -- systemctl FALSO del ensayo local, solo para stockapp-api.
+# =======================================================================================
+#
+# Estado en $ENSAYO_ESTADO/stockapp-api.activo (active|inactive) y
+# $ENSAYO_ESTADO/stockapp-api.habilitado (enabled|masked). La unit vive en
+# $ENSAYO_RAIZ/etc/systemd/system/stockapp-api.service, la raíz del VPS viejo simulado.
+# Cualquier otra unit sale con 5 sin tocar nada.
+#
+# Fiel a systemd real en lo que importa para el congelamiento (verificado con systemd 255):
+#   - install.sh deja la unit como ARCHIVO REGULAR en /etc/systemd/system, y 'mask' ahí falla
+#     con 1 y "already exists" (el symlink a /dev/null va en esa misma ruta);
+#   - con la unit movida, 'mask' crea el symlink a /dev/null en esa ruta y, sin -q, avisa
+#     "Created symlink" por stderr aunque funcione;
+#   - 'unmask' saca el symlink; 'start' sobre una unit enmascarada falla con 1;
+#   - 'show -p FragmentPath' da la ruta del archivo regular (vacía si no hay archivo).
+# =======================================================================================
+
+set -euo pipefail
+
+UNIT="stockapp-api"
+
+if [[ -z "${ENSAYO_ESTADO:-}" || ! -d "${ENSAYO_ESTADO}" ]]; then
+    echo "ensayo: systemctl necesita ENSAYO_ESTADO (directorio del estado simulado)" >&2
+    exit 1
+fi
+if [[ -z "${ENSAYO_RAIZ:-}" || ! -d "${ENSAYO_RAIZ}" ]]; then
+    echo "ensayo: systemctl necesita ENSAYO_RAIZ (raíz del VPS viejo simulado)" >&2
+    exit 1
+fi
+
+ACTIVO="${ENSAYO_ESTADO}/${UNIT}.activo"
+HABILITADO="${ENSAYO_ESTADO}/${UNIT}.habilitado"
+FRAGMENTO="${ENSAYO_RAIZ}/etc/systemd/system/${UNIT}.service"
+
+silencio=0
+propiedad=""
+argumentos=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -q|--quiet) silencio=1; shift ;;
+        -p)
+            if [[ $# -lt 2 ]]; then
+                echo "ensayo: falta el valor de -p" >&2
+                exit 1
+            fi
+            propiedad="$2"
+            shift 2
+            ;;
+        -*) echo "ensayo: opción de systemctl no simulada: $1" >&2; exit 1 ;;
+        *) argumentos+=("$1"); shift ;;
+    esac
+done
+if [[ ${#argumentos[@]} -eq 0 ]]; then
+    echo "ensayo: systemctl sin subcomando" >&2
+    exit 1
+fi
+subcomando="${argumentos[0]}"
+unidades=("${argumentos[@]:1}")
+
+decir() {
+    [[ "$silencio" -eq 1 ]] || echo "$1"
+}
+
+enmascarada() {
+    [[ -L "$FRAGMENTO" && "$(readlink "$FRAGMENTO")" == "/dev/null" ]]
+}
+
+if [[ "$subcomando" == "daemon-reload" ]]; then
+    if [[ ${#unidades[@]} -ne 0 ]]; then
+        echo "ensayo: daemon-reload no lleva unit" >&2
+        exit 1
+    fi
+    exit 0
+fi
+
+if [[ ${#unidades[@]} -ne 1 ]]; then
+    echo "ensayo: el systemctl simulado opera exactamente una unit" >&2
+    exit 1
+fi
+unidad="${unidades[0]%.service}"
+if [[ "$unidad" != "$UNIT" ]]; then
+    echo "ensayo: solo se simula la unit ${UNIT} (pidió '${unidades[0]}')" >&2
+    exit 5
+fi
+
+case "$subcomando" in
+    is-active)
+        estado="$(cat "$ACTIVO")"
+        decir "$estado"
+        [[ "$estado" == "active" ]] && exit 0
+        exit 3
+        ;;
+    is-enabled)
+        estado="$(cat "$HABILITADO")"
+        decir "$estado"
+        [[ "$estado" == "enabled" ]] && exit 0
+        exit 1
+        ;;
+    stop)
+        echo inactive > "$ACTIVO"
+        ;;
+    start)
+        if [[ "$(cat "$HABILITADO")" == "masked" ]]; then
+            echo "Failed to start ${UNIT}.service: Unit ${UNIT}.service is masked." >&2
+            exit 1
+        fi
+        echo active > "$ACTIVO"
+        ;;
+    show)
+        if [[ "$propiedad" != "FragmentPath" ]]; then
+            echo "ensayo: solo está simulado 'show -p FragmentPath'" >&2
+            exit 1
+        fi
+        if [[ -f "$FRAGMENTO" && ! -L "$FRAGMENTO" ]]; then
+            echo "FragmentPath=${FRAGMENTO}"
+        else
+            echo "FragmentPath="
+        fi
+        ;;
+    mask)
+        if enmascarada; then
+            echo masked > "$HABILITADO"
+            exit 0
+        fi
+        if [[ -e "$FRAGMENTO" || -L "$FRAGMENTO" ]]; then
+            echo "Failed to mask unit, file \"${FRAGMENTO}\" already exists." >&2
+            exit 1
+        fi
+        ln -s /dev/null "$FRAGMENTO"
+        echo masked > "$HABILITADO"
+        [[ "$silencio" -eq 1 ]] || echo "Created symlink ${FRAGMENTO} → /dev/null." >&2
+        ;;
+    unmask)
+        if enmascarada; then
+            rm -f "$FRAGMENTO"
+            [[ "$silencio" -eq 1 ]] || echo "Removed \"${FRAGMENTO}\"." >&2
+        fi
+        echo enabled > "$HABILITADO"
+        ;;
+    *)
+        echo "ensayo: subcomando de systemctl no simulado: ${subcomando}" >&2
+        exit 1
+        ;;
+esac

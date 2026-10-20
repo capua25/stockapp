@@ -25,6 +25,10 @@ public class MigracionVpsSincroniaTests
         "deploy/restaurar-backup.sh",
         "deploy/volcado-final-vps.sh",
         "deploy/bajar-backup-vps.sh",
+        "deploy/ensayo/ensayo-local.sh",
+        "deploy/ensayo/shims/ssh",
+        "deploy/ensayo/shims/sudo",
+        "deploy/ensayo/shims/systemctl",
     ];
 
     public static TheoryData<string> CasosScriptsNuevos()
