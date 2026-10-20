@@ -22,25 +22,49 @@
 #                     ^[a-z_][a-z0-9_]*$ antes de interpolarlos en SQL o en un comando.
 #   --env             default ~/stockapp-deploy/.env. Solo se lee si falta --base o --usuario,
 #                     y se lee línea por línea (nunca se ejecuta con 'source').
-#   --dir-seguridad   default ~/stockapp-deploy/migracion.
+#   --dir-seguridad   default ~/stockapp-deploy/migracion (se deja en 700).
 #   --manifiesto      el que arma volcado-final-vps.sh. Opcional para el script, OBLIGATORIO en
 #                     la migración (lo exige el runbook): sin él solo se verifica estructura.
+#   --recrear-base    confirmación explícita (el script no es interactivo): tiene que ser IGUAL a
+#                     --base. Si la base destino no está vacía, primero se toma un dump de
+#                     seguridad (pg_dump -Fc dentro del contenedor, validado con pg_restore --list,
+#                     traído a <dir-seguridad>/pre-recrear-<base>-<AAAAMMDDTHHMMSSZ>.dump, 600) y
+#                     recién después DROP DATABASE + CREATE DATABASE ... OWNER <usuario>. Si el
+#                     dump de seguridad falla, no se borra nada. Nunca DROP ... WITH (FORCE): con
+#                     conexiones abiertas aborta.
+#   --verificar-post-arranque
+#                     modo aparte, de solo lectura (necesita --manifiesto, no usa <dump>): después
+#                     del primer arranque de la API, compara la base con el manifiesto. No mira la
+#                     API ni si la base está vacía. LogsAuditoria y __EFMigrationsHistory pueden
+#                     crecer (nunca bajar); CorridasBackup acepta cualquier valor (la retención de
+#                     backups borra filas al arrancar) y se informa el delta; el resto, igual al
+#                     manifiesto; las tablas que no están en el manifiesto se listan como nuevas
+#                     (migraciones posteriores); la última migración real >= la del manifiesto.
 #
 # Qué verifica, en orden: API inactiva; contenedor corriendo; sha256 y tamaño contra el
 # manifiesto (antes de copiar nada); base vacía; pg_restore --list y sus tablas contra el
 # manifiesto; restauración; conteos tabla por tabla y última migración; secuencias (el próximo
 # valor de cada una supera el máximo de su columna); duplicados case-insensitive en los 7
-# catálogos con Nombre único (la remediación se SUGIERE, nunca se ejecuta).
+# catálogos con Nombre único (la remediación se SUGIERE, nunca se ejecuta). El dump nuevo se
+# valida (sha, --list) ANTES de recrear la base: nunca se borra nada por un dump que no sirve.
+#
+# Idempotencia:
+#   - tras un éxito, correrlo otra vez aborta por "base no vacía" (3);
+#   - tras un fallo de pg_restore (5) la base quedó vacía: se reintenta tal cual;
+#   - tras un fallo de verificación (6/7) la base quedó restaurada: se reintenta con
+#     --recrear-base <base>, que primero guarda un dump de seguridad.
 #
 # Códigos de salida (estables):
 #   0  OK
 #   2  uso/argumentos/manifiesto inválidos
-#   3  precondición: API activa, contenedor fuera de patrón/ausente/detenido, base no vacía
+#   3  precondición: API activa, contenedor fuera de patrón/ausente/detenido, base no vacía,
+#      conexiones abiertas al DROP DATABASE de --recrear-base
 #   4  dump inválido: sha256/tamaño ≠ manifiesto, pg_restore --list falla, tablas ≠ manifiesto
 #   5  falló pg_restore: la base quedó VACÍA (transacción única), se puede reintentar tal cual
 #   6  falló la verificación de conteos, última migración o secuencias (la base QUEDA restaurada)
 #   7  duplicados en catálogos con Nombre único (la base QUEDA restaurada)
 #   8  no se pudo consultar (docker/psql con error): "no pude consultar" nunca es "vacío"
+#   9  falló el dump de seguridad de --recrear-base: NO se borró nada
 #
 # Este script NUNCA arranca la API: al terminar, la decisión de arrancarla es del operador.
 # =======================================================================================
@@ -93,17 +117,14 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -n "$RECREAR_BASE" ]]; then
-    echo "ERROR: --recrear-base todavía no soportado." >&2
-    exit 2
-fi
 if [[ "$VERIFICAR_POST_ARRANQUE" -eq 1 ]]; then
-    echo "ERROR: --verificar-post-arranque todavía no soportado." >&2
-    exit 2
+    [[ -n "$MANIFIESTO" ]] || error_uso "--verificar-post-arranque necesita --manifiesto."
+    [[ -z "$RECREAR_BASE" ]] || error_uso "--verificar-post-arranque es de solo lectura: no se combina con --recrear-base."
+    [[ -z "$DUMP" ]] || echo "AVISO: --verificar-post-arranque no usa el dump '${DUMP}': se ignora."
+else
+    [[ -n "$DUMP" ]] || error_uso "falta el dump a restaurar."
+    [[ -f "$DUMP" && -r "$DUMP" ]] || error_uso "el dump '${DUMP}' no existe o no se puede leer."
 fi
-
-[[ -n "$DUMP" ]] || error_uso "falta el dump a restaurar."
-[[ -f "$DUMP" && -r "$DUMP" ]] || error_uso "el dump '${DUMP}' no existe o no se puede leer."
 
 if [[ ! "$CONTENEDOR" =~ ^stockapp[a-z0-9-]*$ ]]; then
     echo "ERROR: el contenedor '${CONTENEDOR}' no matchea ^stockapp[a-z0-9-]*$." >&2
@@ -181,6 +202,9 @@ leer_manifiesto() {
 
 [[ "$BASE" =~ ^[a-z_][a-z0-9_]*$ ]] || error_uso "nombre de base inválido: '${BASE}' (tiene que matchear ^[a-z_][a-z0-9_]*$)."
 [[ "$USUARIO" =~ ^[a-z_][a-z0-9_]*$ ]] || error_uso "nombre de rol inválido: '${USUARIO}' (tiene que matchear ^[a-z_][a-z0-9_]*$)."
+if [[ -n "$RECREAR_BASE" && "$RECREAR_BASE" != "$BASE" ]]; then
+    error_uso "--recrear-base '${RECREAR_BASE}' no es igual a --base '${BASE}': la confirmación tiene que nombrar la misma base. No se tocó nada."
+fi
 
 # ---------------------------------------------------------------------------------------
 # Helpers de consulta
@@ -228,7 +252,9 @@ listar_conteos() {
 # ---------------------------------------------------------------------------------------
 # Paso 1 -- La API no está activa
 # ---------------------------------------------------------------------------------------
-if command -v systemctl >/dev/null 2>&1; then
+if [[ "$VERIFICAR_POST_ARRANQUE" -eq 1 ]]; then
+    : # la verificación post-arranque corre CON la API arriba: no la mira
+elif command -v systemctl >/dev/null 2>&1; then
     rc_api=0
     systemctl is-active --quiet stockapp-api >/dev/null 2>&1 || rc_api=$?
     if [[ "$rc_api" -eq 0 ]]; then
@@ -268,6 +294,87 @@ if [[ "$rc_listo" -ne 0 ]]; then
     exit 3
 fi
 echo "OK: contenedor '${CONTENEDOR}' corriendo y Postgres responde."
+
+# ---------------------------------------------------------------------------------------
+# Modo --verificar-post-arranque (solo lectura; termina acá)
+# ---------------------------------------------------------------------------------------
+verificar_post_arranque() {
+    local tabla esperado real delta fallo=0 nuevas=0 ultima=""
+    declare -A reales=()
+    echo
+    echo "== Verificación post-arranque contra '${MANIFIESTO}' =="
+    listar_conteos "$BASE"
+    while IFS='|' read -r tabla real; do
+        [[ -n "$tabla" ]] || continue
+        reales["$tabla"]="$real"
+    done <<< "$SALIDA_CONSULTA"
+
+    for tabla in "${MANIFIESTO_TABLAS[@]}"; do
+        esperado="${MANIFIESTO_CONTEOS[$tabla]}"
+        if [[ -z "${reales[$tabla]+x}" ]]; then
+            echo "  ${tabla}: esperado ${esperado}, NO EXISTE en la base" >&2
+            fallo=1
+            continue
+        fi
+        real="${reales[$tabla]}"
+        delta=$((real - esperado))
+        case "$tabla" in
+            LogsAuditoria|__EFMigrationsHistory)
+                # Solo pueden crecer: la auditoría nunca se pierde.
+                if [[ "$real" -ge "$esperado" ]]; then
+                    printf '  %-40s %12s -> %-12s OK (puede crecer; delta %+d)\n' "$tabla" "$esperado" "$real" "$delta"
+                else
+                    echo "  ${tabla}: esperado >= ${esperado}, real ${real} (BAJÓ: delta ${delta})" >&2
+                    fallo=1
+                fi
+                ;;
+            CorridasBackup)
+                # La retención de backups borra filas en el primer arranque: cualquier valor vale.
+                printf '  %-40s %12s -> %-12s OK (retención de backups; delta %+d)\n' "$tabla" "$esperado" "$real" "$delta"
+                ;;
+            *)
+                if [[ "$real" -eq "$esperado" ]]; then
+                    printf '  %-40s %12s  OK\n' "$tabla" "$real"
+                else
+                    echo "  ${tabla}: esperado ${esperado}, real ${real} (delta ${delta})" >&2
+                    fallo=1
+                fi
+                ;;
+        esac
+    done
+
+    for tabla in "${!reales[@]}"; do
+        [[ -z "${MANIFIESTO_CONTEOS[$tabla]+x}" ]] || continue
+        if [[ "$nuevas" -eq 0 ]]; then
+            echo "  Tablas nuevas (migraciones posteriores), no están en el manifiesto:"
+        fi
+        nuevas=1
+        echo "    ${tabla}: ${reales[$tabla]} filas"
+    done
+
+    consultar "$BASE" "SELECT to_regclass('public.\"__EFMigrationsHistory\"') IS NOT NULL;" "si existe __EFMigrationsHistory"
+    if [[ "$SALIDA_CONSULTA" == "t" ]]; then
+        consultar "$BASE" "SELECT coalesce(max(\"MigrationId\"), '') FROM \"__EFMigrationsHistory\";" "la última migración"
+        ultima="$SALIDA_CONSULTA"
+    fi
+    # Comparación lexicográfica de MigrationId (prefijo de fecha AAAAMMDDHHMMSS), en locale C.
+    if [[ -n "$ultima" ]] && ( export LC_ALL=C; [[ ! "$ultima" < "$MANIFIESTO_ULTIMA_MIGRACION" ]] ); then
+        echo "  última migración: ${ultima} (manifiesto: ${MANIFIESTO_ULTIMA_MIGRACION})  OK"
+    else
+        echo "  última migración: real ${ultima:-(ninguna)} es ANTERIOR a la del manifiesto ${MANIFIESTO_ULTIMA_MIGRACION}" >&2
+        fallo=1
+    fi
+
+    if [[ "$fallo" -eq 1 ]]; then
+        echo "ERROR: la base no coincide con el manifiesto después del arranque (detalle arriba)." >&2
+        exit 6
+    fi
+    echo "OK: verificación post-arranque completa."
+    exit 0
+}
+if [[ "$VERIFICAR_POST_ARRANQUE" -eq 1 ]]; then
+    verificar_post_arranque
+fi
 
 # ---------------------------------------------------------------------------------------
 # Paso 3 -- Con manifiesto: el dump es el que se volcó (antes de copiar nada)
@@ -323,7 +430,12 @@ filas_si_existe() {
     printf '%s' "$SALIDA_CONSULTA"
 }
 
-if [[ "$relaciones" -ne 0 || "$schemas_extra" -ne 0 ]]; then
+BASE_VACIA=1
+if [[ ( "$relaciones" -ne 0 || "$schemas_extra" -ne 0 ) && -n "$RECREAR_BASE" ]]; then
+    BASE_VACIA=0
+    echo "AVISO: la base '${BASE}' NO está vacía (${relaciones} relaciones). Con --recrear-base se va a"
+    echo "       recrear, DESPUÉS de validar el dump nuevo y de guardar un dump de seguridad de lo que hay."
+elif [[ "$relaciones" -ne 0 || "$schemas_extra" -ne 0 ]]; then
     consultar "$BASE" "SELECT count(*) FROM information_schema.tables
       WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND table_type = 'BASE TABLE';" "la cantidad de tablas"
     tablas_existentes="$SALIDA_CONSULTA"
@@ -338,8 +450,9 @@ if [[ "$relaciones" -ne 0 || "$schemas_extra" -ne 0 ]]; then
         echo "       el procedimiento es otro: ver el runbook de la migración."
     } >&2
     exit 3
+else
+    echo "OK: la base '${BASE}' está vacía."
 fi
-echo "OK: la base '${BASE}' está vacía."
 
 # ---------------------------------------------------------------------------------------
 # Paso 4 -- Copia del dump al contenedor (y limpieza garantizada)
@@ -398,6 +511,83 @@ if [[ -n "$MANIFIESTO" ]]; then
     fi
 fi
 echo "OK: dump legible ($(wc -l <<< "$TABLAS_DEL_DUMP") tablas con datos)."
+
+# ---------------------------------------------------------------------------------------
+# Paso 6 (destructivo, solo con --recrear-base) -- dump de seguridad verificado, DROP y CREATE
+# ---------------------------------------------------------------------------------------
+# Se hace recién acá, con el dump nuevo ya validado. Nada se borra sin un dump de seguridad
+# restaurable en el disco del servidor (la auditoría no se pierde nunca).
+fallo_seguridad() {
+    echo "ERROR: falló el dump de seguridad: $1" >&2
+    echo "       NO se borró nada: la base '${BASE}' sigue como estaba. ABORTO." >&2
+    exit 9
+}
+recrear_base() {
+    local ruta_seguridad="/tmp/seguridad-${RANDOM}${RANDOM}.dump"
+    local destino marca archivo_stderr rc=0 error_cmd
+    TEMPORALES_EN_CONTENEDOR+=("$ruta_seguridad")
+
+    mkdir -p "$DIR_SEGURIDAD" || fallo_seguridad "no se pudo crear '${DIR_SEGURIDAD}'."
+    chmod 700 "$DIR_SEGURIDAD" || fallo_seguridad "no se pudo dejar '${DIR_SEGURIDAD}' en 700."
+    marca="$(date -u +%Y%m%dT%H%M%SZ)"
+    destino="${DIR_SEGURIDAD}/pre-recrear-${BASE}-${marca}.dump"
+    [[ ! -e "$destino" ]] || fallo_seguridad "'${destino}' ya existe (no se pisa)."
+
+    echo "Tomando dump de seguridad de '${BASE}'..."
+    archivo_stderr="$(mktemp)"
+    docker exec "$CONTENEDOR" sh -c 'umask 077; pg_dump -U "$1" -d "$2" --format=custom -f "$3"' \
+        sh "$USUARIO" "$BASE" "$ruta_seguridad" >/dev/null 2>"$archivo_stderr" || rc=$?
+    error_cmd="$(cat "$archivo_stderr")"
+    rm -f "$archivo_stderr"
+    [[ "$rc" -eq 0 ]] || fallo_seguridad "pg_dump salió ${rc}: ${error_cmd}"
+
+    rc=0
+    docker exec "$CONTENEDOR" pg_restore --list "$ruta_seguridad" >/dev/null 2>&1 || rc=$?
+    [[ "$rc" -eq 0 ]] || fallo_seguridad "pg_restore --list rechazó el dump de seguridad (código ${rc})."
+
+    rc=0
+    docker cp "${CONTENEDOR}:${ruta_seguridad}" "$destino" >/dev/null 2>&1 || rc=$?
+    [[ "$rc" -eq 0 ]] || fallo_seguridad "docker cp hacia '${destino}' salió ${rc}."
+    chmod 600 "$destino" || fallo_seguridad "no se pudo dejar '${destino}' en 600."
+    [[ -s "$destino" ]] || fallo_seguridad "'${destino}' quedó vacío."
+    echo "OK: dump de seguridad en ${destino}"
+
+    # DROP/CREATE conectados a 'postgres', con exit code y stderr propios (no por consultar):
+    # "hay conexiones abiertas" es una precondición (3), cualquier otro error es 8.
+    rc=0
+    archivo_stderr="$(mktemp)"
+    printf 'DROP DATABASE "%s";\n' "$BASE" | docker exec -i "$CONTENEDOR" \
+        psql -U "$USUARIO" -d postgres -tA -v ON_ERROR_STOP=1 >/dev/null 2>"$archivo_stderr" || rc=$?
+    error_cmd="$(cat "$archivo_stderr")"
+    rm -f "$archivo_stderr"
+    if [[ "$rc" -ne 0 || -n "$error_cmd" ]]; then
+        if [[ "$error_cmd" == *"is being accessed by other users"* ]]; then
+            echo "ERROR: no se puede borrar '${BASE}': tiene conexiones abiertas (¿la API u otra sesión?)." >&2
+            echo "       Cerralas y reintentá; este script no fuerza el borrado. La base quedó intacta." >&2
+            echo "       El dump de seguridad igual quedó en ${destino}." >&2
+            exit 3
+        fi
+        echo "ERROR: falló DROP DATABASE \"${BASE}\" (código ${rc}): ${error_cmd}" >&2
+        echo "       El dump de seguridad está en ${destino}." >&2
+        exit 8
+    fi
+
+    rc=0
+    archivo_stderr="$(mktemp)"
+    printf 'CREATE DATABASE "%s" OWNER "%s";\n' "$BASE" "$USUARIO" | docker exec -i "$CONTENEDOR" \
+        psql -U "$USUARIO" -d postgres -tA -v ON_ERROR_STOP=1 >/dev/null 2>"$archivo_stderr" || rc=$?
+    error_cmd="$(cat "$archivo_stderr")"
+    rm -f "$archivo_stderr"
+    if [[ "$rc" -ne 0 || -n "$error_cmd" ]]; then
+        echo "ERROR: falló CREATE DATABASE \"${BASE}\" (código ${rc}): ${error_cmd}" >&2
+        echo "       La base fue BORRADA y no se pudo recrear: el dump de seguridad está en ${destino}." >&2
+        exit 8
+    fi
+    echo "OK: base '${BASE}' recreada vacía (dueño ${USUARIO})."
+}
+if [[ "$BASE_VACIA" -eq 0 ]]; then
+    recrear_base
+fi
 
 # ---------------------------------------------------------------------------------------
 # Paso 7 -- Restauración en UNA transacción

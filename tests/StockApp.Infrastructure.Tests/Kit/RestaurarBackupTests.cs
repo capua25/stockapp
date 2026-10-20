@@ -503,6 +503,13 @@ public class RestaurarBackupTests
             var ok = Correr($"\"{d.Ruta}\" {Base(c)}");
             Assert.True(ok.ExitCode == 0, Diag(ok));
             Assert.DoesNotContain("restaurar-", c.Exec("sh -c 'ls /tmp'"));
+
+            // --recrear-base deja además un dump de seguridad DENTRO del contenedor: también se borra.
+            var recreada = Correr($"\"{d.Ruta}\" {Base(c)} --recrear-base stockapp --dir-seguridad \"{Path.Combine(dir, "seg")}\"");
+            Assert.True(recreada.ExitCode == 0, Diag(recreada));
+            var tmp = c.Exec("sh -c 'ls /tmp'");
+            Assert.DoesNotContain("restaurar-", tmp);
+            Assert.DoesNotContain("seguridad-", tmp);
         }
         finally { Directory.Delete(dir, recursive: true); }
     }
@@ -736,6 +743,277 @@ public class RestaurarBackupTests
             Assert.Equal("2", c.Psql("SELECT count(*) FROM \"Categorias\" WHERE lower(\"Nombre\") = 'tornillos';"));
         }
         finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    // =====================================================================================
+    // --recrear-base: nunca se borra nada sin un dump de seguridad verificado
+    // =====================================================================================
+
+    private const string SqlPrevio =
+        "CREATE TABLE previo(id int); INSERT INTO previo VALUES (1), (2), (3);";
+
+    private static string[] DumpsDeSeguridad(string dir) =>
+        Directory.Exists(dir) ? Directory.GetFiles(dir) : [];
+
+    [Fact]
+    public async Task RecrearBase_NombreDistinto_Aborta2SinTocarNada()
+    {
+        var d = await DumpEsquemaReal();
+        using var c = new ContenedorPg();
+        var dir = NuevoDirectorio();
+        try
+        {
+            c.Psql(SqlPrevio);
+            var antes = c.Snapshot();
+            var seg = Path.Combine(dir, "seg");
+
+            var r = Correr($"\"{d.Ruta}\" {Base(c)} --recrear-base otra --dir-seguridad \"{seg}\"");
+
+            Assert.True(r.ExitCode == 2, Diag(r));
+            Assert.Equal(antes, c.Snapshot());
+            Assert.Empty(DumpsDeSeguridad(seg));
+            Assert.Equal("", r.RastroDocker);
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task RecrearBase_TomaDumpDeSeguridadRestaurableYRestaura()
+    {
+        var d = await DumpEsquemaReal();
+        using var c = new ContenedorPg();
+        var dir = NuevoDirectorio();
+        try
+        {
+            c.Psql(SqlPrevio);
+            var manifiesto = Path.Combine(dir, "m.manifiesto");
+            EscribirManifiesto(manifiesto, d);
+            var seg = Path.Combine(dir, "seg");
+
+            var r = Correr($"\"{d.Ruta}\" --manifiesto \"{manifiesto}\" {Base(c)} --recrear-base stockapp --dir-seguridad \"{seg}\"");
+
+            Assert.True(r.ExitCode == 0, Diag(r));
+            var dumps = DumpsDeSeguridad(seg);
+            Assert.Single(dumps);
+            Assert.Matches(@"^pre-recrear-stockapp-\d{8}T\d{6}Z\.dump$", Path.GetFileName(dumps[0]));
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(dumps[0]));
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, File.GetUnixFileMode(seg));
+            Assert.Contains(dumps[0], r.Stdout);
+
+            // El dump de seguridad sirve: restaurado en otra base devuelve lo que había.
+            c.RestaurarEnBase(dumps[0], "verif");
+            Assert.Equal("3", c.Psql("SELECT count(*) FROM previo;", "verif"));
+
+            // Y la base destino quedó con el contenido del dump, sin rastros de lo anterior.
+            Assert.Equal(d.Conteos, ParsearSnapshot(c.Snapshot()));
+            Assert.Equal("", c.Psql("SELECT to_regclass('public.previo');"));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task RecrearBase_FallaElDumpDeSeguridad_NoBorraNada9()
+    {
+        var d = await DumpEsquemaReal();
+        using var c = new ContenedorPg();
+        var dir = NuevoDirectorio();
+        try
+        {
+            c.Psql(SqlPrevio);
+            var seg = Path.Combine(dir, "seg");
+
+            var r = Correr($"\"{d.Ruta}\" {Base(c)} --recrear-base stockapp --dir-seguridad \"{seg}\"",
+                new Dictionary<string, string> { ["STUB_DOCKER_FALLAR_PGDUMP"] = "1" });
+
+            Assert.True(r.ExitCode == 9, Diag(r));
+            Assert.Contains("pg_dump", r.RastroDocker);
+            Assert.DoesNotContain("DROP", r.RastroDocker + r.Stdout);
+            Assert.Equal("3", c.Psql("SELECT count(*) FROM previo;"));
+        }
+        finally { Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task RecrearBase_ConConexionAbierta_Aborta3YLaBaseQuedaIntacta()
+    {
+        var d = await DumpEsquemaReal();
+        using var c = new ContenedorPg();
+        var dir = NuevoDirectorio();
+        try
+        {
+            c.Psql(SqlPrevio);
+            EjecutorBash.Ejecutar($"docker exec -d {c.Nombre} psql -U stockapp -d stockapp -c 'SELECT pg_sleep(120)'");
+            // docker exec -d vuelve antes de que psql conecte: se espera a ver la sesión (ruling F14).
+            var conectada = await EsperaMonotonica.HastaAsync(
+                () => c.Psql("SELECT count(*) FROM pg_stat_activity WHERE query LIKE 'SELECT pg_sleep(120)%';") == "1",
+                TimeSpan.FromSeconds(30), TimeSpan.FromMilliseconds(200));
+            Assert.True(conectada, "La sesión con pg_sleep nunca apareció en pg_stat_activity.");
+
+            var r = Correr($"\"{d.Ruta}\" {Base(c)} --recrear-base stockapp --dir-seguridad \"{Path.Combine(dir, "seg")}\"");
+
+            Assert.True(r.ExitCode == 3, Diag(r));
+            Assert.Contains("conexiones abiertas", r.Stderr);
+            Assert.Equal("3", c.Psql("SELECT count(*) FROM previo;"));
+        }
+        finally
+        {
+            try
+            {
+                c.Psql("SELECT count(pg_terminate_backend(pid)) FROM pg_stat_activity WHERE query LIKE 'SELECT pg_sleep(120)%';", "postgres");
+            }
+            finally { Directory.Delete(dir, recursive: true); }
+        }
+    }
+
+    [Fact]
+    public async Task ExitoSeguidoDeReintento_AbortaPorBaseNoVacia()
+    {
+        var d = await DumpEsquemaReal();
+        using var c = new ContenedorPg();
+
+        var primero = Correr($"\"{d.Ruta}\" {Base(c)}");
+        Assert.True(primero.ExitCode == 0, Diag(primero));
+        var antes = c.Snapshot();
+
+        var segundo = Correr($"\"{d.Ruta}\" {Base(c)}");
+
+        Assert.True(segundo.ExitCode == 3, Diag(segundo));
+        Assert.Equal(antes, c.Snapshot());
+    }
+
+    // =====================================================================================
+    // --verificar-post-arranque: después del primer arranque de la API (solo lectura)
+    // =====================================================================================
+
+    /// <summary>Contenedor con el dump real ya restaurado por el script y su manifiesto.</summary>
+    private async Task<(ContenedorPg C, DumpReal D)> Restaurado()
+    {
+        var d = await DumpEsquemaReal();
+        var c = new ContenedorPg();
+        var r = Correr($"\"{d.Ruta}\" {Base(c)}");
+        if (r.ExitCode != 0)
+        {
+            c.Dispose();
+            Assert.Fail(Diag(r));
+        }
+        return (c, d);
+    }
+
+    private Resultado PostArranque(ContenedorPg c, string manifiesto) =>
+        Correr($"--verificar-post-arranque --manifiesto \"{manifiesto}\" {Base(c)}");
+
+    [Fact]
+    public async Task PostArranque_SoloCreceEnTablasPermitidas_Ok()
+    {
+        var (c, d) = await Restaurado();
+        var dir = NuevoDirectorio();
+        try
+        {
+            var manifiesto = Path.Combine(dir, "m.manifiesto");
+            EscribirManifiesto(manifiesto, d);
+            // Columnas obligatorias de LogAuditoria: UsuarioId (FK a Usuarios), Fecha, Accion,
+            // Entidad, EntidadId, Detalle. Si la base no tiene usuarios (depende de qué sembró la
+            // fixture), la FK se saltea solo en esta transacción: lo que se prueba es el conteo.
+            c.Psql(
+                "BEGIN;" +
+                "SELECT set_config('session_replication_role', 'replica', true) WHERE NOT EXISTS (SELECT 1 FROM \"Usuarios\");" +
+                "INSERT INTO \"LogsAuditoria\"(\"UsuarioId\", \"Fecha\", \"Accion\", \"Entidad\", \"EntidadId\", \"Detalle\") " +
+                "VALUES (coalesce((SELECT min(\"Id\") FROM \"Usuarios\"), 1), now(), 1, 'PostArranque', 0, 'arranque');" +
+                "COMMIT;");
+
+            var r = PostArranque(c, manifiesto);
+
+            Assert.True(r.ExitCode == 0, Diag(r));
+            Assert.Equal("", r.RastroSystemctl);
+        }
+        finally { c.Dispose(); Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task PostArranque_TablaComunConMasFilas_Falla6()
+    {
+        var (c, d) = await Restaurado();
+        var dir = NuevoDirectorio();
+        try
+        {
+            var manifiesto = Path.Combine(dir, "m.manifiesto");
+            EscribirManifiesto(manifiesto, d);
+            c.Psql($"INSERT INTO \"Categorias\"(\"Nombre\") VALUES ('PostArranque-{Guid.NewGuid():N}');");
+
+            var r = PostArranque(c, manifiesto);
+
+            Assert.True(r.ExitCode == 6, Diag(r));
+            Assert.Contains("Categorias", r.Stderr);
+        }
+        finally { c.Dispose(); Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task PostArranque_LogsAuditoriaMenor_Falla6()
+    {
+        var (c, d) = await Restaurado();
+        var dir = NuevoDirectorio();
+        try
+        {
+            var manifiesto = Path.Combine(dir, "m.manifiesto");
+            EscribirManifiesto(manifiesto, d, conteos => conteos["LogsAuditoria"] += 1);
+
+            var r = PostArranque(c, manifiesto);
+
+            Assert.True(r.ExitCode == 6, Diag(r));
+            Assert.Contains("LogsAuditoria", r.Stderr);
+        }
+        finally { c.Dispose(); Directory.Delete(dir, recursive: true); }
+    }
+
+    /// <summary>
+    /// La retención de backups borra filas de CorridasBackup en el primer arranque (catch-up de
+    /// BackupProgramadoService → ServicioBackup.AplicarRetencionAsync): no es pérdida de datos.
+    /// </summary>
+    [Fact]
+    public async Task PostArranque_CorridasBackupMenor_Ok()
+    {
+        var (c, d) = await Restaurado();
+        var dir = NuevoDirectorio();
+        try
+        {
+            var manifiesto = Path.Combine(dir, "m.manifiesto");
+            EscribirManifiesto(manifiesto, d, conteos => conteos["CorridasBackup"] += 2);
+
+            var r = PostArranque(c, manifiesto);
+
+            Assert.True(r.ExitCode == 0, Diag(r));
+            Assert.Matches(@"CorridasBackup.*-2", r.Stdout);
+        }
+        finally { c.Dispose(); Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public async Task PostArranque_TablaNuevaNoEnManifiesto_OkYLaLista()
+    {
+        var (c, d) = await Restaurado();
+        var dir = NuevoDirectorio();
+        try
+        {
+            var manifiesto = Path.Combine(dir, "m.manifiesto");
+            EscribirManifiesto(manifiesto, d, conteos => conteos.Remove("Zonas"));
+
+            var r = PostArranque(c, manifiesto);
+
+            Assert.True(r.ExitCode == 0, Diag(r));
+            Assert.Matches(@"nuevas \(migraciones posteriores\)[\s\S]*Zonas", r.Stdout);
+        }
+        finally { c.Dispose(); Directory.Delete(dir, recursive: true); }
+    }
+
+    [Fact]
+    public void PostArranque_SinManifiesto_Aborta2()
+    {
+        var r = Correr("--verificar-post-arranque --contenedor stockapp-test-nadie --base stockapp --usuario stockapp");
+
+        Assert.True(r.ExitCode == 2, Diag(r));
+        Assert.Contains("--manifiesto", r.Stderr);
+        Assert.Equal("", r.RastroDocker);
     }
 
     /// <summary>
