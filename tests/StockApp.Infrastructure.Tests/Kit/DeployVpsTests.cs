@@ -293,7 +293,8 @@ public class DeployVpsTests
         string? vpsHost = "vps.test.invalid", string? vpsSshPort = "2222",
         bool simularBackupViejoPrimero = false, bool simularFalloConsulta = false,
         bool simularFalloConsultaPaso6 = false, bool simularRespuestaNoNumericaPaso6 = false,
-        bool simularFalloPolling = false, bool simularFalloConectividadEstadoServicio = false)
+        bool simularFalloPolling = false, bool simularFalloConectividadEstadoServicio = false,
+        IDictionary<string, string>? envExtra = null)
     {
         var testbin = CrearTestbin(
             simularDuplicados, simularFalloConsulta,
@@ -310,10 +311,14 @@ public class DeployVpsTests
                 $"export RASTRO_SCP=\"{rastroScp}\"\n" +
                 $"export RASTRO_PUBLISH=\"{rastroPublish}\"\n" +
                 $"export SCP_TAMANO_BYTES=\"{scpTamanoBytes}\"\n" +
+                // Higiene (ruling F2): EjecutorBash hereda el entorno del agente; lo que el operador
+                // tenga exportado (otro .env, credenciales) no puede colarse en la corrida.
+                "unset STOCKAPP_ENV_LOCAL VPS_ADMIN_USER VPS_ADMIN_PASSWORD VPS_DIR\n" +
                 ExportODesetear("VPS_USER", vpsUser) +
                 ExportODesetear("VPS_HOST", vpsHost) +
                 ExportODesetear("VPS_SSH_PORT", vpsSshPort) +
                 (simularBackupViejoPrimero ? "export SIMULAR_BACKUP_VIEJO_PRIMERO=1\n" : "") +
+                string.Concat((envExtra ?? new Dictionary<string, string>()).Select(kv => $"export {kv.Key}=\"{kv.Value}\"\n")) +
                 $"bash \"{repoFixture}/deploy/deploy-vps.sh\" {argumentos}";
             var (exitCode, stdout, stderr) = EjecutorBash.Ejecutar(script);
             var ssh = File.Exists(rastroSsh) ? File.ReadAllText(rastroSsh) : "";
@@ -1365,6 +1370,70 @@ public class DeployVpsTests
             Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}");
             Assert.DoesNotContain("Admin12345", rastroSsh);
             Assert.DoesNotContain("FAKE-TOKEN-123", rastroSsh);
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    // ---------- STOCKAPP_ENV_LOCAL elige el .env del operador ----------
+    // Con dos VPS en juego, exportar VPS_HOST no alcanza: el .env se carga con 'source'
+    // DESPUÉS del entorno y lo pisa. STOCKAPP_ENV_LOCAL cambia QUÉ archivo se carga.
+
+    [Fact]
+    public void StockappEnvLocal_EligeElArchivo()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            var otro = Path.Combine(repo, "otro.env");
+            File.WriteAllText(otro, File.ReadAllText(Path.Combine(repo, "deploy", ".env")) + "\nVPS_HOST=otro.test.invalid\n");
+
+            var (exitCode, stdout, stderr, rastroSsh, _, _) = Correr(
+                repo, "0.0.0-test --dry-run",
+                envExtra: new Dictionary<string, string> { ["STOCKAPP_ENV_LOCAL"] = otro });
+
+            Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}");
+            var lineas = rastroSsh.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            Assert.NotEmpty(lineas);
+            Assert.All(lineas, l => Assert.Contains("operador@otro.test.invalid", l));
+            Assert.DoesNotContain("vps.test.invalid", rastroSsh.Replace("otro.test.invalid", ""));
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    [Fact]
+    public void StockappEnvLocalInexistente_AbortaSinTocarSsh()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            var inexistente = Path.Combine(repo, "no-existe.env");
+
+            var (exitCode, stdout, stderr, rastroSsh, rastroScp, rastroPublish) = Correr(
+                repo, "0.0.0-test --dry-run",
+                envExtra: new Dictionary<string, string> { ["STOCKAPP_ENV_LOCAL"] = inexistente });
+
+            Assert.Equal(1, exitCode);
+            Assert.Contains("STOCKAPP_ENV_LOCAL", stdout + stderr);
+            Assert.Contains(inexistente, stdout + stderr);
+            Assert.Equal("", rastroSsh);
+            Assert.Equal("", rastroScp);
+            Assert.Equal("", rastroPublish);
+        }
+        finally { Directory.Delete(repo, recursive: true); }
+    }
+
+    [Fact]
+    public void SinStockappEnvLocal_UsaDeployEnvComoHoy()
+    {
+        var repo = CrearRepoFixture();
+        try
+        {
+            File.AppendAllText(Path.Combine(repo, "deploy", ".env"), "\nVPS_HOST=del-repo.test.invalid\n");
+
+            var (exitCode, stdout, stderr, rastroSsh, _, _) = Correr(repo, "0.0.0-test --dry-run");
+
+            Assert.True(exitCode == 0, $"stdout={stdout}\nstderr={stderr}");
+            Assert.Contains("operador@del-repo.test.invalid", rastroSsh);
         }
         finally { Directory.Delete(repo, recursive: true); }
     }

@@ -31,6 +31,12 @@ set -euo pipefail
 #
 # --dry-run corre SOLO el paso 0 y el paso 1 (ambos de solo lectura) y termina ahí.
 
+# STOCKAPP_ENV_LOCAL (opcional): ruta del .env del operador a cargar en lugar de
+# deploy/.env. Con dos VPS en juego: STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/deploy-vps.sh ...
+# Como el .env se carga con 'source' DESPUÉS del entorno, exportar VPS_HOST no alcanza para
+# elegir el VPS. Si está definida y el archivo no existe o no se puede leer, ABORTA (exit 1)
+# antes de cualquier ssh/scp.
+#
 # VPS_HOST / VPS_USER / VPS_SSH_PORT son OBLIGATORIAS y se exigen más abajo, DESPUÉS de cargar
 # deploy/.env (pueden venir de ahí o del entorno). A propósito NO hay default: un deploy sin
 # configuración explícita tiene que fallar, nunca caer en un VPS que quedó horneado en el script.
@@ -132,7 +138,11 @@ limpiar_backup_remoto() {
 }
 trap limpiar_backup_remoto EXIT
 
-ENV_LOCAL="${REPO_ROOT}/deploy/.env"
+ENV_LOCAL="${STOCKAPP_ENV_LOCAL:-${REPO_ROOT}/deploy/.env}"
+if [[ -n "${STOCKAPP_ENV_LOCAL:-}" && ( ! -f "$ENV_LOCAL" || ! -r "$ENV_LOCAL" ) ]]; then
+    echo "ERROR: STOCKAPP_ENV_LOCAL apunta a '${ENV_LOCAL}', que no existe o no se puede leer." >&2
+    exit 1
+fi
 if [[ -f "$ENV_LOCAL" ]]; then
     set -a
     # shellcheck source=/dev/null

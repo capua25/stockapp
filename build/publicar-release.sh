@@ -14,6 +14,11 @@ set -euo pipefail
 #   --forzar  permite publicar una versión MENOR que la que sirve hoy el servidor. Es una
 #             salida de emergencia, no el camino normal de un rollback (ver más abajo).
 #
+# STOCKAPP_ENV_LOCAL (opcional): ruta del .env del operador a cargar en lugar de deploy/.env.
+# Con dos VPS en juego: STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo build/publicar-release.sh ...
+# Como el .env se carga con 'source' DESPUÉS del entorno, exportar VPS_HOST no alcanza. Si está
+# definida y el archivo no existe o no se puede leer, ABORTA (exit 1) antes de cualquier ssh/scp.
+#
 # Configuración (deploy/.env local o entorno). OBLIGATORIAS, sin default a propósito: un
 # host por defecto subiría el feed al servidor equivocado en silencio.
 #   VPS_HOST, VPS_USER, VPS_SSH_PORT
@@ -120,7 +125,11 @@ if [[ ! "$VERSION" =~ ^[0-9A-Za-z.+-]+$ ]]; then
 fi
 
 # deploy/.env se carga ANTES de exigir las variables: VPS_HOST/VPS_SSH_PORT pueden venir de ahí.
-ENV_LOCAL="${REPO_ROOT}/deploy/.env"
+ENV_LOCAL="${STOCKAPP_ENV_LOCAL:-${REPO_ROOT}/deploy/.env}"
+if [[ -n "${STOCKAPP_ENV_LOCAL:-}" && ( ! -f "$ENV_LOCAL" || ! -r "$ENV_LOCAL" ) ]]; then
+    echo "ERROR: STOCKAPP_ENV_LOCAL apunta a '${ENV_LOCAL}', que no existe o no se puede leer." >&2
+    exit 1
+fi
 if [[ -f "$ENV_LOCAL" ]]; then
     set -a
     # shellcheck source=/dev/null

@@ -201,6 +201,8 @@ public class PublicarReleaseTests
             var sb = new StringBuilder();
             sb.Append($"export PATH=\"{Testbin}:$PATH\"\n");
             sb.Append($"export RASTRO_SSH=\"{RastroSsh}\" RASTRO_SCP=\"{RastroScp}\" SERVIDOR_FALSO=\"{Servidor}\"\n");
+            // Higiene (ruling F2): el entorno heredado del agente no puede colarse en la corrida.
+            sb.Append("unset STOCKAPP_ENV_LOCAL VPS_ADMIN_USER VPS_ADMIN_PASSWORD\n");
             sb.Append("export VPS_HOST=\"vps.test.invalid\" VPS_USER=\"operador\" VPS_SSH_PORT=\"2222\" VPS_DIR=\"/srv/operador-deploy\"\n");
             foreach (var s in sin) sb.Append($"unset {s}\n");
             if (env is not null)
@@ -869,5 +871,52 @@ public class PublicarReleaseTests
         Assert.All(curlRemoto, l => Assert.Contains("--resolve api.test.invalid:5080:127.0.0.1", l));
         Assert.All(curlRemoto, l => Assert.DoesNotContain(" -k", l));
         Assert.All(curlRemoto, l => Assert.Contains("https://api.test.invalid:5080/updates/", l));
+    }
+
+    // ---------- STOCKAPP_ENV_LOCAL elige el .env del operador ----------
+    // Con dos VPS en juego, exportar VPS_HOST no alcanza: el .env se carga con 'source'
+    // DESPUÉS del entorno y lo pisa. STOCKAPP_ENV_LOCAL cambia QUÉ archivo se carga.
+
+    [Fact]
+    public void StockappEnvLocal_EligeElArchivo()
+    {
+        using var e = new Entorno();
+        var otro = Path.Combine(e.Repo, "otro.env");
+        File.WriteAllText(otro, "API_PORT=5080\nVPS_HOST=otro.test.invalid\n");
+
+        var r = e.Correr("0.5.0", new Dictionary<string, string> { ["STOCKAPP_ENV_LOCAL"] = otro });
+
+        Assert.True(r.ExitCode == 0, Diagnostico(r));
+        Assert.NotEmpty(r.Ssh);
+        Assert.All(r.Ssh, l => Assert.Contains("operador@otro.test.invalid", l));
+        Assert.All(r.Ssh, l => Assert.DoesNotContain("vps.test.invalid", l.Replace("otro.test.invalid", "")));
+    }
+
+    [Fact]
+    public void StockappEnvLocalInexistente_AbortaSinTocarSsh()
+    {
+        using var e = new Entorno();
+        var inexistente = Path.Combine(e.Repo, "no-existe.env");
+
+        var r = e.Correr("0.5.0", new Dictionary<string, string> { ["STOCKAPP_ENV_LOCAL"] = inexistente });
+
+        Assert.Equal(1, r.ExitCode);
+        Assert.Contains("STOCKAPP_ENV_LOCAL", r.Stderr);
+        Assert.Contains(inexistente, r.Stderr);
+        Assert.Empty(r.Ssh);
+        Assert.Empty(r.Scp);
+    }
+
+    [Fact]
+    public void SinStockappEnvLocal_UsaDeployEnvComoHoy()
+    {
+        using var e = new Entorno();
+        File.WriteAllText(Path.Combine(e.Repo, "deploy", ".env"), "API_PORT=5080\nVPS_HOST=del-repo.test.invalid\n");
+
+        var r = e.Correr("0.5.0");
+
+        Assert.True(r.ExitCode == 0, Diagnostico(r));
+        Assert.NotEmpty(r.Ssh);
+        Assert.All(r.Ssh, l => Assert.Contains("operador@del-repo.test.invalid", l));
     }
 }
