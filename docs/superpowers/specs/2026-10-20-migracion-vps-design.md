@@ -26,6 +26,7 @@ Hay un hecho que simplifica todo: **la instalación del municipio y la migració
 - **Redirigir clientes (decidido por Martin).** Ninguna PC del municipio apunta al servidor viejo, así que no hay redirección HTTP, ni CNAME transitorio, ni proxy.
 - **Multi-tenant y rediseño del licenciamiento (decidido por Martin).** En el VPS nuevo el licenciamiento queda **apagado** (`Licencia__Habilitado=false`). El rediseño va junto con el multi-tenant futuro.
 - **Automatizar el corte entero en un solo comando (decisión del asistente).** El corte cruza dos servidores y tiene puntos donde un humano tiene que mirar el resultado antes de seguir: los conteos, el login y el smoke de la GUI. Se entregan piezas verificables y un runbook que las encadena, no un orquestador.
+  - **Nota 2026-10-20 (decidido por Martin): este no-objetivo queda SIN EFECTO.** Lo reemplaza `docs/superpowers/specs/2026-10-20-migracion-vps-automatizada-design.md`: dos orquestadores (`preparar-vps-nuevo.sh` y `migrar-vps.sh`) encadenan estas mismas piezas. El GO y el smoke de la GUI siguen siendo humanos.
 - **Conservar el dominio viejo, sus sesiones o sus tokens.** Ver §5.1.
 - **Migrar `licencia.lic`, los logs o el feed viejo.** Ver §5.2.
 - **Desmantelar el VPS viejo.** Después de N días es una decisión aparte de Martin (§5.7). Este diseño solo lo deja detenido.
