@@ -14,6 +14,7 @@ public class LineaPoa
     public bool Activo { get; set; } = true;              // baja lógica
 
     /// <summary>Guid del lote de /confirmar que creó esta línea (F5c). Null si es manual.</summary>
+    // Esquema del importador ODS (eliminado 2026-10-21): inutilizado, se conserva para no generar drops. No borrar sin decisión.
     public Guid? IdImportacion { get; set; }
 
     public List<AsignacionPresupuestal> Asignaciones { get; set; } = new();

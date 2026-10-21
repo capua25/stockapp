@@ -27,6 +27,7 @@ public class AppDbContext : DbContext
     public DbSet<ConfiguracionAlertas> ConfiguracionesAlertas => Set<ConfiguracionAlertas>();
     public DbSet<Tarea> Tareas => Set<Tarea>();
     public DbSet<NotaTarea> NotasTarea => Set<NotaTarea>();
+    // Esquema del importador ODS (eliminado 2026-10-21): inutilizado, se conserva para no generar drops. No borrar sin decisión.
     public DbSet<LoteImportacion> LotesImportacion => Set<LoteImportacion>();
     public DbSet<PermisoUsuario> PermisosUsuario => Set<PermisoUsuario>();
     public DbSet<DocumentoAdministrativo> DocumentosAdministrativos => Set<DocumentoAdministrativo>();
@@ -209,6 +210,7 @@ public class AppDbContext : DbContext
         });
 
         // ── LoteImportacion (fix/integridad-referencial) ──────────────────────
+        // Esquema del importador ODS (eliminado 2026-10-21): inutilizado, se conserva para no generar drops. No borrar sin decisión.
         // Id lo asigna la APP (Guid.NewGuid(), ver LoteImportacion.cs) ANTES del Add() —
         // ValueGeneratedNever() evita que EF/Postgres intenten generar o ignorar ese valor.
         // Sin nav de colección hacia los hijos (Gastos/IngresosCaja/LineasPoa/PagosGasto): nada

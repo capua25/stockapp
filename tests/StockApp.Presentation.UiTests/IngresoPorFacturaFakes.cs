@@ -15,10 +15,10 @@ namespace StockApp.Presentation.UiTests;
 
 /// <summary>
 /// Fakes minimos de las dependencias de IngresoPorFacturaViewModel/AdjuntosPanelViewModel, mismo
-/// criterio que TareaFakes.cs/NuevaImportacionFakes.cs/MovimientoRegistroFakes.cs (este proyecto
+/// criterio que TareaFakes.cs/FakesFinanzasCompartidos.cs/MovimientoRegistroFakes.cs (este proyecto
 /// no referencia Moq). Reusa ProveedorServiceFake/FuenteFinanciamientoServiceFake/
-/// RubroGastoServiceFake/LineaPoaServiceFake (NuevaImportacionFakes.cs), ConfirmacionServiceFake
-/// (MovimientoRegistroFakes.cs) y ServicioSeleccionArchivoFake (NuevaImportacionFakes.cs) --
+/// RubroGastoServiceFake/LineaPoaServiceFake (FakesFinanzasCompartidos.cs), ConfirmacionServiceFake
+/// (MovimientoRegistroFakes.cs) y ServicioSeleccionArchivoFake (FakesFinanzasCompartidos.cs) --
 /// mismo namespace, no se redeclaran.
 /// </summary>
 internal sealed class IngresoPorFacturaServiceFake : IIngresoPorFacturaService

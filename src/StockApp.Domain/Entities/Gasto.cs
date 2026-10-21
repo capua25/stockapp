@@ -36,6 +36,7 @@ public class Gasto
     /// las vías normales (ABM manual) — que es, hoy y a futuro, la inmensa mayoría de los
     /// datos. Permite a /revertir/{id} encontrar y dar de baja un lote completo.
     /// </summary>
+    // Esquema del importador ODS (eliminado 2026-10-21): inutilizado, se conserva para no generar drops. No borrar sin decisión.
     public Guid? IdImportacion { get; set; }
 
     /// <summary>

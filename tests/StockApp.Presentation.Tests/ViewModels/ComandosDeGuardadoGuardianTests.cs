@@ -60,8 +60,6 @@ public class ComandosDeGuardadoGuardianTests
             "acción por fila que navega a la pantalla de pagos de esa factura; ahí se confirma",
         [("IngresoPorFacturaViewModel", "FinalizarCommand")] =
             "navegación posterior al guardado (vuelve a Gastos); no confirma nada tipeado",
-        [("NuevaImportacionViewModel", "NuevaImportacionCommand")] =
-            "reinicia el asistente; descartar lo tipeado no debe bloquearse por un campo en rojo",
         [("ActualizacionBloqueoViewModel", "AplicarYReiniciarCommand")] =
             "aplica una actualización ya descargada; la pantalla no tiene ningún campo tipeado",
         [("MantenimientoViewModel", "IniciarBackupCommand")] =
@@ -98,13 +96,6 @@ public class ComandosDeGuardadoGuardianTests
         // Guardar exige al menos un renglón cargado.
         [nameof(IngresoPorFacturaViewModel)] = vm =>
             ((IngresoPorFacturaViewModel)vm).Renglones.Add(new FilaRenglonFacturaVm()),
-        // Analizar exige las dos planillas elegidas (llegan por el selector de archivos).
-        [nameof(NuevaImportacionViewModel)] = vm =>
-        {
-            foreach (var campo in new[] { "_gastosContenido", "_poaContenido" })
-                typeof(NuevaImportacionViewModel).GetField(campo, BindingFlags.NonPublic | BindingFlags.Instance)!
-                    .SetValue(vm, new byte[] { 1 });
-        },
     };
 
     /// <summary>
@@ -267,7 +258,6 @@ public class ComandosDeGuardadoGuardianTests
         Assert.Contains("ProductoFormViewModel.GuardarCommand", candidatos);
         Assert.Contains("EntradaRegistroViewModel.RegistrarCommand", candidatos);
         Assert.Contains("IngresoPorFacturaViewModel.AgregarArticuloCommand", candidatos);
-        Assert.Contains("NuevaImportacionViewModel.ConfirmarCommand", candidatos);
         // Solo por la vista (el nombre no es un verbo de confirmación):
         Assert.Contains("LoginViewModel.EntrarCommand", primarios);
         Assert.Contains("LoginViewModel.EntrarCommand", candidatos);

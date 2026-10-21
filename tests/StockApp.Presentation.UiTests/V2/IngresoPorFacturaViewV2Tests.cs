@@ -447,7 +447,6 @@ public class IngresoPorFacturaViewV2Tests
         public Task<(string NombreArchivo, byte[] Contenido)?> SeleccionarArchivoAsync()
             => Task.FromResult<(string NombreArchivo, byte[] Contenido)?>(("factura-0004398.pdf", new byte[2048]));
 
-        public Task<(string NombreArchivo, byte[] Contenido)?> SeleccionarArchivoOdsAsync() => throw new NotSupportedException();
     }
 
     [AvaloniaFact]

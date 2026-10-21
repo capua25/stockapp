@@ -343,38 +343,6 @@ public class ShellMainViewModelTests
         Assert.Null(ex);
     }
 
-    // ── F5d Task 10 — Navegación a Importar planillas ────────────────────────
-    //
-    // Importación quedó apagada por ShellMainViewModel.ImportacionHabilitada = false
-    // (2026-09-04, pedido del usuario: el módulo no se va a usar). Los dos tests de abajo
-    // documentaban el comportamiento ORIGINAL (navega y cambia de sección); ahora documentan
-    // el no-op, uno por aserción (así el nombre del test que falla dice cuál de las dos cosas
-    // se rompió). Si se reactiva la constante, revertir:
-    // - NavImportacion_ConModuloDeshabilitado_NoLlamaNavegar: Times.Never -> Times.Once
-    // - NavImportacion_ConModuloDeshabilitado_NoEstableceSeccionActiva:
-    //   Assert.Equal(seccionOriginal, ...) -> Assert.Equal("Importacion", vm.SeccionActiva)
-
-    [Fact]
-    public void NavImportacion_ConModuloDeshabilitado_NoLlamaNavegar()
-    {
-        var (vm, _, navMock, _) = Crear(RolUsuario.Admin);
-
-        vm.NavImportacionCommand.Execute(null);
-
-        navMock.Verify(n => n.Navegar<StockApp.Presentation.ViewModels.Finanzas.ImportacionViewModel>(), Times.Never);
-    }
-
-    [Fact]
-    public void NavImportacion_ConModuloDeshabilitado_NoEstableceSeccionActiva()
-    {
-        var (vm, _, _, _) = Crear(RolUsuario.Admin);
-        var seccionOriginal = vm.SeccionActiva;
-
-        vm.NavImportacionCommand.Execute(null);
-
-        Assert.Equal(seccionOriginal, vm.SeccionActiva);
-    }
-
     // ── Refresco de permisos al navegar (spec decisión 7) ──────────────────────
     // Pre-flight (mismo riesgo que el bug crítico de Task 13, checkboxes congelados): las
     // propiedades Puede* son getters calculados sobre ICurrentSession.PermisosActuales, que

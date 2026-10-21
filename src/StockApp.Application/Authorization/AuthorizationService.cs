@@ -13,7 +13,7 @@ namespace StockApp.Application.Authorization;
 public class AuthorizationService : IAuthorizationService
 {
     /// <summary>
-    /// Los 5 permisos que NUNCA se resuelven contra PermisoUsuario: Admin los tiene siempre,
+    /// Los 4 permisos que NUNCA se resuelven contra PermisoUsuario: Admin los tiene siempre,
     /// Operador nunca, sin consultar la tabla ni la cache. Punto de falla más peligroso del
     /// diseño (spec, "Riesgos") — el corte tiene que pasar ANTES de mirar PermisosActuales,
     /// nunca después. Compartida por AuthorizationService.Verificar y PermisoAuthorizationHandler
@@ -22,14 +22,13 @@ public class AuthorizationService : IAuthorizationService
     public static readonly IReadOnlySet<string> PermisosEstructuralesAdmin = new HashSet<string>
     {
         Permisos.GestionarUsuarios,
-        Permisos.ImportarPlanillas,
         Permisos.GestionarDiagnostico,
         Permisos.AdministrarTareas,
         Permisos.AdministrarDocumentos,
     };
 
     /// <summary>
-    /// Los 12 permisos configurables: Permisos.Todos menos los 5 estructurales. Derivado, no
+    /// Los 12 permisos configurables: Permisos.Todos menos los 4 estructurales. Derivado, no
     /// una lista aparte a mano — evita que ambas listas diverjan si algún día se agrega un
     /// permiso nuevo a Permisos.Todos sin decidir explícitamente su categoría acá.
     /// </summary>

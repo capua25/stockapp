@@ -37,7 +37,6 @@ using StockApp.Application.Tareas;
 using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Auth;
 using StockApp.Infrastructure.Backups;
-using StockApp.Infrastructure.Finanzas;
 using StockApp.Infrastructure.Licenciamiento;
 using StockApp.Infrastructure.Notificaciones;
 using StockApp.Infrastructure.Persistence;
@@ -237,12 +236,6 @@ builder.Services.AddScoped<IAdjuntoService, AdjuntoService>();
 // Finanzas — Fase 4: vistas calculadas (libro caja, control POA, calendario de pagos)
 builder.Services.AddScoped<IFinanzasVistasService, FinanzasVistasService>();
 
-// Finanzas — F5b: análisis (read-only) del importador de planillas .ods. IPlanillaParser
-// (interfaz de Application, F5a) se registra acá por primera vez, detrás de la impl de
-// Infrastructure PlanillaOdsParser.
-builder.Services.AddScoped<IPlanillaParser, PlanillaOdsParser>();
-builder.Services.AddScoped<IAnalisisImportacionService, AnalisisImportacionService>();
-
 // Tareas — módulo independiente (spec 2026-08-01)
 builder.Services.AddScoped<ITareaRepository, TareaRepository>();
 builder.Services.AddScoped<ITareaService, TareaService>();
@@ -252,12 +245,6 @@ builder.Services.AddScoped<IDocumentoAdministrativoRepository, DocumentoAdminist
 builder.Services.AddScoped<IDocumentoAdministrativoService, DocumentoAdministrativoService>();
 builder.Services.AddScoped<IAdjuntoDocumentoRepository, AdjuntoDocumentoRepository>();
 builder.Services.AddScoped<IAdjuntoDocumentoService, AdjuntoDocumentoService>();
-
-// Finanzas — F5c: confirmación transaccional del importador (escritura + idempotencia +
-// guard de re-importación + reversa). IImportacionRepository es la única pieza de todo el
-// flujo de importación que toca EF/Npgsql directamente.
-builder.Services.AddScoped<IImportacionRepository, ImportacionRepository>();
-builder.Services.AddScoped<IConfirmacionImportacionService, ConfirmacionImportacionService>();
 
 // Auditoría (Fase 2b)
 builder.Services.AddScoped<IAuditoriaQueryRepository, AuditoriaQueryRepository>();
@@ -702,7 +689,6 @@ app.MapGastosEndpoints();
 app.MapAdjuntosEndpoints();
 app.MapIngresosCajaEndpoints();
 app.MapFinanzasVistasEndpoints();
-app.MapImportacionEndpoints();
 app.MapLicenciaEndpoints();
 app.MapResetAdminEndpoints();
 app.MapBackupsEndpoints();

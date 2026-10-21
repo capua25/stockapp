@@ -47,11 +47,10 @@ public class AuthorizationServiceTests
 
     [Theory]
     [InlineData(Permisos.GestionarUsuarios)]
-    [InlineData(Permisos.ImportarPlanillas)]
     [InlineData(Permisos.GestionarDiagnostico)]
     [InlineData(Permisos.AdministrarTareas)]
     [InlineData(Permisos.AdministrarDocumentos)]
-    public void VerificarConSesion_Operador_LosCincoEstructurales_RechazanSiempre(string permisoEstructural)
+    public void VerificarConSesion_Operador_LosCuatroEstructurales_RechazanSiempre(string permisoEstructural)
     {
         var sesion = new SesionFake { RolActual = RolUsuario.Operador, PermisosActuales = new HashSet<string>() };
 
@@ -60,11 +59,10 @@ public class AuthorizationServiceTests
 
     [Theory]
     [InlineData(Permisos.GestionarUsuarios)]
-    [InlineData(Permisos.ImportarPlanillas)]
     [InlineData(Permisos.GestionarDiagnostico)]
     [InlineData(Permisos.AdministrarTareas)]
     [InlineData(Permisos.AdministrarDocumentos)]
-    public void VerificarConSesion_SesionEnvenenada_LosCincoEstructuralesRechazanIgual(string permisoEstructural)
+    public void VerificarConSesion_SesionEnvenenada_LosCuatroEstructuralesRechazanIgual(string permisoEstructural)
     {
         // El test más importante de esta clase: aunque PermisosActuales CONTENGA el permiso
         // estructural (una fila colada por error, o un bug futuro en PUT /usuarios/{id}/permisos),
@@ -107,11 +105,10 @@ public class AuthorizationServiceTests
     }
 
     [Fact]
-    public void PermisosEstructuralesAdmin_ContieneExactamenteLosCincoDocumentados()
+    public void PermisosEstructuralesAdmin_ContieneExactamenteLosCuatroDocumentados()
     {
-        Assert.Equal(5, AuthorizationService.PermisosEstructuralesAdmin.Count);
+        Assert.Equal(4, AuthorizationService.PermisosEstructuralesAdmin.Count);
         Assert.Contains(Permisos.GestionarUsuarios, AuthorizationService.PermisosEstructuralesAdmin);
-        Assert.Contains(Permisos.ImportarPlanillas, AuthorizationService.PermisosEstructuralesAdmin);
         Assert.Contains(Permisos.GestionarDiagnostico, AuthorizationService.PermisosEstructuralesAdmin);
         Assert.Contains(Permisos.AdministrarTareas, AuthorizationService.PermisosEstructuralesAdmin);
         Assert.Contains(Permisos.AdministrarDocumentos, AuthorizationService.PermisosEstructuralesAdmin);

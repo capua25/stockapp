@@ -150,8 +150,6 @@ public class GrillasSinRecorteBarridoTests
             new MovimientoCajaDto(new DateOnly(2026, 3, 15), i % 2 == 0 ? "Ingreso" : "Egreso", "Compra de materiales de construcción",
                 "Distribuidora Municipal del Este SRL", "A-0004521", "Rentas Generales Departamentales", "Materiales de construcción",
                 98765432.10m, 12345678.90m, -98765432.10m))),
-        new("Historial de importaciones", () => new HistorialImportacionesView(), _ => Muchos<object>(i =>
-            new ImportacionHistorialDto(Guid.NewGuid(), new DateTime(2026, 9, 30, 15, 0, 0, DateTimeKind.Utc), 2026, "Operador de Depósito Central", i % 2 == 0))),
         new("Tareas", () => new TareaListView(), _ => Muchos<object>(i => new TareaFila(new Tarea
             {
                 Id = i, Titulo = "Reparar el bache de la calle Zorrilla frente a la escuela número doce", Estado = i % 2 == 0 ? EstadoTarea.Pendiente : EstadoTarea.EnCurso,

@@ -58,23 +58,12 @@ public class ShellMainViewModelGruposTests
     [InlineData("FINANZAS", "Gastos y facturas|Ingresos de caja|Libro caja|Control POA|Calendario de pagos")]
     [InlineData("GESTIÓN", "Tareas|Documentos")]
     [InlineData("ANÁLISIS", "Reportes")]
-    [InlineData("ADMINISTRACIÓN", "Catálogos|Usuarios|Mantenimiento|Importar planillas")]
+    [InlineData("ADMINISTRACIÓN", "Catálogos|Usuarios|Mantenimiento")]
     public void Seccion_TieneSusItemsEnElOrdenDeLaSpec(string seccion, string titulos)
     {
         var (vm, _, _) = Crear(RolUsuario.Admin);
 
         Assert.Equal(titulos.Split('|'), vm.Grupos.Single(g => g.Titulo == seccion).Items.Select(i => i.Titulo));
-    }
-
-    [Fact]
-    public void Importacion_ExisteEnAdministracionPeroQuedaOcultaAunParaAdmin()
-    {
-        // ImportacionHabilitada=false (2026-09-04): el ítem existe pero no se muestra (spec §4.1).
-        var (vm, _, _) = Crear(RolUsuario.Admin);
-        var administracion = vm.Grupos.Single(g => g.Titulo == "ADMINISTRACIÓN");
-
-        Assert.Contains(administracion.Items, i => i.Seccion == "Importacion");
-        Assert.DoesNotContain(administracion.ItemsVisibles, i => i.Seccion == "Importacion");
     }
 
     [Fact]

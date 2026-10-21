@@ -270,9 +270,6 @@ public partial class App : AvaloniaApp
         services.AddTransient<IConfiguracionAlertasService>(sp =>
             new ConfiguracionAlertasApiClient(sp.GetRequiredService<HttpClient>()));
 
-        // ── Módulo Finanzas — F5d: importador de planillas (historial + análisis/confirmación/reversa) ──
-        services.AddTransient<IImportacionService, ImportacionApiClient>();
-
         // ── Inc 7 Fase B: licenciamiento (pantalla de bloqueo + reset de Admin) ──
         services.AddTransient<ILicenciaService>(sp => new LicenciaApiClient(sp.GetRequiredService<HttpClient>()));
         services.AddTransient<IResetAdminService>(sp => new ResetAdminApiClient(sp.GetRequiredService<HttpClient>()));
@@ -397,11 +394,6 @@ public partial class App : AvaloniaApp
         services.AddTransient<ControlPoaViewModel>();
         services.AddTransient<AdjuntosPanelViewModel>();
         services.AddTransient<CalendarioPagosViewModel>();
-
-        // ── Módulo Finanzas — F5d: importador de planillas ────────────────────
-        services.AddTransient<HistorialImportacionesViewModel>();
-        services.AddTransient<NuevaImportacionViewModel>();
-        services.AddTransient<StockApp.Presentation.ViewModels.Finanzas.ImportacionViewModel>();
 
         // ── Módulo Tareas (spec 2026-08-01) ───────────────────────────────────
         services.AddTransient<TareaListViewModel>();

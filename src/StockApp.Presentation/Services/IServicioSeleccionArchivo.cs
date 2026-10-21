@@ -14,9 +14,4 @@ public interface IServicioSeleccionArchivo
     /// </summary>
     Task<(string NombreArchivo, byte[] Contenido)?> SeleccionarArchivoAsync();
 
-    /// <summary>
-    /// F5d: selector de archivo filtrando por .ods (OpenDocument Spreadsheet), para elegir las
-    /// planillas de Gastos/POA del importador. Mismo contrato que SeleccionarArchivoAsync().
-    /// </summary>
-    Task<(string NombreArchivo, byte[] Contenido)?> SeleccionarArchivoOdsAsync();
 }

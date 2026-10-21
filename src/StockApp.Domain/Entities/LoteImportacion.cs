@@ -1,5 +1,6 @@
 namespace StockApp.Domain.Entities;
 
+// Esquema del importador ODS (eliminado 2026-10-21): inutilizado, se conserva para no generar drops. No borrar sin decisión.
 /// <summary>
 /// Lote de una corrida del importador de planillas (spec F5c/F5d), como entidad real en vez de
 /// cinco columnas Guid sueltas sin FK (fix/integridad-referencial). Antes, la fuente de verdad
@@ -38,26 +39,4 @@ public class LoteImportacion
 
     public DateTime? RevertidaEn { get; private set; }
     public int? RevertidaPorUsuarioId { get; private set; }
-
-    /// <summary>
-    /// Único punto de mutación del estado "revertida" — mismo criterio que
-    /// PagoGasto.Automatico (ver PagoGastoTests): RevertidaEn/RevertidaPorUsuarioId solo pueden
-    /// setearse JUNTOS. Un lote con uno seteado y el otro null quedaría en un estado ambiguo que
-    /// ListarHistorialAsync/RevertirAsync no sabrían interpretar (¿está revertido o no?).
-    ///
-    /// Idempotente a propósito (Minor 7 del review adversarial): antes, llamarla dos veces
-    /// pisaba RevertidaEn/RevertidaPorUsuarioId en silencio con la segunda fecha/usuario. Hoy la
-    /// protege también el guard "yaRevertida" de ImportacionRepository.RevertirAsync, pero la
-    /// entidad no puede depender de que TODO llamador futuro repita ese guard — es el único punto
-    /// de mutación documentado como tal, así que se defiende sola.
-    /// </summary>
-    public void MarcarRevertida(DateTime fecha, int usuarioId)
-    {
-        if (RevertidaEn is not null)
-            throw new InvalidOperationException(
-                $"El lote {Id} ya fue revertido el {RevertidaEn:O} por el usuario {RevertidaPorUsuarioId}.");
-
-        RevertidaEn = fecha;
-        RevertidaPorUsuarioId = usuarioId;
-    }
 }

@@ -6,7 +6,7 @@ namespace StockApp.Application.Tests.Authorization;
 public class PermisosTests
 {
     [Fact]
-    public void Todos_ContieneLasDiecisieteConstantesExactas()
+    public void Todos_ContieneLasDieciseisConstantesExactas()
     {
         var esperados = new[]
         {
@@ -21,7 +21,6 @@ public class PermisosTests
             Permisos.RegistrarGastos,
             Permisos.RegistrarPagos,
             Permisos.RegistrarIngresos,
-            Permisos.ImportarPlanillas,
             Permisos.GestionarDiagnostico,
             Permisos.GestionarTareas,
             Permisos.AdministrarTareas,

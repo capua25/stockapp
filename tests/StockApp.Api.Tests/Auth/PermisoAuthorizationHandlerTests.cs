@@ -48,10 +48,9 @@ public class PermisoAuthorizationHandlerTests
 
     [Theory]
     [InlineData(Permisos.GestionarUsuarios)]
-    [InlineData(Permisos.ImportarPlanillas)]
     [InlineData(Permisos.GestionarDiagnostico)]
     [InlineData(Permisos.AdministrarTareas)]
-    public async Task Operador_LosCuatroEstructurales_RechazanAunqueElProveedorLosTuviera(string permisoEstructural)
+    public async Task Operador_LosTresEstructurales_RechazanAunqueElProveedorLosTuviera(string permisoEstructural)
     {
         // Sesión "envenenada": el proveedor devuelve el permiso estructural, pero el handler
         // tiene que rechazar igual — el corte es ANTES de consultar el proveedor.

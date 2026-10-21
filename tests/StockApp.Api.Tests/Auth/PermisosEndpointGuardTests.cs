@@ -83,11 +83,6 @@ public class PermisosEndpointGuardTests : ApiTestBase
         ("DELETE", "/finanzas/gastos/{id}/pagos/{pagoId}", Permisos.RegistrarPagos),
         ("POST",   "/finanzas/gastos/{id}/movimientos", Permisos.RegistrarGastos),
 
-        ("POST",   "/finanzas/importar/analizar", Permisos.ImportarPlanillas),
-        ("POST",   "/finanzas/importar/confirmar", Permisos.ImportarPlanillas),
-        ("POST",   "/finanzas/importar/revertir/{id}", Permisos.ImportarPlanillas),
-        ("GET",    "/finanzas/importar/historial", Permisos.ImportarPlanillas),
-
         // Bug de coherencia (2026-08-15): la policy HTTP solo exigía RegistrarMovimientos
         // mientras IngresoPorFacturaService (RegistrarAsync/AnularLoteAsync) exige además
         // RegistrarGastos sin condición — el 403 llegaba recién desde Application, más adentro.

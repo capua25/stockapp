@@ -28,11 +28,10 @@ namespace StockApp.Presentation.UiTests;
 /// <summary>
 /// El guardián del sistema nuevo (spec §8.2): cobertura de todas las vistas del ensamblado, piezas del tema viejo
 /// prohibidas en v2 (convención 11), botón v2 con variante (un <c>Button</c> sin clase dentro de <c>.ui2</c> no recibe
-/// estilo v2), opacidades literales y overlays de modal (convención 25). Lo que sigue en v1 (la importación) lo
-/// custodia <see cref="GuardianImportacionV1Tests"/>.
+/// estilo v2), opacidades literales y overlays de modal (convención 25).
 ///
-/// Toda vista nueva entra en <see cref="VistasV2"/> (o, si es v1, en <see cref="GuardianImportacionV1Tests.VistasV1Vivas"/>);
-/// <see cref="Guardian_CubreTodasLasVistasDelEnsamblado"/> exige que no quede ninguna fuera de las tres listas.
+/// Toda vista nueva entra en <see cref="VistasV2"/> (o en <see cref="VistasFueraDelGuardian"/> con su razón);
+/// <see cref="Guardian_CubreTodasLasVistasDelEnsamblado"/> exige que no quede ninguna fuera de las dos listas.
 /// </summary>
 public class GuardianSistemaV2Tests
 {
@@ -127,8 +126,8 @@ public class GuardianSistemaV2Tests
 
     /// <summary>
     /// Enumera por reflexion todos los Control publicos, no abstractos, de los namespaces de vistas del ensamblado
-    /// StockApp.Presentation y exige que cada uno este en <see cref="VistasV2"/>,
-    /// <see cref="GuardianImportacionV1Tests.VistasV1Vivas"/> o <see cref="VistasFueraDelGuardian"/>: agregar una vista
+    /// StockApp.Presentation y exige que cada uno este en <see cref="VistasV2"/>
+    /// o <see cref="VistasFueraDelGuardian"/>: agregar una vista
     /// y olvidarla en las listas dejaria invariantes sin correr.
     ///
     /// El predicado de namespace excluye deliberadamente StockApp.Presentation.Controls: no son vistas, son piezas del
@@ -145,7 +144,6 @@ public class GuardianSistemaV2Tests
             .ToList();
 
         var cubiertas = VistasV2
-            .Concat(GuardianImportacionV1Tests.VistasV1Vivas)
             .Concat(VistasFueraDelGuardian)
             .ToHashSet();
 
@@ -161,7 +159,6 @@ public class GuardianSistemaV2Tests
         var listas = new[]
         {
             ("VistasV2", (IEnumerable<Type>)VistasV2),
-            ("VistasV1Vivas", GuardianImportacionV1Tests.VistasV1Vivas),
             ("VistasFueraDelGuardian", VistasFueraDelGuardian),
         };
 

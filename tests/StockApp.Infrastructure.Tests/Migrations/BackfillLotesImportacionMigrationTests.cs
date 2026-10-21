@@ -334,23 +334,9 @@ public sealed class BackfillLotesImportacionMigrationTests
             Assert.True(lotes.ContainsKey(idLoteDobleLogConfirmacion));
             Assert.Equal(2029, lotes[idLoteDobleLogConfirmacion].Ejercicio);
 
-            // ListarHistorialAsync (Bloqueante 2: antes de este fix, un lote sin fila en
-            // LotesImportacion desaparecía en silencio de este historial) tiene que devolver, como
-            // mínimo, los 3 lotes originales del caso base.
-            var repo = new ImportacionRepository(ctx);
-            var historial = await repo.ListarHistorialAsync();
-            var idsEnHistorial = historial.Select(h => h.IdImportacion).ToHashSet();
-
-            Assert.Contains(idLoteNormal, idsEnHistorial);
-            Assert.Contains(idLoteRevertido, idsEnHistorial);
-            Assert.Contains(idLoteHuerfano, idsEnHistorial);
-
-            var filaHuerfana = historial.Single(h => h.IdImportacion == idLoteHuerfano);
-            Assert.Equal(0, filaHuerfana.Ejercicio); // sentinel documentado (ver ImportacionRepository)
-            Assert.False(filaHuerfana.Revertida);
-
-            var filaRevertida = historial.Single(h => h.IdImportacion == idLoteRevertido);
-            Assert.True(filaRevertida.Revertida);
+            // La verificación vía ImportacionRepository.ListarHistorialAsync (3 lotes del caso base
+            // visibles en el historial) se retiró junto con el importador ODS (2026-10-21): los
+            // asserts de arriba ya cubren que los 3 lotes quedaron reconstruidos en la tabla.
         }
     }
 
@@ -434,9 +420,10 @@ public sealed class BackfillLotesImportacionMigrationTests
         var fechaReversionReal = new DateTime(2026, 5, 10, 12, 0, 0, DateTimeKind.Utc);
         await using (var ctx = CrearContexto(connectionString))
         {
-            var lote = await ctx.LotesImportacion.SingleAsync(l => l.Id == idLote);
-            lote.MarcarRevertida(fechaReversionReal, usuarioId);
-            await ctx.SaveChangesAsync();
+            // MarcarRevertida se eliminó con el importador ODS (2026-10-21): se simula la
+            // reversión real con un UPDATE directo, que deja la fila en el mismo estado.
+            await ctx.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE \"LotesImportacion\" SET \"RevertidaEn\" = {fechaReversionReal}, \"RevertidaPorUsuarioId\" = {usuarioId} WHERE \"Id\" = {idLote}");
         }
 
         // Down() SOLO hasta AgregaLotesImportacion (la tabla y sus filas -- incluida la reversión

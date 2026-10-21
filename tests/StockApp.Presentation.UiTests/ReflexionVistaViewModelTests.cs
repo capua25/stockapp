@@ -91,29 +91,6 @@ public class ReflexionVistaViewModelTests
         AssertTodasExpuestas(axaml, miembros, exclusiones);
     }
 
-    [Fact]
-    public void NuevaImportacionViewModel_TodaPropiedadYComando_TieneUnControlEnLaVista()
-    {
-        var axaml = LeerAxaml("StockApp.Presentation/Views/Finanzas/NuevaImportacionView.axaml");
-        var miembros = PropiedadesPublicasDeclaradas(typeof(NuevaImportacionViewModel));
-
-        var exclusiones = new HashSet<string>
-        {
-            // Colecciones RAW envueltas en su *View (DataGridCollectionView) para que el DataGrid
-            // pueda ordenar (ver AllowSort/IDataGridCollectionView, DataGridSortClickTests.cs) --
-            // el axaml bindea FilasGastoView/FilasIngresoView/FilasLineaPoaView, nunca la coleccion
-            // cruda.
-            nameof(NuevaImportacionViewModel.FilasGasto),
-            "FilasIngreso",
-            "FilasLineaPoa",
-            // Gating via ComandoDeGuardado(ConfirmarAsync, () => PuedeConfirmar) sobre ConfirmarCommand:
-            // Button.IsEnabled se deriva automaticamente del Command, no necesita un binding propio
-            // -- el mensaje visible para el usuario es MensajeConfirmarBloqueado (esa SI esta bindeada).
-            nameof(NuevaImportacionViewModel.PuedeConfirmar),
-        };
-        AssertTodasExpuestas(axaml, miembros, exclusiones);
-    }
-
     /// <summary>
     /// Encargo puntual: auditar la vista mas critica que quedo sin cubrir en la ronda anterior
     /// (post-mortem literal: "en ingreso por factura se llego a 2023 tests verdes con una

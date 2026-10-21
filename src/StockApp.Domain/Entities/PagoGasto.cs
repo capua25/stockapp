@@ -43,6 +43,7 @@ public class PagoGasto
     /// pago automático de contado que el propio importador creó (que SÍ se da de baja en la
     /// reversa) de un pago manual real (que NUNCA se toca: la reversa se bloquea si lo encuentra).
     /// </summary>
+    // Esquema del importador ODS (eliminado 2026-10-21): inutilizado, se conserva para no generar drops. No borrar sin decisión.
     public Guid? IdImportacion { get; set; }
 
     /// <summary>

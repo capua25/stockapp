@@ -213,8 +213,6 @@ public class ShellMainSeccionActivaTests
         var navegacion = new Mock<INavigationService>();
         var vm = Crear(navegacion.Object, RolUsuario.Admin);
         var items = vm.Grupos.SelectMany(g => g.Items).Append(vm.ItemInicio)
-            // Importar planillas está deshabilitado (ImportacionHabilitada): su comando no navega.
-            .Where(i => i.Seccion != "Importacion" || ShellMainViewModel.ImportacionHabilitada)
             .ToList();
         // Con el hub de Reportes y Catálogos consolidados el sidebar de Admin tiene 17 ítems (Inicio + 16).
         Assert.True(items.Count >= 17);

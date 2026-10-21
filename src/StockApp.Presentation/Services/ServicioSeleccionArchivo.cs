@@ -24,24 +24,10 @@ public class ServicioSeleccionArchivo : IServicioSeleccionArchivo
         return Dispatcher.UIThread.InvokeAsync(() => SeleccionarInternoAsync(FiltroDocumentosEImagenes()));
     }
 
-    public Task<(string NombreArchivo, byte[] Contenido)?> SeleccionarArchivoOdsAsync()
-    {
-        if (AvaloniaApp.Current is null)
-            return Task.FromResult<(string, byte[])?>(null);
-
-        return Dispatcher.UIThread.InvokeAsync(() => SeleccionarInternoAsync(FiltroOds()));
-    }
-
     private static FilePickerFileType FiltroDocumentosEImagenes() => new("Documentos e imágenes")
     {
         Patterns = new[] { "*.pdf", "*.jpg", "*.jpeg", "*.png" },
         MimeTypes = new[] { "application/pdf", "image/jpeg", "image/png" },
-    };
-
-    private static FilePickerFileType FiltroOds() => new("Planillas OpenDocument")
-    {
-        Patterns = new[] { "*.ods" },
-        MimeTypes = new[] { "application/vnd.oasis.opendocument.spreadsheet" },
     };
 
     private static async Task<(string, byte[])?> SeleccionarInternoAsync(FilePickerFileType filtro)

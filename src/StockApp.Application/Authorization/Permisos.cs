@@ -21,13 +21,8 @@ public static class Permisos
     public const string RegistrarPagos            = "finanzas.pagos";
     public const string RegistrarIngresos         = "finanzas.ingresos";
 
-    // Finanzas — F5b: a diferencia de los permisos de arriba, este es Admin-only desde
-    // el vamos (no espera el futuro sistema de permisos por usuario). Importar planillas
-    // reemplaza datos históricos de todo el ejercicio; Operador queda afuera por diseño.
-    public const string ImportarPlanillas         = "finanzas.importar";
-
-    // Backups programados (Entrega 1) — Admin-only desde el vamos, mismo criterio que
-    // ImportarPlanillas: superficie sensible (backups y, en la Entrega 2, logs del servidor).
+    // Backups programados (Entrega 1) — Admin-only desde el vamos: superficie sensible
+    // (backups y, en la Entrega 2, logs del servidor).
     public const string GestionarDiagnostico = "diagnostico.gestionar";
 
     // Tareas (spec 2026-08-01) — módulo independiente. GestionarTareas: crear, tomar,
@@ -65,7 +60,6 @@ public static class Permisos
         RegistrarGastos,
         RegistrarPagos,
         RegistrarIngresos,
-        ImportarPlanillas,
         GestionarDiagnostico,
         GestionarTareas,
         AdministrarTareas,

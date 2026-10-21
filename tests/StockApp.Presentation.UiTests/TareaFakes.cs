@@ -16,7 +16,7 @@ namespace StockApp.Presentation.UiTests;
 
 /// <summary>
 /// Fakes minimos de las dependencias de TareaListViewModel/TareaFormViewModel, mismo criterio que
-/// NuevaImportacionFakes.cs y MovimientoRegistroFakes.cs (este proyecto no referencia Moq). A
+/// FakesFinanzasCompartidos.cs y MovimientoRegistroFakes.cs (este proyecto no referencia Moq). A
 /// diferencia de los fakes que solo devuelven datos fijos, TareaServiceFake MUTA las Tarea reales
 /// (via Tarea.CambiarEstado/CambiarPrioridad, las mismas reglas del dominio) para que un test que
 /// hace click en "Tomar" y despues vuelve a leer la lista vea el estado nuevo de verdad -- eso es

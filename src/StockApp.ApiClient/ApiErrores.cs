@@ -12,10 +12,8 @@ internal sealed record IdCreado(int Id);
 /// <summary>
 /// Proyección del problem+json (RFC 7807) de la API. Además de title/detail/status,
 /// DomainExceptionHandler agrega extensiones estructuradas para StockInsuficienteException
-/// (productoId/stockActual/cantidadSolicitada — Task 5 de este plan), para
-/// ValidacionImportacionException (errors: diccionario "Tipo[i].Campo" → mensajes — F5d Task 4,
-/// fix de review: sin esto la UI no puede resaltar la celda exacta del error de confirmación) y
-/// para AnulacionRequierePagoAutomaticoConfirmadoException (gastoId/montoPagoAutomatico —
+/// (productoId/stockActual/cantidadSolicitada — Task 5 de este plan) y para
+/// AnulacionRequierePagoAutomaticoConfirmadoException (gastoId/montoPagoAutomatico —
 /// anulación en cascada del pago automático de contado, unificación Contado ⇒ pago automático).
 /// ReadFromJsonAsync usa defaults Web: camelCase + case-insensitive.
 /// </summary>
@@ -27,8 +25,7 @@ internal sealed record ProblemaJson(
     decimal? StockActual,
     decimal? CantidadSolicitada,
     int? GastoId,
-    decimal? MontoPagoAutomatico,
-    [property: JsonPropertyName("errors")] IReadOnlyDictionary<string, string[]>? Errores);
+    decimal? MontoPagoAutomatico);
 
 /// <summary>
 /// Traducción centralizada HTTP → excepciones de dominio (spec 3b): UN solo lugar, los
@@ -93,7 +90,7 @@ internal static class ApiErrores
         {
             HttpStatusCode.NotFound        => new EntidadNoEncontradaException(mensaje),
             HttpStatusCode.Conflict        => CrearConflicto(problema, mensaje),
-            HttpStatusCode.BadRequest      => CrearBadRequest(problema, mensaje),
+            HttpStatusCode.BadRequest      => new ArgumentException(mensaje),
             HttpStatusCode.Forbidden       => new UnauthorizedAccessException(mensaje),
             HttpStatusCode.Unauthorized    => new UnauthorizedAccessException(mensaje),
             HttpStatusCode.TooManyRequests => new ReglaDeNegocioException(
@@ -122,21 +119,6 @@ internal static class ApiErrores
             return new AnulacionRequierePagoAutomaticoConfirmadoException(gastoId, montoPagoAutomatico);
 
         return new ReglaDeNegocioException(mensaje);
-    }
-
-    /// <summary>
-    /// 400 con extensión "errors" (diccionario "Tipo[i].Campo" → mensajes, F5d) →
-    /// ValidacionImportacionException reconstruida con el MISMO diccionario que armó
-    /// DomainExceptionHandler — preserva el detalle por campo para que la UI del importador
-    /// resalte la celda exacta. Cualquier otro 400 (validaciones simples de los demás
-    /// endpoints) → ArgumentException plano con el detail, como siempre.
-    /// </summary>
-    private static Exception CrearBadRequest(ProblemaJson? problema, string mensaje)
-    {
-        if (problema is { Errores: { Count: > 0 } errores })
-            return new ValidacionImportacionException(errores);
-
-        return new ArgumentException(mensaje);
     }
 
     private static async Task<ProblemaJson?> LeerProblemaAsync(HttpResponseMessage response)

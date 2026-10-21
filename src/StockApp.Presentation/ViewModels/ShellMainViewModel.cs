@@ -56,12 +56,6 @@ public partial class ShellMainViewModel : ViewModelBase
 
     public bool EsAdmin => _session.RolActual == RolUsuario.Admin;
 
-    // Importación queda apagada por pedido del usuario (2026-09-04): el módulo no se va a usar.
-    // El código NO se elimina — poner en true reactiva la sección completa (sidebar + navegación).
-    // Al reactivar, revertir también los asserts de Importación en Admin_VeTodo y en los dos
-    // tests NavImportacion_* de ShellMainViewModelTests.cs (quedaron documentados con comentario).
-    internal const bool ImportacionHabilitada = false;
-
     // ── Gating por permiso configurable (spec 2026-08-10) ─────────────────────
     // Misma condición que evalúa AuthorizationService.Verificar del lado servidor: Admin
     // siempre pasa, Operador según PermisosActuales. Esto es cosmética, no seguridad — la
@@ -267,7 +261,6 @@ public partial class ShellMainViewModel : ViewModelBase
                 CrearItem("Catálogos", "mdi-tag-multiple", NavCatalogosCommand, "Catalogos", () => PuedeGestionarCatalogos),
                 CrearItem("Usuarios", "mdi-account-cog", NavUsuariosCommand, "Usuarios", () => EsAdmin),
                 CrearItem("Mantenimiento", "mdi-database-cog", NavMantenimientoCommand, "Mantenimiento", () => EsAdmin),
-                CrearItem("Importar planillas", "mdi-file-upload", NavImportacionCommand, "Importacion", () => EsAdmin && ImportacionHabilitada),
             }),
         };
 
@@ -353,7 +346,6 @@ public partial class ShellMainViewModel : ViewModelBase
         [typeof(CatalogosViewModel)] = "Catalogos",
         [typeof(UsuariosAdminViewModel)] = "Usuarios",
         [typeof(MantenimientoViewModel)] = "Mantenimiento",
-        [typeof(ImportacionViewModel)] = "Importacion",
     };
 
     /// <summary>
@@ -611,18 +603,6 @@ public partial class ShellMainViewModel : ViewModelBase
     {
         SeccionActiva = "CalendarioPagos";
         _navigation.Navegar<CalendarioPagosViewModel>();
-    }
-
-    [RelayCommand]
-    private void NavImportacion()
-    {
-        if (!ImportacionHabilitada)
-        {
-            return;
-        }
-
-        SeccionActiva = "Importacion";
-        _navigation.Navegar<StockApp.Presentation.ViewModels.Finanzas.ImportacionViewModel>();
     }
 
     // ── Cerrar sesión ──────────────────────────────────────────────────────────

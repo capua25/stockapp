@@ -210,25 +210,6 @@ public class DomainExceptionHandlerTests
     }
 
     [Fact]
-    public async Task ValidacionImportacionException_Mapea400ConElDiccionarioDeErroresEnErrors()
-    {
-        var errores = new Dictionary<string, string[]>
-        {
-            ["Gastos[12].CodigoRubro"] = new[] { "El rubro 340 no existe ni fue declarado nuevo" },
-            ["LineasPoa[3].Programa"] = new[] { "Requerido" },
-        };
-
-        var (status, _, body) = await EjecutarAsync(new ValidacionImportacionException(errores));
-
-        Assert.Equal(StatusCodes.Status400BadRequest, status);
-        var errorsElement = body.RootElement.GetProperty("errors");
-        Assert.Equal(
-            "El rubro 340 no existe ni fue declarado nuevo",
-            errorsElement.GetProperty("Gastos[12].CodigoRubro")[0].GetString());
-        Assert.Equal("Requerido", errorsElement.GetProperty("LineasPoa[3].Programa")[0].GetString());
-    }
-
-    [Fact]
     public async Task TryHandleAsync_ExcepcionDeNegocio_LogueaWarning()
     {
         var espia = new LoggerEspia();

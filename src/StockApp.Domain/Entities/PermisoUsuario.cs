@@ -4,8 +4,8 @@ namespace StockApp.Domain.Entities;
 /// Un permiso configurable concedido a un usuario Operador. VERDAD ÚNICA de los permisos
 /// configurables (spec 2026-08-10, decisión 3): resolver = SELECT, sin merge ni overrides.
 /// Sin fila para un (UsuarioId, Permiso) = ese permiso no está concedido (fail-closed).
-/// Nunca existen filas para los 4 permisos estructurales (GestionarUsuarios, ImportarPlanillas,
-/// GestionarDiagnostico, AdministrarTareas) — esos nunca se resuelven contra esta tabla.
+/// Nunca existen filas para los permisos estructurales (GestionarUsuarios, GestionarDiagnostico,
+/// AdministrarTareas, AdministrarDocumentos) — esos nunca se resuelven contra esta tabla.
 /// </summary>
 public class PermisoUsuario
 {

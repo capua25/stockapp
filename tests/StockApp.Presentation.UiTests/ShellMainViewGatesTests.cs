@@ -301,12 +301,11 @@ public class ShellMainViewGatesTests
     [AvaloniaFact]
     public void OperadorConTODOSLosPermisos_SIGUE_SinVerLoAdminOnly()
     {
-        // ESTE es el test mas importante del archivo. Importacion, Mantenimiento y Usuarios van
+        // ESTE es el test mas importante del archivo. Mantenimiento y Usuarios van
         // por EsAdmin, y AuthorizationService.PermisosEstructuralesAdmin corta ANTES de mirar
         // PermisosActuales: un Operador no llega ahi ni con el permiso en la lista.
         var (window, vm) = Montar(RolUsuario.Operador, Permisos.Todos.ToArray());
 
-        Assert.False(EsVisible(window, vm.NavImportacionCommand));
         Assert.False(EsVisible(window, vm.NavMantenimientoCommand));
         Assert.False(EsVisible(window, vm.NavUsuariosCommand));
     }
@@ -321,42 +320,8 @@ public class ShellMainViewGatesTests
         Assert.True(EsVisible(window, vm.NavIngresoPorFacturaCommand));
         Assert.True(EsVisible(window, vm.NavReportesCommand));
         Assert.True(EsVisible(window, vm.NavCatalogosCommand));
-        // Importación: ver Admin_NoVeImportacion_PorqueEstaDeshabilitada. Apagada a propósito
-        // por ShellMainViewModel.ImportacionHabilitada (2026-09-04); revertir este assert a
-        // True si se reactiva la constante.
         Assert.True(EsVisible(window, vm.NavMantenimientoCommand));
         Assert.True(EsVisible(window, vm.NavUsuariosCommand));
-    }
-
-    // ── Importación apagada (2026-09-04) ────────────────────────────────────────
-
-    /// <summary>
-    /// Guardián de "invisible": ShellMainViewModel.ImportacionHabilitada = false apaga el
-    /// ítem Importación (dentro de ADMINISTRACIÓN) aunque el usuario sea Admin (el gate real sigue siendo
-    /// EsAdmin && ImportacionHabilitada). Si se reactiva la constante, este test debe pasar a
-    /// Assert.True.
-    /// </summary>
-    [AvaloniaFact]
-    public void Admin_NoVeImportacion_PorqueEstaDeshabilitada()
-    {
-        var (window, vm) = Montar(RolUsuario.Admin);
-
-        Assert.False(EsVisible(window, vm.NavImportacionCommand));
-    }
-
-    /// <summary>
-    /// Importación existe como ítem de ADMINISTRACIÓN (spec §4.1) pero queda fuera de ItemsVisibles
-    /// para Admin, mientras la sección sigue visible por sus otros ítems.
-    /// </summary>
-    [AvaloniaFact]
-    public void Admin_ConImportacionDeshabilitada_ElItemExistePeroNoEstaEnItemsVisibles()
-    {
-        var (_, vm) = Montar(RolUsuario.Admin);
-        var administracion = vm.Grupos.Single(g => g.Titulo == "ADMINISTRACIÓN");
-
-        Assert.Contains(administracion.Items, i => i.Seccion == "Importacion");
-        Assert.DoesNotContain(administracion.ItemsVisibles, i => i.Seccion == "Importacion");
-        Assert.True(administracion.EsVisible);
     }
 
     // ── Task 5.3, Step 4: gates de grupo ──────────────────────────────────────────
@@ -395,10 +360,9 @@ public class ShellMainViewGatesTests
         Assert.True(administracion.EsVisible);
         Assert.Contains(administracion.ItemsVisibles, i => i.Seccion == "Catalogos");
         // ...pero ningún ítem estructuralmente Admin-only.
-        Assert.DoesNotContain(administracion.ItemsVisibles, i => i.Seccion is "Usuarios" or "Mantenimiento" or "Importacion");
+        Assert.DoesNotContain(administracion.ItemsVisibles, i => i.Seccion is "Usuarios" or "Mantenimiento");
         Assert.False(EsVisible(window, vm.NavUsuariosCommand));
         Assert.False(EsVisible(window, vm.NavMantenimientoCommand));
-        Assert.False(EsVisible(window, vm.NavImportacionCommand));
     }
 
     // ── Ruling 6: revocación en caliente ─────────────────────────────────────────
