@@ -202,6 +202,7 @@ public class MigrarVpsTests : IDisposable
             echo "ultima_migracion=20260101000000_Inicial"
             echo "[conteos]"
             printf 'Usuarios\t3\n'
+            printf 'LogsAuditoria\t40\n'
         } > "$salida/volcado-$ts.manifiesto"
         tar -cf "$salida/backups-historial.tar" --files-from /dev/null
         printf '%b' "${STUB_VOLCADO_OVERRIDES-}" > "$salida/overrides-api-env.txt"
@@ -386,7 +387,10 @@ public class MigrarVpsTests : IDisposable
                         cat "$E/dbsize"
                         ;;
                     *__EFMigrationsHistory*) cat "$E/migracion" ;;
-                    *LogsAuditoria*) cat "$E/logs-auditoria" ;;
+                    *LogsAuditoria*)
+                        if [[ -f "$E/falla-logs" ]]; then echo "psql: error: connection refused" >&2; exit 2; fi
+                        cat "$E/logs-auditoria"
+                        ;;
                     *) echo "stub: SQL no prevista" >&2; exit 99 ;;
                 esac
                 ;;
@@ -436,7 +440,7 @@ public class MigrarVpsTests : IDisposable
                     echo 'curl: (7) Failed to connect to 127.0.0.1 port 8443' >&2; exit 7
                 fi
                 ;;
-            'mkdir -m 700 "$HOME/'* | 'chmod 600 "$HOME/'* | 'sha256sum "$HOME/'* | 'find "$HOME/stockapp-deploy/migracion" '* | '"$HOME/stockapp-deploy/migracion/'*)
+            'mkdir -m 700 "$HOME/'* | 'chmod 600 "$HOME/'* | 'sha256sum "$HOME/'* | 'find "$HOME/stockapp-deploy/migracion" '* | '"$HOME/stockapp-deploy/migracion/'* | 'du -sh -- "$HOME/stockapp-deploy/migracion/'* | 'rm -r -- "$HOME/stockapp-deploy/migracion/'*)
                 if [[ "$lado" != nuevo ]]; then echo "stub ssh: comando no previsto en el $lado: $cmd" >&2; exit 99; fi
                 HOME="$E/home" bash -c "$cmd" < /dev/null
                 ;;
@@ -578,7 +582,28 @@ public class MigrarVpsTests : IDisposable
         BashLimpio.EscribirEjecutable(Path.Combine(Bin, "ssh"), SshFalso);
         BashLimpio.EscribirEjecutable(Path.Combine(Bin, "curl"), CurlFalso);
         BashLimpio.EscribirEjecutable(Path.Combine(Bin, "scp"), ScpFalso);
+        BashLimpio.EscribirEjecutable(Path.Combine(Bin, "pg_restore"), PgRestoreFalso);
     }
+
+    /// <summary>
+    /// pg_restore falso del operador (--desde-backup). Reproduce de pg_restore 16.15, verificado contra un
+    /// dump -Fc real de pg_dump 16.15: <c>--list</c> imprime el encabezado (";", "; Archive created at
+    /// &lt;fecha en la zona local&gt;", dbname, TOC Entries...) y sale 0; un archivo sin la firma PGDMP sale 1
+    /// con "input file does not appear to be a valid archive". Como el real, NO comprueba que el archivo
+    /// esté completo: un -Fc truncado igual pasa --list (por eso el .sha256 hermano importa).
+    /// </summary>
+    private const string PgRestoreFalso = "#!/usr/bin/env bash\n" + """
+        { printf 'pg_restore\tARGS:'; printf ' %s' "$@"; printf '\n'; } >> "$RASTRO"
+        [[ $# -eq 2 && "$1" == --list && -f "$2" ]] || { echo "stub pg_restore: uso inesperado: $*" >&2; exit 99; }
+        if [[ "$(head -c 5 "$2")" != PGDMP ]]; then
+            echo "pg_restore: error: input file does not appear to be a valid archive" >&2
+            exit 1
+        fi
+        printf ';\n'
+        if [[ -z "${STUB_PG_RESTORE_SIN_FECHA-}" ]]; then printf '; Archive created at %s\n' "${STUB_PG_RESTORE_FECHA:-2026-10-19 00:00:12 -03}"; fi
+        printf ';     dbname: stockapp\n;     TOC Entries: 5\n;     Compression: gzip\n;     Dump Version: 1.15-0\n;     Format: CUSTOM\n'
+        printf ';     Dumped from database version: 16.15\n;     Dumped by pg_dump version: 16.15\n;\n;\n; Selected TOC Entries:\n;\n'
+        """;
 
     private void EstadoInicialDeLosHosts()
     {
@@ -3543,5 +3568,625 @@ public class MigrarVpsTests : IDisposable
         Assert.Equal("masked", File.ReadAllText(Host("viejo", "enabled")).Trim());
         // R46: por ssh no se lo puede detener; hay que apagarlo desde el panel del proveedor.
         Assert.Contains("panel del proveedor", r.Salida);
+    }
+    // =====================================================================================
+    // --desde-backup <dump> [--manifiesto <m>] (spec 6.5.7: recuperación ante desastres)
+    // =====================================================================================
+
+    private const string NombreBackup = "backup_20261019_030000500.dump";
+    private const string FechaBackup = "2026-10-19 00:00:12 -03";
+    private string BackupDir => Path.Combine(_dir, "backups-del-operador");
+    private string Backup => Path.Combine(BackupDir, NombreBackup);
+
+    /// <summary>
+    /// El dump que dejó bajar-backup-vps.sh: un -Fc (firma PGDMP) de <paramref name="bytes"/> bytes y, si
+    /// <paramref name="sha"/> no es null, su .sha256 hermano con el formato de sha256sum ("" = el correcto).
+    /// </summary>
+    private void PlantarBackup(int bytes = 2048, string? sha = "", bool firma = true)
+    {
+        Directory.CreateDirectory(BackupDir);
+        var contenido = (firma ? "PGDMP" : "XXXXX") + new string('x', Math.Max(0, bytes - 5));
+        File.WriteAllText(Backup, contenido);
+        if (sha is not null)
+            File.WriteAllText(Backup + ".sha256", $"{(sha == "" ? Sha256(Backup) : sha)}  {NombreBackup}\n");
+    }
+
+    /// <summary>El manifiesto de un volcado de ese mismo dump (o de otro, para los casos de identidad).</summary>
+    private string PlantarManifiesto(string? dump = null, string? sha = null)
+    {
+        var ruta = Path.Combine(BackupDir, "volcado-20261019T030000Z.manifiesto");
+        File.WriteAllText(ruta,
+            "# manifiesto-migracion v1\nfecha_utc=2026-10-19T03:00:00Z\n" +
+            $"dump={dump ?? NombreBackup}\nsha256={sha ?? Sha256(Backup)}\nultima_migracion=20260101000000_Inicial\n" +
+            "[conteos]\nUsuarios\t3\nLogsAuditoria\t40\n");
+        return ruta;
+    }
+
+    /// <summary>En --desde-backup no hay viejo: el usuario real de V5 y V8 sale del .env del nuevo.</summary>
+    private void CredencialEnElEnvNuevo() =>
+        File.AppendAllText(EnvNuevo, $"VPS_ADMIN_USER=martin\nVPS_ADMIN_PASSWORD={Contrasena}\n");
+
+    private Resultado CorrerDesdeBackup(string[]? extra = null, string? stdin = "RESTAURAR\n", IDictionary<string, string>? env = null) =>
+        Correr(new[] { "--desde-backup", Backup, "--env-nuevo", EnvNuevo }.Concat(extra ?? []).ToArray(),
+            stdin, env, conArgumentosBase: false);
+
+    private static string? LineaDeV(string salida, string v) =>
+        salida.Split('\n').LastOrDefault(l => Regex.IsMatch(l, $@"^\s*{v}\s"));
+
+    [Theory]
+    [InlineData("chico")]
+    [InlineData("ilegible")]
+    [InlineData("inexistente")]
+    public void DesdeBackup_DumpChicoOIlegible_Sale3(string caso)
+    {
+        CredencialEnElEnvNuevo();
+        switch (caso)
+        {
+            case "chico": PlantarBackup(bytes: 1000); break;
+            case "ilegible": PlantarBackup(firma: false); break;
+            case "inexistente": Directory.CreateDirectory(BackupDir); break;
+        }
+
+        var r = CorrerDesdeBackup();
+
+        Assert.True(r.Exit == 3, r.Todo);
+        // Se sabe antes de tocar nada: ni un comando a un servidor, ni una corrida.
+        Assert.Empty(ComandosRemotos(r.Rastro));
+        Assert.Empty(Corridas());
+        Assert.Contains(caso switch { "chico" => "1024", "ilegible" => "pg_restore --list", _ => "no existe" }, r.Salida);
+    }
+
+    [Theory]
+    [InlineData("hash-distinto")]
+    [InlineData("otro-nombre")]
+    [InlineData("ilegible")]
+    public void DesdeBackup_ShaHermanoDistinto_Sale3(string caso)
+    {
+        CredencialEnElEnvNuevo();
+        PlantarBackup();
+        File.WriteAllText(Backup + ".sha256", caso switch
+        {
+            "hash-distinto" => $"{new string('0', 64)}  {NombreBackup}\n",
+            "otro-nombre" => $"{Sha256(Backup)}  backup_20261018_030000123.dump\n",
+            _ => "no soy un sha256sum\n",
+        });
+
+        var r = CorrerDesdeBackup();
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.Contains(".sha256", r.Salida);
+        Assert.Empty(ComandosRemotos(r.Rastro));
+        Assert.Empty(Corridas());
+    }
+
+    [Fact]
+    public void DesdeBackup_ListadoSinFecha_Sale8SinTocarNada()
+    {
+        // Sin "Archive created at" no se puede decir qué se pierde: no se confirma a ciegas.
+        CredencialEnElEnvNuevo();
+        PlantarBackup();
+
+        var r = CorrerDesdeBackup(env: Entorno(("STUB_PG_RESTORE_SIN_FECHA", "1")));
+
+        Assert.True(r.Exit == 8, r.Todo);
+        Assert.Contains("Archive created at", r.Salida);
+        Assert.Empty(ComandosRemotos(r.Rastro));
+        Assert.Empty(Corridas());
+    }
+
+    [Fact]
+    public void DesdeBackup_ShaHermanoCorrecto_SeVerificaYSigue()
+    {
+        CredencialEnElEnvNuevo();
+        PlantarBackup();
+
+        var r = CorrerDesdeBackup();
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        Assert.Contains($"{NombreBackup}.sha256 verificado", r.Stdout);
+    }
+
+    [Fact]
+    public void DesdeBackup_SinShaHermano_LoDiceYSigue()
+    {
+        CredencialEnElEnvNuevo();
+        PlantarBackup(sha: null);
+
+        var r = CorrerDesdeBackup();
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        Assert.Contains("sin .sha256 al lado", r.Stdout);
+    }
+
+    [Fact]
+    public void DesdeBackup_SinManifiesto_SinV6NiV10_Go()
+    {
+        CredencialEnElEnvNuevo();
+        PlantarBackup();
+
+        var r = CorrerDesdeBackup();
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        var corrida = UnaCorrida("desde-backup");
+        Assert.Equal("desde-backup", ClaveDeEstado(corrida, "modo"));
+        Assert.Equal("resultado=GO", File.ReadAllLines(Path.Combine(corrida, "estado")).Last());
+        Assert.Equal(NombreBackup, ClaveDeEstado(corrida, "volcado"));
+        Assert.Equal(Sha256(Backup), ClaveDeEstado(corrida, "sha256"));
+        Assert.Equal(FechaBackup, ClaveDeEstado(corrida, "fecha_backup"));
+        Assert.Equal(MachineNuevo, ClaveDeEstado(corrida, "machine_id_nuevo"));
+        Assert.Null(ClaveDeEstado(corrida, "machine_id_viejo"));
+        Assert.Null(ClaveDeEstado(corrida, "env_viejo"));
+        Assert.Null(ClaveDeEstado(corrida, "congelado_utc"));
+        Assert.Null(ClaveDeEstado(corrida, "fin_rollback"));
+        // Pasos 3, 4, 8, 9, 11 y 12; el 5, 6, 7 y 10 son del VPS viejo o de su volcado: omitidos (contrato
+        // paso_<n>=ok|omitido).
+        foreach (var n in new[] { 1, 2, 3, 4, 8, 9, 11, 12, 13 })
+            Assert.Matches(@"^ok ", PasoDeEstado(corrida, n) ?? $"(falta paso_{n})");
+        foreach (var n in new[] { 5, 6, 7, 10 })
+            Assert.Matches(@"^omitido ", PasoDeEstado(corrida, n) ?? $"(falta paso_{n})");
+        // Sin manifiesto, restaurar verifica la estructura y no los conteos; V6 no corre y V10 no existe.
+        var restaurar = Assert.Single(LineasDeBloque(r.Rastro, "restaurar"));
+        Assert.Contains("--recrear-base stockapp", restaurar);
+        Assert.Contains("/" + NombreBackup, restaurar);
+        Assert.DoesNotContain("--manifiesto", restaurar);
+        Assert.Contains("OMITIDO", LineaDeV(r.Stdout, "V6") ?? "(sin V6)");
+        Assert.DoesNotContain(" OK", LineaDeV(r.Stdout, "V10") ?? "");
+        foreach (var v in new[] { "V1", "V2", "V3", "V4", "V5", "V7", "V8" })
+            Assert.Contains(" OK", LineaDeV(r.Stdout, v) ?? $"(sin {v})");
+        // La confirmación dice qué se pierde: todo lo posterior a la fecha del dump (pg_restore --list).
+        Assert.Contains($"todo lo posterior a {FechaBackup} se pierde", r.Stdout);
+        // El historial no viaja (no hay tar) y la API arrancó habilitada.
+        Assert.DoesNotContain("-xpf", r.Rastro);
+        Assert.Contains(StartNuevo, r.Rastro);
+        // El usuario real de V5 sale del .env del nuevo; su contraseña viaja por stdin y no queda en ningún lado.
+        Assert.Contains("\"martin\"", File.ReadAllText(Path.Combine(Estado, "login-operador-stdin.txt")));
+        Assert.DoesNotContain(Contrasena, r.Salida);
+        Assert.DoesNotContain(Contrasena, r.Rastro);
+        Assert.DoesNotContain(Contrasena, File.ReadAllText(Path.Combine(corrida, "registro.log")));
+        Assert.DoesNotContain(Contrasena, File.ReadAllText(Path.Combine(corrida, "estado")));
+        Assert.DoesNotContain(Contrasena, File.ReadAllText(Path.Combine(Estado, "entorno-hijos.txt")));
+    }
+
+    [Fact]
+    public void DesdeBackup_ConManifiesto_VerificaConteosYCorreV6()
+    {
+        CredencialEnElEnvNuevo();
+        PlantarBackup();
+        var manifiesto = PlantarManifiesto();
+
+        var r = CorrerDesdeBackup(["--manifiesto", manifiesto]);
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        var restaurar = LineasDeBloque(r.Rastro, "restaurar").ToList();
+        Assert.Contains(restaurar, l => l.Contains("--recrear-base stockapp") && l.Contains("--manifiesto ") && l.Contains("volcado-20261019T030000Z.manifiesto"));
+        Assert.Contains(restaurar, l => l.Contains("--verificar-post-arranque"));
+        Assert.Contains(" OK", LineaDeV(r.Stdout, "V6") ?? "(sin V6)");
+        Assert.Contains("scp\tnuevo", r.Rastro);
+        Assert.Contains("volcado-20261019T030000Z.manifiesto", r.Rastro.Split('\n').Single(l => l.StartsWith("scp\t")));
+    }
+
+    [Theory]
+    [InlineData("dump")]
+    [InlineData("sha")]
+    public void DesdeBackup_ManifiestoDeOtroBackup_Sale3(string caso)
+    {
+        CredencialEnElEnvNuevo();
+        PlantarBackup();
+        var manifiesto = caso == "dump" ? PlantarManifiesto(dump: "volcado-20261018T030000Z.dump") : PlantarManifiesto(sha: new string('1', 64));
+
+        var r = CorrerDesdeBackup(["--manifiesto", manifiesto]);
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.Empty(ComandosRemotos(r.Rastro));
+        Assert.Empty(Corridas());
+    }
+
+    [Fact]
+    public void DesdeBackup_NingunComandoAlViejo()
+    {
+        CredencialEnElEnvNuevo();
+        PlantarBackup();
+
+        var r = CorrerDesdeBackup();
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        // El VPS de origen puede estar muerto: nada lo nombra, ni ssh, ni scp, ni el volcado.
+        Assert.DoesNotContain(ComandosRemotos(r.Rastro), c => c.Lado == "viejo");
+        Assert.DoesNotContain("DESCONOCIDO", r.Rastro);
+        Assert.DoesNotContain("scp\tviejo", r.Rastro);
+        Assert.Empty(LineasDeBloque(r.Rastro, "volcado"));
+        // La verificación de la preparación tampoco recibe un .env del viejo.
+        var preparar = Assert.Single(LineasDeBloque(r.Rastro, "preparar"));
+        Assert.Contains("--verificar", preparar);
+        Assert.DoesNotContain("--env-viejo", preparar);
+        Assert.Contains($"ENV={EnvNuevo}", preparar);
+    }
+
+    public static TheoryData<string[]> OpcionesQueNoVanConDesdeBackup() => new()
+    {
+        new[] { "--env-viejo", "/x/env-viejo" },
+        new[] { "--contenedor-viejo", "stockapp-ensayo-x" },
+        new[] { "--raiz-remota-viejo", "/hosts/viejo" },
+        new[] { "--ensayo" },
+        new[] { "--revertir" },
+        new[] { "--post-corte", "/x/corte-20260101T000000Z" },
+    };
+
+    [Theory]
+    [MemberData(nameof(OpcionesQueNoVanConDesdeBackup))]
+    public void DesdeBackup_ConOpcionesDelViejoODeOtroModo_Rechaza2(string[] opcion)
+    {
+        CredencialEnElEnvNuevo();
+        PlantarBackup();
+
+        var r = CorrerDesdeBackup(opcion);
+
+        Assert.True(r.Exit == 2, r.Todo);
+        Assert.Empty(ComandosRemotos(r.Rastro));
+        Assert.Empty(Corridas());
+    }
+
+    [Fact]
+    public void Manifiesto_SinDesdeBackup_Rechaza2()
+    {
+        var r = Correr(["--manifiesto", "/x/volcado.manifiesto"], stdin: "CONGELAR\n");
+
+        Assert.True(r.Exit == 2, r.Todo);
+        Assert.Equal("", r.Rastro);
+    }
+
+    [Fact]
+    public void DesdeBackup_PalabraDistinta_Sale4SinEscrituras()
+    {
+        CredencialEnElEnvNuevo();
+        PlantarBackup();
+
+        var r = CorrerDesdeBackup(stdin: "CONGELAR\n");
+
+        Assert.True(r.Exit == 4, r.Todo);
+        Assert.Contains("RESTAURAR", r.Stdout);
+        Assert.Empty(Escrituras(r.Rastro));
+        Assert.Empty(LineasDeBloque(r.Rastro, "restaurar"));
+        Assert.Equal("FALLO-4", ClaveDeEstado(UnaCorrida("desde-backup"), "resultado"));
+    }
+
+    [Fact]
+    public void DesdeBackup_SinTerminalConHostReal_Sale3()
+    {
+        CredencialEnElEnvNuevo();
+        PlantarBackup();
+        EscribirEnvs(hostNuevo: "nuevo-real.example.org");
+        CredencialEnElEnvNuevo();
+
+        var r = CorrerDesdeBackup();
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.Contains("terminal", r.Salida);
+        Assert.Empty(ComandosRemotos(r.Rastro));
+    }
+
+    [Fact]
+    public void DesdeBackup_V8SinHistorial_LaDescargaSeInformaYNoBloquea()
+    {
+        CredencialEnElEnvNuevo();
+        PlantarBackup();
+        // Sin historial: GET /backups lista corridas del backup cuyo archivo no existe en el nuevo.
+        File.WriteAllText(Path.Combine(Estado, "contenido"), "no\n");
+
+        var r = CorrerDesdeBackup();
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        var v8 = LineaDeV(r.Stdout, "V8") ?? "(sin V8)";
+        Assert.Contains(" OK", v8);
+        Assert.Contains("se informa", v8);
+        Assert.True(File.Exists(Path.Combine(Estado, "post-backups")), "V8 tiene que pedir un backup nuevo (POST /backups)");
+    }
+
+    [Fact]
+    public void DesdeBackup_FallaLaRestauracion_CierraLaCorridaYDiceVolverACorrer()
+    {
+        CredencialEnElEnvNuevo();
+        PlantarBackup();
+
+        var r = CorrerDesdeBackup(env: Entorno(("STUB_RESTAURAR_EXIT", "5")));
+
+        Assert.True(r.Exit == 6, r.Todo);
+        Assert.DoesNotContain(StartNuevo, r.Rastro);
+        // No hay viejo que revertir ni corrida que retomar: se cierra y se vuelve a correr entera.
+        Assert.Equal("FALLO-6", ClaveDeEstado(UnaCorrida("desde-backup"), "resultado"));
+        Assert.Contains("deploy/migrar-vps.sh --desde-backup", r.Salida);
+        Assert.DoesNotContain("--continuar", r.Salida);
+        Assert.DoesNotContain("--revertir", r.Salida);
+    }
+
+    [Fact]
+    public void DesdeBackup_ConUnaCorridaSinTerminar_SeNiega3()
+    {
+        CredencialEnElEnvNuevo();
+        PlantarBackup();
+        PlantarCorrida("corte-20260101T090000Z", "modo=corte\ninicio_utc=2026-01-01T09:00:00Z\n");
+
+        var r = CorrerDesdeBackup();
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.Contains("sin terminar", r.Salida);
+        Assert.Empty(Escrituras(r.Rastro));
+    }
+
+    [Fact]
+    public void Continuar_CorridaDeDesdeBackup_SeCierraYPideVolverACorrer()
+    {
+        // Murió sin cerrarse (un SIGKILL): --desde-backup no se retoma, se cierra para que no bloquee (R24).
+        var corrida = PlantarCorrida("desde-backup-20260101T090000Z",
+            $"modo=desde-backup\ninicio_utc=2026-01-01T09:00:00Z\nenv_nuevo={EnvNuevo}\nmachine_id_nuevo={MachineNuevo}\n" +
+            "paso_1=ok 2026-01-01T09:00:10Z 10\n");
+
+        var r = CorrerContinuar(corrida);
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.Equal("resultado=FALLO-ABANDONADA", File.ReadAllLines(Path.Combine(corrida, "estado")).Last());
+        Assert.Contains("--desde-backup", r.Salida);
+        Assert.Empty(ComandosRemotos(r.Rastro));
+    }
+
+    // =====================================================================================
+    // --post-corte <corrida-del-corte> [--antes-de-plazo] (spec 6.5.8: D+14)
+    // =====================================================================================
+
+    private static string HaceDias(int dias) =>
+        DateTime.UtcNow.AddDays(-dias).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>Un corte con GO cuyo congelamiento fue hace <paramref name="dias"/> días (y, si se pide, otro resultado).</summary>
+    private string CorteParaPostCorte(int dias = 20, string? resultado = null)
+    {
+        var corte = CorteConGo();
+        var archivo = Path.Combine(corte, "estado");
+        File.WriteAllLines(archivo, File.ReadAllLines(archivo)
+            .Where(l => resultado != "" || !l.StartsWith("resultado="))
+            .Select(l => l.StartsWith("congelado_utc=") ? "congelado_utc=" + HaceDias(dias)
+                : l.StartsWith("resultado=") && resultado is not null ? "resultado=" + resultado : l));
+        return corte;
+    }
+
+    private Resultado CorrerPostCorte(string corrida, string[]? extra = null, string stdin = "", IDictionary<string, string>? env = null) =>
+        Correr(new[] { "--post-corte", corrida }.Concat(extra ?? []).ToArray(), stdin, env, conArgumentosBase: false);
+
+    /// <summary>~/stockapp-backups-vps/corte-&lt;ts&gt;: el archivo permanente del dump del corte.</summary>
+    private string ArchivoDelCorte(string corte) => Path.Combine(Home, "stockapp-backups-vps", Path.GetFileName(corte));
+
+    private static (string Dump, string Manifiesto) VolcadoDelCorte(string corte)
+    {
+        var dir = Path.Combine(corte, ClaveDeEstado(corte, "volcado_dir") ?? "volcado");
+        var dump = ClaveDeEstado(corte, "volcado")!;
+        return (Path.Combine(dir, dump), Path.Combine(dir, dump.Replace(".dump", ".manifiesto")));
+    }
+
+    private static string[] PreguntasDeBorrado(string salida) =>
+        salida.Split('\n').Where(l => l.Contains("¿Borrar ")).ToArray();
+
+    /// <summary>Nada cambió: el dump sigue en la corrida, no hay archivo y no se borró nada en ningún lado.</summary>
+    private void AfirmarNadaTocado(Resultado r, string corte, string estadoAntes)
+    {
+        var (dump, manifiesto) = VolcadoDelCorte(corte);
+        Assert.True(File.Exists(dump) && File.Exists(manifiesto), r.Todo);
+        Assert.False(Directory.Exists(ArchivoDelCorte(corte)), r.Todo);
+        Assert.Equal(estadoAntes, File.ReadAllText(Path.Combine(corte, "estado")));
+        Assert.Single(Directory.GetDirectories(MigracionNuevo));
+        Assert.DoesNotContain("rm -r", r.Rastro);
+        Assert.Empty(PreguntasDeBorrado(r.Salida));
+    }
+
+    public static TheoryData<string?, int, bool, string, int> PostCorteQueSeNiega() => new()
+    {
+        { "NO-GO", 20, false, "", 3 },
+        { "REVERTIDO", 20, false, "", 3 },
+        { "", 20, false, "", 3 },            // sin terminar: sin resultado=
+        { null, 3, false, "", 3 },           // GO, pero antes de los 14 días
+        { null, 3, true, "no\n", 4 },        // --antes-de-plazo sin la palabra BORRAR
+    };
+
+    [Theory]
+    [MemberData(nameof(PostCorteQueSeNiega))]
+    public void PostCorte_SinGoOAntesDelPlazo_SeNiega(string? resultado, int dias, bool antesDePlazo, string stdin, int esperado)
+    {
+        var corte = CorteParaPostCorte(dias, resultado);
+        var estadoAntes = File.ReadAllText(Path.Combine(corte, "estado"));
+
+        var r = CorrerPostCorte(corte, antesDePlazo ? ["--antes-de-plazo"] : [], stdin);
+
+        Assert.True(r.Exit == esperado, r.Todo);
+        AfirmarNadaTocado(r, corte, estadoAntes);
+        if (dias < 14 && !antesDePlazo) Assert.Contains("--antes-de-plazo", r.Salida);
+    }
+
+    [Fact]
+    public void PostCorte_AntesDelPlazoConLaPalabra_Archiva()
+    {
+        var corte = CorteParaPostCorte(dias: 3);
+
+        var r = CorrerPostCorte(corte, ["--antes-de-plazo"], "BORRAR\n");
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.True(Directory.Exists(ArchivoDelCorte(corte)), r.Todo);
+        // Sin más palabras en stdin, cada candidato se conserva.
+        Assert.True(Directory.Exists(corte), r.Todo);
+        Assert.Single(Directory.GetDirectories(MigracionNuevo));
+    }
+
+    [Fact]
+    public void PostCorte_ArchivaConShaYNuncaBorraElCorte()
+    {
+        var corte = CorteParaPostCorte();
+        var (dump, manifiesto) = VolcadoDelCorte(corte);
+        var shaDump = Sha256(dump);
+        var shaManifiesto = Sha256(manifiesto);
+        var archivo = ArchivoDelCorte(corte);
+
+        // BORRAR a todo lo que pregunte: el archivo del corte igual no se toca.
+        var r = CorrerPostCorte(corte, stdin: string.Concat(Enumerable.Repeat("BORRAR\n", 10)));
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Equal("700", Permisos(archivo));
+        var archivado = Path.Combine(archivo, Path.GetFileName(dump));
+        Assert.Equal(shaDump, Sha256(archivado));
+        Assert.Equal(shaManifiesto, Sha256(Path.Combine(archivo, Path.GetFileName(manifiesto))));
+        Assert.Equal(2, Directory.GetFiles(archivo).Length);
+        // El sha, antes y después del movimiento.
+        Assert.Contains($"antes  {shaDump}", r.Stdout);
+        Assert.Contains($"después {shaDump}", r.Stdout);
+        Assert.DoesNotContain(PreguntasDeBorrado(r.Salida), l => l.Contains(archivo));
+        Assert.NotEmpty(PreguntasDeBorrado(r.Salida));
+        // Sin temporales fuera de la corrida (TMPDIR del test vacío).
+        Assert.Empty(Directory.GetFileSystemEntries(Tmp));
+    }
+
+    [Fact]
+    public void PostCorte_BorraSoloLoConfirmado()
+    {
+        var corte = CorteParaPostCorte();
+        var remoto = Assert.Single(Directory.GetDirectories(MigracionNuevo));
+        var ensayo = PlantarCorrida("ensayo-20260101T090000Z", EstadoDeEnsayo());
+        // Una corrida sin terminar no se ofrece: puede ser lo único que dice cómo revertir.
+        var abierta = PlantarCorrida("corte-20260102T090000Z", "modo=corte\ninicio_utc=2026-01-02T09:00:00Z\ncongelado_utc=2026-01-02T09:05:00Z\n");
+
+        // En orden: el directorio remoto del corte, el ensayo local y, al final, la corrida del corte.
+        var r = CorrerPostCorte(corte, stdin: "BORRAR\nno\nBORRAR\n");
+
+        Assert.True(r.Exit == 0, r.Todo);
+        var preguntas = PreguntasDeBorrado(r.Salida);
+        Assert.Equal(3, preguntas.Length);
+        Assert.Contains(Path.GetFileName(remoto), preguntas[0]);
+        Assert.Contains(ensayo, preguntas[1]);
+        Assert.Contains(corte, preguntas[2]);
+        Assert.False(Directory.Exists(remoto), r.Todo);
+        Assert.True(Directory.Exists(ensayo), r.Todo);
+        Assert.False(Directory.Exists(corte), r.Todo);
+        Assert.True(Directory.Exists(abierta), r.Todo);
+        Assert.DoesNotContain(preguntas, l => l.Contains(abierta));
+        // Por ruta exacta: el rm remoto nombra ese directorio y nada más.
+        Assert.Contains($"nuevo\trm -r -- \"$HOME/stockapp-deploy/migracion/{Path.GetFileName(remoto)}\"", r.Rastro);
+        Assert.True(Directory.Exists(ArchivoDelCorte(corte)), r.Todo);
+    }
+
+    [Fact]
+    public void PostCorte_NuncaEjecutaComandosEnElViejo()
+    {
+        var corte = CorteParaPostCorte();
+
+        var r = CorrerPostCorte(corte, stdin: "no\nno\n");
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.DoesNotContain(ComandosRemotos(r.Rastro), c => c.Lado == "viejo");
+        Assert.DoesNotContain("scp\t", r.Rastro);
+        Assert.Empty(LineasDeBloque(r.Rastro, "volcado"));
+        // La referencia para desmantelar el viejo se IMPRIME, acotada por nombre a StockApp, y no se ejecuta.
+        Assert.Contains("no se ejecuta", r.Stdout);
+        Assert.Contains("docker compose -f docker-compose.postgres.yml --env-file .env down", r.Stdout);
+        Assert.Contains("docker volume rm stockapp_pgdata", r.Stdout);
+        Assert.DoesNotContain("docker compose down", r.Stdout);
+        Assert.DoesNotContain(" -v", r.Stdout.Split('\n').Single(l => l.Contains("docker compose -f")));
+        // VPS compartido: ni la herramienta de certificados, ni el proxy, ni el firewall, ni nada global.
+        foreach (var prohibido in new[] { "certbot", "nginx", "ufw", "prune", "rm -rf", "reboot" })
+            Assert.DoesNotContain(prohibido, r.Salida);
+        var referencia = r.Stdout[r.Stdout.IndexOf("Referencia para desmantelar", StringComparison.Ordinal)..];
+        Assert.DoesNotContain("/tmp/", referencia.Replace(Home, "~"));
+        Assert.Contains("certificado del dominio viejo", referencia);
+    }
+
+    [Fact]
+    public void PostCorte_NoPudoConsultarLogsAuditoria_SeDetiene()
+    {
+        var corte = CorteParaPostCorte();
+        var estadoAntes = File.ReadAllText(Path.Combine(corte, "estado"));
+        PonerNuevo("falla-logs", "");
+
+        var r = CorrerPostCorte(corte, stdin: "BORRAR\nBORRAR\n");
+
+        Assert.True(r.Exit == 8, r.Todo);
+        AfirmarNadaTocado(r, corte, estadoAntes);
+    }
+
+    [Fact]
+    public void PostCorte_LogsAuditoriaMenorQueElManifiesto_SeDetiene3()
+    {
+        var corte = CorteParaPostCorte();
+        var estadoAntes = File.ReadAllText(Path.Combine(corte, "estado"));
+        PonerNuevo("logs-auditoria", "39\n");
+
+        var r = CorrerPostCorte(corte, stdin: "BORRAR\nBORRAR\n");
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.Contains("39", r.Salida);
+        AfirmarNadaTocado(r, corte, estadoAntes);
+    }
+
+    [Fact]
+    public void PostCorte_OtroServidorNuevo_Sale9()
+    {
+        var corte = CorteParaPostCorte();
+        var estadoAntes = File.ReadAllText(Path.Combine(corte, "estado"));
+        PonerNuevo("machine-id", "cccccccc33333333cccccccc33333333\n");
+
+        var r = CorrerPostCorte(corte, stdin: "BORRAR\nBORRAR\n");
+
+        Assert.True(r.Exit == 9, r.Todo);
+        AfirmarNadaTocado(r, corte, estadoAntes);
+    }
+
+    [Fact]
+    public void PostCorte_ReCorrido_ElArchivoYaEstaba()
+    {
+        var corte = CorteParaPostCorte();
+        var primera = CorrerPostCorte(corte, stdin: "no\nno\n");
+        Assert.True(primera.Exit == 0, primera.Todo);
+        var (dump, _) = VolcadoDelCorte(corte);
+        Assert.False(File.Exists(dump));
+
+        File.Delete(Rastro);
+        var r = CorrerPostCorte(corte, stdin: "no\nno\n");
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Contains("YA ESTABA", r.Stdout);
+        Assert.Equal(ClaveDeEstado(corte, "sha256"), Sha256(Path.Combine(ArchivoDelCorte(corte), Path.GetFileName(dump))));
+        Assert.Equal("GO", ClaveDeEstado(corte, "resultado"));
+        Assert.Equal("resultado=GO", File.ReadAllLines(Path.Combine(corte, "estado")).Last());
+    }
+
+    public static TheoryData<string[]> OpcionesQueNoVanConPostCorte() => new()
+    {
+        new[] { "--env-nuevo", "/x/env-nuevo" },
+        new[] { "--ensayo" },
+        new[] { "--contenedor-nuevo", "stockapp-ensayo-y" },
+        new[] { "--desde-backup", "/x/backup.dump" },
+    };
+
+    [Theory]
+    [MemberData(nameof(OpcionesQueNoVanConPostCorte))]
+    public void PostCorte_ConOtrasOpciones_Rechaza2(string[] opcion)
+    {
+        var r = CorrerPostCorte(Path.Combine(CorridasDir, "corte-20260101T090000Z"), opcion);
+
+        Assert.True(r.Exit == 2, r.Todo);
+        Assert.Equal("", r.Rastro);
+    }
+
+    [Theory]
+    [InlineData("ensayo-20260101T090000Z")]
+    [InlineData("revertir-20260101T090000Z")]
+    public void PostCorte_CorridaQueNoEsDeCorte_Rechaza2(string nombre)
+    {
+        var r = CorrerPostCorte(Path.Combine(CorridasDir, nombre));
+
+        Assert.True(r.Exit == 2, r.Todo);
+        Assert.Equal("", r.Rastro);
+    }
+
+    [Fact]
+    public void AntesDePlazo_SinPostCorte_Rechaza2()
+    {
+        var r = Correr(["--antes-de-plazo"], stdin: "CONGELAR\n");
+
+        Assert.True(r.Exit == 2, r.Todo);
+        Assert.Equal("", r.Rastro);
     }
 }

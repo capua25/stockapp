@@ -8,6 +8,8 @@
 #   deploy/migrar-vps.sh [--ensayo] [--env-viejo <archivo>] [--env-nuevo <archivo>]
 #   deploy/migrar-vps.sh --continuar <corrida> [--reintentar-restauracion]
 #   deploy/migrar-vps.sh --revertir [<corrida>] [--aun-con-escrituras]
+#   deploy/migrar-vps.sh --desde-backup <dump> [--manifiesto <m>] [--env-nuevo <archivo>]
+#   deploy/migrar-vps.sh --post-corte <corrida-del-corte> [--antes-de-plazo]
 #
 #   (sin --ensayo)  El corte. Pre-vuelo de SOLO LECTURA (config, identidad de los hosts, estado del
 #                   viejo, preparación del nuevo, overrides, credencial) y, recién después, una
@@ -49,6 +51,37 @@
 #                   paso 11 de un corte posterior la vuelve a habilitar); el resultado previo de la corrida
 #                   revertida queda en resultado_previo. Con el VPS nuevo inalcanzable sale 8 sin tocar el
 #                   viejo: hay que apagar el nuevo desde el panel del proveedor.
+#   --desde-backup  Recuperación ante desastres: el VPS viejo murió o no se puede congelar, y el VPS nuevo
+#                   (ya preparado) recibe un backup que el operador tiene en esta máquina (el que deja
+#                   bajar-backup-vps.sh, o el volcado de una corrida anterior). El viejo NO se nombra: ni
+#                   ssh, ni volcado, ni --env-viejo. Pre-vuelo, antes de tocar nada: el dump legible, de al
+#                   menos 1024 bytes y aceptado por pg_restore --list local (de ese listado sale la fecha,
+#                   "Archive created at"); si hay un <dump>.sha256 al lado, como el de bajar-backup-vps.sh,
+#                   tiene que coincidir; con --manifiesto, el manifiesto tiene que nombrar ese dump y su
+#                   sha256. Después, solo el nuevo (preparar-vps-nuevo.sh --verificar y el espacio, con el
+#                   tamaño del dump como cota inferior) y la palabra RESTAURAR, con el aviso de que todo lo
+#                   posterior a la fecha del dump se pierde. Pasos 3, 4, 8, 9 (sin manifiesto restaurar
+#                   verifica la estructura y no los conteos), 11 y 12; el 5, 6, 7 y 10 son del viejo o de su
+#                   volcado y quedan OMITIDO. Verificación: V1 a V5, V7 y V8 (sin historial: la descarga de
+#                   una corrida vieja se informa y no bloquea; el backup nuevo sí), V6 solo con manifiesto y
+#                   sin V10. El usuario real de V5 y V8 es VPS_ADMIN_USER del --env-nuevo (y su contraseña,
+#                   VPS_ADMIN_PASSWORD: entorno, archivo o terminal). Una corrida que falla se cierra
+#                   (resultado=FALLO-<n>) y se vuelve a correr entera: no hay --continuar ni --revertir (el
+#                   paso 9 recrea la base con un dump de seguridad de lo que tenga). Códigos: los de la tabla,
+#                   sin el 9 de contenedores (no hay viejo); 6 es "falló un paso desde la transferencia".
+#   --post-corte    D+14, con una corrida de corte con resultado=GO y 14 días desde congelado_utc (antes,
+#                   solo con --antes-de-plazo y la palabra BORRAR). No toca el VPS viejo. En orden:
+#                   LogsAuditoria del nuevo >= el del manifiesto del corte (si no puede consultarlo, se
+#                   detiene); MUEVE el dump y el manifiesto del corte a ~/stockapp-backups-vps/corte-<ts>/
+#                   (700), con el sha256 antes y después (si falla, no sigue); después ofrece borrar, uno por
+#                   uno, con su ruta y su tamaño y la palabra BORRAR cada vez, los directorios de
+#                   ~/stockapp-deploy/migracion/ del nuevo, lo de ~/stockapp-backups-vps/ y sus corridas
+#                   terminadas, y al final la propia corrida del corte. Nunca ofrece el archivo de un corte
+#                   ni una corrida sin terminar. Por último IMPRIME (no ejecuta) la referencia para
+#                   desmantelar el viejo. Re-correrlo da YA ESTABA en el archivo. Códigos: 0 hecho, 2 uso, 3
+#                   precondición (sin GO, antes del plazo, LogsAuditoria menor que el manifiesto, lock), 4 sin
+#                   la palabra BORRAR del plazo, 5 falló el archivo o un borrado (lo hecho queda hecho;
+#                   re-correr), 8 no pude consultar, 9 el VPS nuevo no es el de la corrida.
 #   --env-viejo     .env del operador para el VPS viejo. Default: deploy/.env.
 #                   Además de los VPS_*: VPS_ADMIN_USER (obligatorio; no cae a BOOTSTRAP_ADMIN_USER)
 #                   y VPS_ADMIN_PASSWORD. La contraseña sale del entorno, si no del archivo y, si
@@ -252,7 +285,24 @@ abortar() {
     if [[ "$MODO" == "revertir" && "$codigo" -ne 2 && "$codigo" -ne 4 && "$SIN_AYUDA_DE_REVERTIR" -eq 0 ]]; then
         ayuda_de_revertir "$codigo"
     fi
+    if [[ "$MODO" == "desde-backup" && "$codigo" -ge 5 && -n "${ORQ_CORRIDA:-}" ]]; then
+        ayuda_desde_backup "$codigo"
+    fi
     exit "$codigo"
+}
+
+# ayuda_desde_backup <codigo>: no hay viejo que revertir ni corrida que retomar. El trap la cierra con
+# resultado=FALLO-<n>, y la salida es volver a correr --desde-backup entero.
+ayuda_desde_backup() {
+    {
+        echo
+        echo "== La recuperación desde el backup no terminó (exit $1) =="
+        echo "Corrida: $ORQ_CORRIDA (queda cerrada con resultado=FALLO-$1)"
+        estado_nuevo_observado
+        echo "Una corrida de --desde-backup no se retoma: se vuelve a correr entera, y su paso 9 recrea la base"
+        echo "del nuevo con un dump de seguridad de lo que tenga. Investigá la causa (arriba) y después:"
+        echo "    deploy/migrar-vps.sh --desde-backup ${BACKUP}${MANIFIESTO_RUTA:+ --manifiesto $MANIFIESTO_RUTA} --env-nuevo $ENV_NUEVO"
+    } >&2
 }
 
 # resumen_de_fallo <codigo>: el viejo quedó congelado y la corrida queda abierta (sin resultado=).
@@ -390,7 +440,12 @@ ENV_EXPLICITO=0
 REVERTIR=0
 REVERTIR_CORRIDA=""
 AUN_CON_ESCRITURAS=0
-# La corrida cuyo estado se relee (--continuar o --revertir).
+ENV_VIEJO_DADO=0
+DESDE_BACKUP=""
+MANIFIESTO_DADO=""
+POST_CORTE=""
+ANTES_DE_PLAZO=0
+# La corrida cuyo estado se relee (--continuar, --revertir o --post-corte).
 OBJETIVO=""
 
 valor_de() {
@@ -450,7 +505,27 @@ while [[ $# -gt 0 ]]; do
             valor_de "$@"
             ENV_VIEJO="$2"
             ENV_EXPLICITO=1
+            ENV_VIEJO_DADO=1
             shift 2
+            ;;
+        --desde-backup)
+            valor_de "$@"
+            DESDE_BACKUP="$2"
+            shift 2
+            ;;
+        --manifiesto)
+            valor_de "$@"
+            MANIFIESTO_DADO="$2"
+            shift 2
+            ;;
+        --post-corte)
+            valor_de "$@"
+            POST_CORTE="$2"
+            shift 2
+            ;;
+        --antes-de-plazo)
+            ANTES_DE_PLAZO=1
+            shift
             ;;
         --env-nuevo)
             valor_de "$@"
@@ -503,12 +578,58 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# ruta_de_corrida_valida <ruta>: la ruta absoluta de una corrida de corte o de ensayo bajo las corridas
-# de este HOME, tal como la imprime migrar.
+# ruta_de_corrida_valida <ruta> [<modos>]: la ruta absoluta de una corrida de uno de <modos> (una
+# alternativa de regex; por defecto corte|ensayo) bajo las corridas de este HOME, tal como la imprime migrar.
 ruta_de_corrida_valida() {
+    local modos="${2:-corte|ensayo}"
     [[ -n "${HOME:-}" && "${1%/*}" == "$HOME/stockapp-backups-vps/corridas" &&
-        "${1##*/}" =~ ^(corte|ensayo)-[0-9]{8}T[0-9]{6}Z$ ]]
+        "${1##*/}" =~ ^($modos)-[0-9]{8}T[0-9]{6}Z$ ]]
 }
+
+# Un solo modo por invocación: el corte (sin opción), --ensayo, --continuar, --revertir, --desde-backup
+# o --post-corte.
+modos_pedidos=0
+[[ "$MODO" == "ensayo" ]] && modos_pedidos=$((modos_pedidos + 1))
+[[ -n "$CONTINUAR" ]] && modos_pedidos=$((modos_pedidos + 1))
+[[ "$REVERTIR" -eq 1 ]] && modos_pedidos=$((modos_pedidos + 1))
+[[ -n "$DESDE_BACKUP" ]] && modos_pedidos=$((modos_pedidos + 1))
+[[ -n "$POST_CORTE" ]] && modos_pedidos=$((modos_pedidos + 1))
+if [[ "$modos_pedidos" -gt 1 ]]; then
+    echo "migrar: --ensayo, --continuar, --revertir, --desde-backup y --post-corte son modos distintos: uno por vez." >&2
+    exit 2
+fi
+if [[ -n "$MANIFIESTO_DADO" && -z "$DESDE_BACKUP" ]]; then
+    echo "migrar: --manifiesto solo existe con --desde-backup <dump>." >&2
+    exit 2
+fi
+if [[ "$ANTES_DE_PLAZO" -eq 1 && -z "$POST_CORTE" ]]; then
+    echo "migrar: --antes-de-plazo solo existe con --post-corte <corrida>." >&2
+    exit 2
+fi
+
+if [[ -n "$DESDE_BACKUP" ]]; then
+    # No hay VPS viejo: puede estar muerto, y nada de esta corrida lo nombra.
+    if [[ "$ENV_VIEJO_DADO" -eq 1 || -n "${ARNES_DADO[--contenedor-viejo]-}" || -n "${ARNES_DADO[--raiz-remota-viejo]-}" ||
+        "$REINTENTAR_RESTAURACION" -eq 1 || "$AUN_CON_ESCRITURAS" -eq 1 ]]; then
+        echo "migrar: --desde-backup no acepta --env-viejo, --contenedor-viejo, --raiz-remota-viejo, --reintentar-restauracion ni --aun-con-escrituras: no hay VPS viejo, y una corrida que falla se vuelve a correr entera." >&2
+        exit 2
+    fi
+    MODO="desde-backup"
+fi
+
+if [[ -n "$POST_CORTE" ]]; then
+    # El .env del nuevo, los contenedores y las raíces salen del estado de la corrida del corte.
+    if [[ "$ENV_EXPLICITO" -eq 1 || "${#ARNES_USADO[@]}" -gt 0 || "$REINTENTAR_RESTAURACION" -eq 1 || "$AUN_CON_ESCRITURAS" -eq 1 ]]; then
+        echo "migrar: --post-corte solo acepta --antes-de-plazo: el servidor nuevo, los contenedores y las raíces salen del estado de la corrida del corte." >&2
+        exit 2
+    fi
+    POST_CORTE="${POST_CORTE%/}"
+    if ! ruta_de_corrida_valida "$POST_CORTE" corte; then
+        echo "migrar: --post-corte necesita la ruta de una corrida de corte, tal como la imprimió migrar (~/stockapp-backups-vps/corridas/corte-<ts>): '$POST_CORTE'." >&2
+        exit 2
+    fi
+    MODO="post-corte"
+fi
 
 if [[ "$REVERTIR" -eq 1 ]]; then
     # Como --continuar: los .env, los contenedores y las raíces salen del estado de la corrida.
@@ -532,9 +653,10 @@ if [[ -n "$CONTINUAR" ]]; then
         echo "migrar: --continuar no acepta --env-viejo, --env-nuevo ni --ensayo: salen del estado de la corrida." >&2
         exit 2
     fi
-    # Solo una corrida de corte o de ensayo, con su ruta absoluta bajo las corridas de este HOME.
+    # Solo una corrida de corte, de ensayo o de --desde-backup (que no se retoma: solo se cierra), con su
+    # ruta absoluta bajo las corridas de este HOME.
     CONTINUAR="${CONTINUAR%/}"
-    if ! ruta_de_corrida_valida "$CONTINUAR"; then
+    if ! ruta_de_corrida_valida "$CONTINUAR" 'corte|ensayo|desde-backup'; then
         echo "migrar: --continuar necesita la ruta de una corrida de corte o de ensayo, tal como la imprimió migrar (~/stockapp-backups-vps/corridas/<corte|ensayo>-<ts>): '$CONTINUAR'." >&2
         exit 2
     fi
@@ -593,12 +715,61 @@ validar_destino() {
     fi
 }
 
+# solo_nuevo: 0 en los modos que no tienen VPS viejo (--desde-backup) o no lo tocan (--post-corte): su
+# .env ni se lee.
+solo_nuevo() {
+    [[ "$MODO" == "desde-backup" || "$MODO" == "post-corte" ]]
+}
+
+# El usuario real de V5 y V8 y el .env de donde salen él y su contraseña: el del viejo (es el mismo
+# usuario que viaja en los datos) o, sin viejo, el del nuevo.
+USUARIO_VERIFICACION=""
+ENV_CREDENCIAL=""
+
+# cargar_config_solo_nuevo: lo mismo que cargar_config, sin leer ni nombrar el VPS viejo.
+cargar_config_solo_nuevo() {
+    orq_leer_env "$ENV_NUEVO" NUEVO "${CLAVES_COMUNES[@]}" VPS_ADMIN_USER VPS_ADMIN_PASSWORD
+    if [[ -z "$PW" && -n "${NUEVO_VPS_ADMIN_PASSWORD-}" ]]; then
+        PW="$NUEVO_VPS_ADMIN_PASSWORD"
+    fi
+    unset NUEVO_VPS_ADMIN_PASSWORD
+    NUEVO_POSTGRES_USER="${NUEVO_POSTGRES_USER:-stockapp}"
+    NUEVO_POSTGRES_DB="${NUEVO_POSTGRES_DB:-stockapp}"
+    exigir NUEVO "$ENV_NUEVO" VPS_HOST VPS_USER VPS_SSH_PORT API_SCHEME API_HOSTNAME API_PORT
+    if [[ "$MODO" == "desde-backup" ]]; then
+        exigir NUEVO "$ENV_NUEVO" VPS_ADMIN_USER
+    fi
+    USUARIO_VERIFICACION="${NUEVO_VPS_ADMIN_USER-}"
+    ENV_CREDENCIAL="$ENV_NUEVO"
+
+    if [[ -n "${STOCKAPP_ENSAYO_FALLAR_EN-}" ]]; then
+        ARNES_USADO+=("STOCKAPP_ENSAYO_FALLAR_EN")
+        if [[ ! "$STOCKAPP_ENSAYO_FALLAR_EN" =~ ^([3-9]|1[01])$ ]]; then
+            abortar 2 "STOCKAPP_ENSAYO_FALLAR_EN='$STOCKAPP_ENSAYO_FALLAR_EN': solo se inyectan los pasos 3 a 11."
+        fi
+    fi
+    if orq_hosts_de_ensayo "$NUEVO_VPS_HOST"; then
+        ORQ_ENSAYO=1
+    elif [[ "${#ARNES_USADO[@]}" -gt 0 ]]; then
+        abortar 2 "${ARNES_USADO[*]} solo existen para el ensayo local (hosts .invalid) y acá VPS_HOST es un servidor real."
+    fi
+    validar_destino NUEVO "$ENV_NUEVO"
+    if [[ "$ORQ_ENSAYO" -ne 1 && "$NUEVO_API_SCHEME" != "https" ]]; then
+        abortar 3 "API_SCHEME en $ENV_NUEVO tiene que ser https: el VPS nuevo sirve con TLS y la verificación V3 lo comprueba."
+    fi
+}
+
 cargar_config() {
     if [[ -z "${HOME:-}" ]]; then
         abortar 3 "HOME no está definido: no sé dónde guardar la corrida."
     fi
-    ENV_VIEJO="$(realpath -m -- "$ENV_VIEJO")"
     ENV_NUEVO="$(realpath -m -- "$ENV_NUEVO")"
+    if solo_nuevo; then
+        cargar_config_solo_nuevo
+        cargar_urls_del_nuevo
+        return 0
+    fi
+    ENV_VIEJO="$(realpath -m -- "$ENV_VIEJO")"
     if [[ "$ENV_VIEJO" == "$ENV_NUEVO" ]]; then
         abortar 9 "--env-viejo y --env-nuevo son el mismo archivo ($ENV_VIEJO): es el mismo servidor."
     fi
@@ -609,6 +780,8 @@ cargar_config() {
         PW="$VIEJO_VPS_ADMIN_PASSWORD"
     fi
     unset VIEJO_VPS_ADMIN_PASSWORD
+    USUARIO_VERIFICACION="${VIEJO_VPS_ADMIN_USER-}"
+    ENV_CREDENCIAL="$ENV_VIEJO"
 
     # Defaults del viejo (los mismos que usan bajar-backup-vps.sh y volcado-final-vps.sh). El nuevo
     # no tiene defaults: sin configuración explícita no se apunta a ningún servidor.
@@ -660,7 +833,10 @@ cargar_config() {
         URL_VIEJO="http://127.0.0.1:${VIEJO_API_PORT}"
         RESOLVE_VIEJO=""
     fi
+    cargar_urls_del_nuevo
+}
 
+cargar_urls_del_nuevo() {
     # La API nueva: la URL pública (V3 a V8, desde esta máquina y validando el certificado) y la de
     # loopback desde el propio servidor nuevo (el arranque del paso 11), con el mismo criterio.
     URL_NUEVO="${NUEVO_API_SCHEME}://${NUEVO_API_HOSTNAME}:${NUEVO_API_PORT}"
@@ -675,9 +851,11 @@ cargar_config() {
 }
 
 exigir_terminal() {
-    # A12: el corte nunca congela sin una confirmación escrita por un humano en una terminal.
-    if [[ "$MODO" == "corte" && "$ORQ_ENSAYO" -ne 1 ]] && ! { : </dev/tty; } 2>/dev/null; then
-        abortar 3 "no hay una terminal para confirmar: un corte no se lanza desatendido. No se tocó nada."
+    # A12: el corte nunca congela sin una confirmación escrita por un humano en una terminal. Lo mismo
+    # para RESTAURAR (--desde-backup) y para cada BORRAR de --post-corte.
+    if [[ ( "$MODO" == "corte" || "$MODO" == "desde-backup" || "$MODO" == "post-corte" ) && "$ORQ_ENSAYO" -ne 1 ]] &&
+        ! { : </dev/tty; } 2>/dev/null; then
+        abortar 3 "no hay una terminal para confirmar: esta operación no se lanza desatendida. No se tocó nada."
     fi
 }
 
@@ -738,6 +916,11 @@ ensayo_previo_con() {
 
 verificar_identidad() {
     local previo_viejo previo_nuevo
+    if solo_nuevo; then
+        # Un solo servidor: su identidad queda en el estado (y --post-corte la compara con la del corte).
+        leer_machine_id NUEVO "$RAIZ_NUEVO" MACHINE_ID_NUEVO
+        return 0
+    fi
     leer_machine_id VIEJO "$RAIZ_VIEJO" MACHINE_ID_VIEJO
     leer_machine_id NUEVO "$RAIZ_NUEVO" MACHINE_ID_NUEVO
     # A9: los dos hosts tienen que ser servidores distintos; el nombre del .env no prueba nada.
@@ -982,7 +1165,12 @@ prevuelo_nuevo() {
         echo "  - preparación del nuevo: OMITIDO (arnés)"
     else
         echo "  - preparación del nuevo (preparar-vps-nuevo.sh --verificar, versión $VERSION_NUEVO):"
-        orq_bloque deploy/preparar-vps-nuevo.sh "$ENV_NUEVO" --version "$VERSION_NUEVO" --env-viejo "$ENV_VIEJO" --verificar
+        # Sin viejo (--desde-backup), preparar lee la clave pública de licencias de su propio default.
+        local args_preparar=(--version "$VERSION_NUEVO")
+        if ! solo_nuevo; then
+            args_preparar+=(--env-viejo "$ENV_VIEJO")
+        fi
+        orq_bloque deploy/preparar-vps-nuevo.sh "$ENV_NUEVO" "${args_preparar[@]}" --verificar
         echo "  bloque preparar-vps-nuevo.sh salió con $ORQ_RC_BLOQUE"
         case "$ORQ_RC_BLOQUE" in
             0) ;;
@@ -1069,14 +1257,14 @@ obtener_contrasena() {
     if [[ "$ORQ_ENSAYO" -eq 1 ]]; then
         IFS= read -r PW || rc=$?
     elif { : </dev/tty; } 2>/dev/null; then
-        printf 'Contraseña de %s en el VPS viejo (no se muestra): ' "$VIEJO_VPS_ADMIN_USER" >/dev/tty
+        printf 'Contraseña de %s (no se muestra): ' "$USUARIO_VERIFICACION" >/dev/tty
         IFS= read -rs PW </dev/tty || rc=$?
         printf '\n' >/dev/tty
     else
-        abortar 3 "falta VPS_ADMIN_PASSWORD (entorno o $ENV_VIEJO) y no hay una terminal para pedirla."
+        abortar 3 "falta VPS_ADMIN_PASSWORD (entorno o $ENV_CREDENCIAL) y no hay una terminal para pedirla."
     fi
     if [[ -z "$PW" ]]; then
-        abortar 3 "falta VPS_ADMIN_PASSWORD (entorno, $ENV_VIEJO o terminal): no puedo validar la credencial."
+        abortar 3 "falta VPS_ADMIN_PASSWORD (entorno, $ENV_CREDENCIAL o terminal): no puedo validar la credencial."
     fi
 }
 
@@ -1150,6 +1338,150 @@ prevuelo() {
     prevuelo_nuevo
     prevuelo_overrides
     prevuelo_credencial
+}
+
+# ---------------------------------------------------------------------------------------
+# --desde-backup: el backup del operador (spec 6.5.7)
+# ---------------------------------------------------------------------------------------
+
+BACKUP=""
+BACKUP_BYTES=0
+FECHA_BACKUP=""
+SHA_HERMANO_TXT=""
+MANIFIESTO_RUTA=""
+MANIFIESTO_TXT=""
+NOMBRE_SEGURO='^[A-Za-z0-9][A-Za-z0-9._-]*$'
+
+# validar_backup: fase A, solo en esta máquina (ningún servidor, ninguna corrida). El dump tiene que ser
+# legible, de al menos 1024 bytes y aceptado por pg_restore --list, que además da la fecha del dump. Un
+# pg_restore --list que pasa NO prueba que el dump esté completo (un -Fc truncado lo pasa): por eso el
+# .sha256 hermano, si existe, y el manifiesto, si se da, tienen que coincidir con el sha256 del archivo.
+validar_backup() {
+    local nombre listado rc=0 lineas linea hash archivo_sha nombre_sha dump_m="" sha_m="" migr_m="" n_dump=0 n_sha=0 n_migr=0
+    BACKUP="$(realpath -m -- "$DESDE_BACKUP")"
+    nombre="${BACKUP##*/}"
+    if [[ ! "$nombre" =~ $NOMBRE_SEGURO ]]; then
+        abortar 2 "el nombre del dump ('$nombre') tiene caracteres que no viajan seguros en un comando remoto: renombralo a letras, números, '.', '_' y '-'."
+    fi
+    if [[ ! -e "$BACKUP" ]]; then
+        abortar 3 "el dump $BACKUP no existe. No se tocó nada."
+    fi
+    if [[ ! -f "$BACKUP" || ! -r "$BACKUP" ]]; then
+        abortar 3 "el dump $BACKUP no es un archivo que se pueda leer. No se tocó nada."
+    fi
+    BACKUP_BYTES="$(stat -c %s -- "$BACKUP")" || abortar 3 "no pude leer el tamaño de $BACKUP."
+    if [[ "$BACKUP_BYTES" -lt 1024 ]]; then
+        abortar 3 "el dump $BACKUP pesa $BACKUP_BYTES bytes (< 1024): no es un dump de StockApp. No se tocó nada."
+    fi
+    if ! command -v pg_restore >/dev/null 2>&1; then
+        abortar 3 "falta 'pg_restore' en esta máquina: hace falta para comprobar el dump antes de restaurarlo."
+    fi
+    listado="$(pg_restore --list "$BACKUP" </dev/null 9>&-)" || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        abortar 3 "pg_restore --list no puede leer $BACKUP (salió con $rc): no es un dump -Fc válido. No se tocó nada."
+    fi
+    # Sin pipe (un head que corta antes haría fallar la tubería bajo pipefail): la línea está al principio.
+    FECHA_BACKUP=""
+    while IFS= read -r linea; do
+        if [[ "$linea" =~ ^\;\ Archive\ created\ at\ (.*[^ ])\ *$ ]]; then
+            FECHA_BACKUP="${BASH_REMATCH[1]}"
+            break
+        fi
+    done <<< "$listado"
+    listado=""
+    if [[ -z "$FECHA_BACKUP" || "$FECHA_BACKUP" == *$'\r'* ]]; then
+        abortar 8 "pg_restore --list de $BACKUP no trae la línea 'Archive created at': no puedo decir de cuándo es el dump."
+    fi
+    if ! SHA_VOLCADO="$(sha256sum -- "$BACKUP")"; then
+        abortar 3 "no pude calcular el sha256 de $BACKUP."
+    fi
+    SHA_VOLCADO="${SHA_VOLCADO%% *}"
+    VOLCADO="$nombre"
+
+    # El .sha256 que deja bajar-backup-vps.sh al lado del dump: una línea de sha256sum con ese nombre.
+    archivo_sha="$BACKUP.sha256"
+    if [[ -e "$archivo_sha" ]]; then
+        lineas="$(cat -- "$archivo_sha" 2>/dev/null)" || abortar 3 "no pude leer $archivo_sha."
+        linea="${lineas%%$'\n'*}"
+        if [[ "$lineas" != "$linea" || ! "$linea" =~ ^([0-9a-f]{64})\ [\ *](.+)$ ]]; then
+            abortar 3 "$archivo_sha no es una línea de sha256sum ('<sha256>  <archivo>'): no puedo verificar el dump. No se tocó nada."
+        fi
+        hash="${BASH_REMATCH[1]}"
+        nombre_sha="${BASH_REMATCH[2]}"
+        if [[ "$nombre_sha" != "$nombre" ]]; then
+            abortar 3 "$archivo_sha es de '$nombre_sha', no de $nombre. No se tocó nada."
+        fi
+        if [[ "$hash" != "$SHA_VOLCADO" ]]; then
+            abortar 3 "el sha256 de $BACKUP ($SHA_VOLCADO) no es el de $archivo_sha ($hash): el dump cambió o está incompleto. No se tocó nada."
+        fi
+        SHA_HERMANO_TXT="${nombre}.sha256 verificado"
+    else
+        SHA_HERMANO_TXT="sin .sha256 al lado: el sha256 no se compara con nada (pg_restore --list no prueba que el dump esté completo)"
+    fi
+
+    # El manifiesto, si se da: el de ESE dump (dump= y sha256=). Con él restaurar verifica los conteos.
+    if [[ -n "$MANIFIESTO_DADO" ]]; then
+        MANIFIESTO_RUTA="$(realpath -m -- "$MANIFIESTO_DADO")"
+        MANIFIESTO="${MANIFIESTO_RUTA##*/}"
+        if [[ ! "$MANIFIESTO" =~ $NOMBRE_SEGURO || "$MANIFIESTO" == "$nombre" ]]; then
+            abortar 2 "el nombre del manifiesto ('$MANIFIESTO') tiene caracteres que no viajan seguros en un comando remoto (o es el del dump)."
+        fi
+        if [[ ! -f "$MANIFIESTO_RUTA" || ! -r "$MANIFIESTO_RUTA" ]]; then
+            abortar 3 "el manifiesto $MANIFIESTO_RUTA no existe o no se puede leer. No se tocó nada."
+        fi
+        while IFS= read -r linea || [[ -n "$linea" ]]; do
+            [[ "$linea" == "[conteos]" ]] && break
+            case "$linea" in
+                dump=*) dump_m="${linea#dump=}"; n_dump=$((n_dump + 1)) ;;
+                sha256=*) sha_m="${linea#sha256=}"; n_sha=$((n_sha + 1)) ;;
+                ultima_migracion=*) migr_m="${linea#ultima_migracion=}"; n_migr=$((n_migr + 1)) ;;
+            esac
+        done < "$MANIFIESTO_RUTA" || abortar 3 "no pude leer el manifiesto $MANIFIESTO_RUTA."
+        if [[ "$n_dump" -ne 1 || "$n_sha" -ne 1 || "$n_migr" -ne 1 || ! "$migr_m" =~ ^[0-9]{14}_[A-Za-z0-9_]+$ ]]; then
+            abortar 3 "el manifiesto $MANIFIESTO tiene que traer exactamente una vez dump=, sha256= y una ultima_migracion= legible."
+        fi
+        if [[ "$dump_m" != "$nombre" ]]; then
+            abortar 3 "el manifiesto $MANIFIESTO es de dump=$dump_m, no de $nombre. No se tocó nada."
+        fi
+        if [[ "$sha_m" != "$SHA_VOLCADO" ]]; then
+            abortar 3 "el manifiesto $MANIFIESTO dice sha256=$sha_m y el dump tiene $SHA_VOLCADO: no es el mismo dump. No se tocó nada."
+        fi
+        ULTIMA_MIGRACION="$migr_m"
+        MANIFIESTO_TXT="manifiesto $MANIFIESTO (dump= y sha256= coinciden; restaurar verifica también los conteos)"
+    else
+        MANIFIESTO=""
+        MANIFIESTO_TXT="sin manifiesto: restaurar verifica la estructura y no los conteos; V6 no corre"
+    fi
+}
+
+prevuelo_desde_backup() {
+    echo "  - backup: $BACKUP ($BACKUP_BYTES bytes, sha256 ${SHA_VOLCADO:0:12}…, creado $FECHA_BACKUP)"
+    echo "  - $SHA_HERMANO_TXT"
+    echo "  - $MANIFIESTO_TXT"
+    # Sin la base de origen, el tamaño del dump es la única medida: una cota inferior de lo que ocupa
+    # restaurado.
+    TAMANO_BASE_VIEJO="$BACKUP_BYTES"
+    prevuelo_nuevo
+    # La credencial no se valida acá (no hay API vieja): se pide ahora para no interrumpir después, y la
+    # valida V5 contra la API nueva.
+    obtener_contrasena
+    echo "  - credencial: '$USUARIO_VERIFICACION' (se valida en V5, contra la API nueva)"
+}
+
+confirmacion_desde_backup() {
+    local texto
+    texto="$(
+        cat <<EOF
+
+== Confirmación ==
+Vas a RESTAURAR un backup en el VPS nuevo (recuperación ante desastres; el VPS viejo no se toca).
+  backup: ${BACKUP} (creado ${FECHA_BACKUP}, sha256 ${SHA_VOLCADO:0:12}…)
+  nuevo: ${NUEVO_VPS_HOST} (machine-id ${MACHINE_ID_NUEVO:0:8}): versión instalada ${VERSION_NUEVO}; su base se reemplaza (con copia de seguridad).
+Atención: todo lo posterior a ${FECHA_BACKUP} se pierde (lo que se escribió después de ese backup no está en él).
+Para continuar escribí exactamente RESTAURAR y Enter. Cualquier otra cosa cancela sin tocar nada:
+EOF
+    )"
+    orq_confirmar RESTAURAR "$texto"
 }
 
 # ---------------------------------------------------------------------------------------
@@ -1238,6 +1570,12 @@ SHA_VOLCADO=""
 ULTIMA_MIGRACION=""
 HABILITACION_VIEJO=""
 RESTAURAR_RC=""
+
+# omitir_paso <n> <motivo>: un paso que este modo no tiene (paso_<n>=omitido, ver el contrato).
+omitir_paso() {
+    abrir_paso "$1" "${PASO_NOMBRES[$1]}"
+    cerrar_paso "$1" OMITIDO "$2" omitido
+}
 
 paso() {
     abrir_paso "$1" "${PASO_NOMBRES[$1]}"
@@ -1656,7 +1994,7 @@ scp_al_nuevo() {
 }
 
 corte_paso8() {
-    local nombre="${ORQ_CORRIDA##*/}" dir="$ORQ_CORRIDA/$VOLCADO_DIR" sha_remoto rc=0
+    local nombre="${ORQ_CORRIDA##*/}" dir="$ORQ_CORRIDA/$VOLCADO_DIR" sha_remoto rc=0 f
     paso 8
     # Si un intento anterior ya creó su directorio remoto (--continuar), este va a otro, también nuevo.
     orq_estado_leer dir_remoto >/dev/null 2>&1 || rc=$?
@@ -1670,8 +2008,18 @@ corte_paso8() {
     orq_ssh NUEVO "mkdir -m 700 \"\$HOME/$D_REL\""
     falla_remota 6 "crear el directorio remoto ~/$D_REL (tiene que ser nuevo)"
     orq_estado_poner dir_remoto "~/$D_REL"
-    scp_al_nuevo "$D_REL" "$dir/$VOLCADO" "$dir/$MANIFIESTO" "$dir/backups-historial.tar" "$REPO_ROOT/deploy/restaurar-backup.sh"
-    orq_ssh NUEVO "chmod 600 $(rr "$VOLCADO") $(rr "$MANIFIESTO") $(rr backups-historial.tar) && chmod 755 $(rr restaurar-backup.sh)"
+    # --desde-backup: el backup del operador (y su manifiesto, si lo hay); no hay historial de backups.
+    local origen=("$dir/$VOLCADO" "$dir/$MANIFIESTO" "$dir/backups-historial.tar") datos
+    if [[ "$MODO" == "desde-backup" ]]; then
+        origen=("$BACKUP")
+        [[ -z "$MANIFIESTO" ]] || origen+=("$MANIFIESTO_RUTA")
+    fi
+    datos="$(rr "$VOLCADO")"
+    for f in "${origen[@]:1}"; do
+        datos+=" $(rr "${f##*/}")"
+    done
+    scp_al_nuevo "$D_REL" "${origen[@]}" "$REPO_ROOT/deploy/restaurar-backup.sh"
+    orq_ssh NUEVO "chmod 600 ${datos} && chmod 755 $(rr restaurar-backup.sh)"
     falla_remota 6 "el chmod de los archivos transferidos"
     orq_ssh NUEVO "sha256sum $(rr "$VOLCADO")"
     falla_remota 6 "el sha256sum remoto del volcado"
@@ -1689,6 +2037,15 @@ opcion_contenedor_nuevo() {
     fi
 }
 
+# como_reintentar <texto-del-corte>: cómo se sigue tras un fallo; en --desde-backup no hay --continuar.
+como_reintentar() {
+    if [[ "$MODO" == "desde-backup" ]]; then
+        printf '%s' "La corrida se cierra: volvé a correr --desde-backup (ver abajo)."
+    else
+        printf '%s' "$1"
+    fi
+}
+
 mostrar_salida_remota() {
     if [[ -n "$ORQ_SALIDA" ]]; then
         printf '%s\n' "$ORQ_SALIDA" | sed 's/^/    │ /'
@@ -1703,7 +2060,11 @@ corte_paso9() {
     paso 9
     # La base del nuevo siempre tiene algo (como mínimo, lo que sembró el primer deploy): --recrear-base
     # va siempre, con su dump de seguridad (A2).
-    cmd="$(rr restaurar-backup.sh) $(rr "$VOLCADO")$(opcion_contenedor_nuevo) --manifiesto $(rr "$MANIFIESTO")"
+    cmd="$(rr restaurar-backup.sh) $(rr "$VOLCADO")$(opcion_contenedor_nuevo)"
+    # Sin manifiesto (--desde-backup con un backup_*.dump), restaurar verifica la estructura y no los conteos.
+    if [[ -n "$MANIFIESTO" ]]; then
+        cmd+=" --manifiesto $(rr "$MANIFIESTO")"
+    fi
     cmd+=" --recrear-base ${NUEVO_POSTGRES_DB} --dir-seguridad $(rr seguridad)"
     orq_ssh NUEVO "$cmd"
     rc="$ORQ_RC"
@@ -1718,8 +2079,8 @@ corte_paso9() {
     # En ningún caso se arranca la API: el conteo se compara ANTES del arranque.
     case "$rc" in
         0) RESTAURAR_RC=0 ;;
-        5) abortar 6 "restaurar-backup.sh salió con 5: pg_restore falló y la base del nuevo quedó VACÍA. --continuar reintenta la restauración tal cual." ;;
-        3 | 4) abortar 6 "restaurar-backup.sh salió con $rc (precondición o dump inválido): --continuar repite desde la transferencia (paso 8), a un directorio remoto nuevo." ;;
+        5) abortar 6 "restaurar-backup.sh salió con 5: pg_restore falló y la base del nuevo quedó VACÍA. $(como_reintentar "--continuar reintenta la restauración tal cual.")" ;;
+        3 | 4) abortar 6 "restaurar-backup.sh salió con $rc (precondición o dump inválido): $(como_reintentar "--continuar repite desde la transferencia (paso 8), a un directorio remoto nuevo.")" ;;
         6 | 7)
             SALIDA_SUGERIDA="reintentar-restauracion"
             abortar 6 "restaurar-backup.sh salió con $rc: la base del nuevo QUEDÓ restaurada pero no verifica. No se arranca la API."
@@ -1857,7 +2218,10 @@ verificar_v2() {
         v_falla V2 "no pude leer la última migración aplicada (salió con $ORQ_RC)"
         return 0
     fi
-    if ! printf '%s\n%s\n' "$ULTIMA_MIGRACION" "$real" | LC_ALL=C sort -C; then
+    if [[ -z "$ULTIMA_MIGRACION" ]]; then
+        # --desde-backup sin manifiesto: no hay una última migración de referencia.
+        real+=" (sin manifiesto: no hay última migración de referencia)"
+    elif ! printf '%s\n%s\n' "$ULTIMA_MIGRACION" "$real" | LC_ALL=C sort -C; then
         v_falla V2 "la última migración aplicada ($real) es anterior a la del manifiesto ($ULTIMA_MIGRACION)"
         return 0
     fi
@@ -1904,7 +2268,7 @@ verificar_v4() {
 verificar_v5() {
     local cuerpo rc=0
     TOKEN=""
-    cuerpo="$(PW="$PW" jq -nc --arg u "$VIEJO_VPS_ADMIN_USER" '{nombreUsuario: $u, contrasena: env.PW}')" || rc=$?
+    cuerpo="$(PW="$PW" jq -nc --arg u "$USUARIO_VERIFICACION" '{nombreUsuario: $u, contrasena: env.PW}')" || rc=$?
     if [[ "$rc" -ne 0 ]]; then
         v_falla V5 "no pude armar el cuerpo del login"
         return 0
@@ -1913,7 +2277,7 @@ verificar_v5() {
     cuerpo=""
     if [[ "$CURL_RC" -ne 0 ]]; then
         CURL_CUERPO=""
-        v_falla V5 "login de '$VIEJO_VPS_ADMIN_USER': curl salió con $CURL_RC: $(primera_linea "$CURL_ERR")"
+        v_falla V5 "login de '$USUARIO_VERIFICACION': curl salió con $CURL_RC: $(primera_linea "$CURL_ERR")"
         return 0
     fi
     rc=0
@@ -1924,10 +2288,15 @@ verificar_v5() {
         v_falla V5 "la respuesta del login no trae un token legible"
         return 0
     fi
-    v_ok V5 "login de '$VIEJO_VPS_ADMIN_USER'"
+    v_ok V5 "login de '$USUARIO_VERIFICACION'"
 }
 
 verificar_v6() {
+    if [[ -z "$MANIFIESTO" ]]; then
+        V_ESTADO[V6]="OMITIDO"
+        V_DETALLE[V6]="sin manifiesto: no hay conteos con qué comparar"
+        return 0
+    fi
     orq_ssh NUEVO "$(rr restaurar-backup.sh) --verificar-post-arranque --manifiesto $(rr "$MANIFIESTO")$(opcion_contenedor_nuevo)"
     mostrar_salida_remota
     if [[ "$ORQ_RC" -eq 0 ]]; then
@@ -1968,7 +2337,7 @@ verificar_v7() {
 }
 
 verificar_v8() {
-    local listado rc=0 cantidad vieja maximo limite nuevas exitosas otras nuevo_resultado
+    local listado rc=0 cantidad vieja maximo limite nuevas exitosas otras nuevo_resultado historial
     if [[ -z "$TOKEN" ]]; then
         v_falla V8 "sin token (falló el login de V5)"
         return 0
@@ -1983,23 +2352,44 @@ verificar_v8() {
         return 0
     fi
     cantidad="$(printf '%s' "$CURL_CUERPO" | jq -e 'if type == "array" then length else error("no es una lista") end')" || rc=$?
-    if [[ "$rc" -ne 0 || ! "$cantidad" =~ ^[0-9]+$ || "$cantidad" -eq 0 ]]; then
+    if [[ "$rc" -ne 0 || ! "$cantidad" =~ ^[0-9]+$ ]] || [[ "$cantidad" -eq 0 && "$MODO" != "desde-backup" ]]; then
         listado=""
         v_falla V8 "GET /backups no lista corridas del historial"
         return 0
     fi
     vieja="$(printf '%s' "$CURL_CUERPO" | jq -r '[.[] | select(.resultado == "Exitosa")] | sort_by(.finalizadaEn) | .[0].id // empty')" || vieja=""
-    maximo="$(printf '%s' "$CURL_CUERPO" | jq -r '[.[].id] | max')" || maximo=""
-    if [[ ! "$vieja" =~ ^[0-9]+$ || ! "$maximo" =~ ^[0-9]+$ ]]; then
+    maximo="$(printf '%s' "$CURL_CUERPO" | jq -r '[.[].id] | max // 0')" || maximo=""
+    if [[ "$MODO" == "desde-backup" ]]; then
+        # Sin historial (spec 6.5.7): GET /backups puede listar corridas cuyo archivo no existe en el
+        # nuevo. La descarga de la más vieja se informa y no bloquea; el backup nuevo (POST) sí.
+        historial="$cantidad corridas en el listado"
+        if [[ "$vieja" =~ ^[0-9]+$ ]]; then
+            curl_operador_con "$listado" -K - -o /dev/null "${URL_NUEVO}/backups/${vieja}/contenido"
+            if [[ "$CURL_RC" -eq 0 ]]; then
+                historial+=", descarga de la #$vieja OK"
+            else
+                historial+=", la descarga de la #$vieja falló (curl $CURL_RC: sin historial, se informa y no bloquea)"
+            fi
+        else
+            historial+=", ninguna Exitosa para descargar (se informa y no bloquea)"
+        fi
+        if [[ ! "$maximo" =~ ^[0-9]+$ ]]; then
+            listado=""
+            v_falla V8 "GET /backups trae ids ilegibles"
+            return 0
+        fi
+    elif [[ ! "$vieja" =~ ^[0-9]+$ || ! "$maximo" =~ ^[0-9]+$ ]]; then
         listado=""
         v_falla V8 "GET /backups no trae una corrida Exitosa del historial"
         return 0
-    fi
-    curl_operador_con "$listado" -K - -o /dev/null "${URL_NUEVO}/backups/${vieja}/contenido"
-    if [[ "$CURL_RC" -ne 0 ]]; then
-        listado=""
-        v_falla V8 "GET /backups/${vieja}/contenido (la más vieja): curl salió con $CURL_RC: $(primera_linea "$CURL_ERR")"
-        return 0
+    else
+        curl_operador_con "$listado" -K - -o /dev/null "${URL_NUEVO}/backups/${vieja}/contenido"
+        if [[ "$CURL_RC" -ne 0 ]]; then
+            listado=""
+            v_falla V8 "GET /backups/${vieja}/contenido (la más vieja): curl salió con $CURL_RC: $(primera_linea "$CURL_ERR")"
+            return 0
+        fi
+        historial="$cantidad corridas en el historial, descarga de la #$vieja"
     fi
     curl_operador_con "$listado" -K - -X POST "${URL_NUEVO}/backups"
     if [[ "$CURL_RC" -ne 0 ]]; then
@@ -2045,7 +2435,7 @@ verificar_v8() {
         sleep 2
     done
     listado=""
-    v_ok V8 "$cantidad corridas en el historial, descarga de la #$vieja y una corrida nueva Exitosa"
+    v_ok V8 "$historial y una corrida nueva Exitosa"
 }
 
 verificar_v10() {
@@ -2116,7 +2506,10 @@ corte_paso12() {
     verificar_v6
     verificar_v7
     verificar_v8
-    verificar_v10
+    # --desde-backup: no hay VPS viejo, así que no hay V10.
+    if [[ "$MODO" != "desde-backup" ]]; then
+        verificar_v10
+    fi
     TOKEN=""
     # La referencia de --revertir: si después de esto LogsAuditoria crece, hubo escrituras reales.
     psql_nuevo 'SELECT count(*) FROM "LogsAuditoria";'
@@ -2127,6 +2520,10 @@ corte_paso12() {
     fi
     V_FALLIDAS=""
     for v in "${V_ORDEN[@]}"; do
+        # OMITIDO (V6 sin manifiesto) no es un fallo: la spec la pide solo con manifiesto.
+        if [[ "$v" == "V10" && "$MODO" == "desde-backup" ]] || [[ "${V_ESTADO[$v]:-}" == "OMITIDO" ]]; then
+            continue
+        fi
         if [[ "${V_ESTADO[$v]:-}" != "OK" ]]; then
             V_FALLIDAS+="${V_FALLIDAS:+, }$v"
         fi
@@ -2193,8 +2590,10 @@ corte_paso13() {
     local congelado fin e n valor resultado nombre detalle que="corte"
     paso 13
     [[ "$MODO" == "ensayo" ]] && que="ensayo"
+    [[ "$MODO" == "desde-backup" ]] && que="--desde-backup"
     congelado="$(orq_estado_leer congelado_utc)" || congelado=""
-    if [[ "$MODO" == "ensayo" ]]; then
+    if [[ "$MODO" == "ensayo" || "$MODO" == "desde-backup" ]]; then
+        # Sin viejo congelado no hay rollback que vencer.
         fin=""
     elif e="$(date -u -d "$congelado" +%s 2>/dev/null)"; then
         fin="$(date -u -d "@$((e + 14 * 86400))" +%Y-%m-%dT%H:%M:%SZ)"
@@ -2230,6 +2629,10 @@ corte_paso13() {
         if [[ "$v" == "V10" && "$MODO" == "ensayo" ]]; then
             nombre="VPS viejo active, sin enmascarar y sin cambios"
         fi
+        if [[ "$v" == "V10" && "$MODO" == "desde-backup" ]]; then
+            printf '  %-4s %-46s %s\n' V10 "$nombre" "OMITIDO  (no hay VPS viejo)"
+            continue
+        fi
         detalle="${V_DETALLE[$v]:-}"
         printf '  %-4s %-46s %s%s\n' "$v" "$nombre" "${V_ESTADO[$v]:-FALLÓ}" "${detalle:+  ($detalle)}"
     done
@@ -2242,6 +2645,12 @@ corte_paso13() {
         echo "Pendiente:"
         echo "  - V9: el smoke de la GUI sobre los datos del ensayo, por un agente con scripts/gui-verificacion"
         echo "  - pegar la tabla de tiempos en el runbook y cargar los overrides que falten"
+    elif [[ "$MODO" == "desde-backup" ]]; then
+        echo "Backup restaurado: ${BACKUP} (creado ${FECHA_BACKUP}). Todo lo posterior a esa fecha se perdió."
+        echo "Pendiente:"
+        echo "  - V9: el smoke de la GUI, por un agente con scripts/gui-verificacion"
+        echo "  - la decisión de GO de Martin"
+        echo "  - apuntar las PCs al servidor nuevo"
     else
         echo "Pendiente:"
         echo "  - V9: el smoke de la GUI, por un agente con scripts/gui-verificacion"
@@ -2436,7 +2845,7 @@ continuar() {
     # Fase A, de solo lectura: el modo, los .env y la identidad de los hosts salen del estado.
     leer_clave_continuar modo || abortar 3 "el estado de $CONTINUAR no dice el modo."
     modo="$VALOR_CLAVE"
-    if [[ ( "$modo" != corte && "$modo" != ensayo ) || "${CONTINUAR##*/}" != "$modo-"* ]]; then
+    if [[ ( "$modo" != corte && "$modo" != ensayo && "$modo" != desde-backup ) || "${CONTINUAR##*/}" != "$modo-"* ]]; then
         abortar 3 "el estado de $CONTINUAR dice modo=$modo: --continuar retoma corridas de corte o de ensayo."
     fi
     MODO="$modo"
@@ -2453,6 +2862,10 @@ continuar() {
             abortar 3 "la corrida ya terminó (resultado=$VALOR_CLAVE): no hay nada que retomar. No se tocó nada."
         fi
         orq_estado_poner resultado FALLO-ABANDONADA
+        if [[ "$MODO" == "desde-backup" ]]; then
+            # Nunca congela nada: no hay qué retomar. Su paso 9 recrea la base, así que se corre entera otra vez.
+            abortar 3 "una corrida de --desde-backup no se retoma: quedó cerrada con resultado=FALLO-ABANDONADA. Volvé a correr deploy/migrar-vps.sh --desde-backup <dump> [--manifiesto <m>] (su restauración recrea la base del nuevo con un dump de seguridad de lo que tenga)."
+        fi
         abortar 3 "la corrida no llegó a congelar el VPS viejo, que siguió sirviendo: no hay nada que retomar. Quedó cerrada con resultado=FALLO-ABANDONADA; empezá una corrida nueva."
     fi
     leer_clave_continuar env_viejo || abortar 3 "el estado de $CONTINUAR no dice env_viejo."
@@ -3033,6 +3446,13 @@ main() {
     if [[ -n "$CONTINUAR" ]]; then
         continuar
     fi
+    if [[ "$MODO" == "post-corte" ]]; then
+        post_corte
+    fi
+    # --desde-backup: el backup se comprueba acá, antes de cualquier servidor y de crear la corrida.
+    if [[ "$MODO" == "desde-backup" ]]; then
+        validar_backup
+    fi
     cargar_config
     exigir_terminal
     verificar_identidad
@@ -3046,12 +3466,17 @@ main() {
 
     echo "migrar-vps: $MODO"
     echo "  corrida: $ORQ_CORRIDA"
-    echo "  viejo: $VIEJO_VPS_HOST (machine-id ${MACHINE_ID_VIEJO:0:8})"
+    if ! solo_nuevo; then
+        echo "  viejo: $VIEJO_VPS_HOST (machine-id ${MACHINE_ID_VIEJO:0:8})"
+    fi
     echo "  nuevo: $NUEVO_VPS_HOST (machine-id ${MACHINE_ID_NUEVO:0:8})"
 
     # El ensayo también: opera los mismos dos servidores, y recrear la base del nuevo o volcar el viejo
     # en medio de un corte sin terminar pisaría lo que ese corte dejó a medias.
     verificar_corridas_sin_terminar
+    if [[ "$MODO" == "desde-backup" ]]; then
+        desde_backup
+    fi
     orq_estado_poner modo "$MODO"
     orq_estado_poner inicio_utc "$(ahora_utc)"
     orq_estado_poner env_viejo "$ENV_VIEJO"
@@ -3087,6 +3512,409 @@ main() {
     corte_paso8
     corte_paso9
     corte_paso10
+    corte_paso11
+    corte_paso12
+    corte_paso13
+}
+
+# ---------------------------------------------------------------------------------------
+# --post-corte <corrida-del-corte> [--antes-de-plazo] (spec 6.5.8, D+14)
+# ---------------------------------------------------------------------------------------
+# Archiva el dump del corte (lo MUEVE, nunca lo borra) y después ofrece borrar, uno por uno y con la
+# palabra BORRAR cada vez, las copias de producción que quedaron de la migración. Nunca toca el VPS viejo:
+# lo que hay que hacer en él solo se IMPRIME. Las líneas de paso no se anotan en el estado del corte (sus
+# paso_<n> son los del corte); lo único que agrega al estado es dónde quedó el archivo y el sha256 del
+# manifiesto, con resultado=GO siempre al final.
+
+PLAZO_DIAS=14
+PASOS_POST_CORTE=5
+ARCHIVO_CORTE=""
+PLAZO_CUMPLIDO=1
+RESPUESTA=""
+
+pc_paso() {
+    orq_paso "$1" "$PASOS_POST_CORTE" "$2"
+    PASO_ABIERTO=1
+}
+
+pc_fin() {
+    PASO_ABIERTO=0
+    orq_fin_paso "$@"
+}
+
+# leer_respuesta -> RESPUESTA: una línea de la terminal (de stdin en el arnés, ORQ_ENSAYO=1; nunca de
+# /dev/tty). Al final de la entrada vale lo que se leyó, o vacío: lo que no se confirma se conserva.
+leer_respuesta() {
+    local rc=0
+    RESPUESTA=""
+    if [[ "$ORQ_ENSAYO" -eq 1 ]]; then
+        IFS= read -r RESPUESTA || rc=$?
+    else
+        IFS= read -r RESPUESTA </dev/tty || rc=$?
+    fi
+    # rc distinto de 0 es fin de la entrada: no es un error, y RESPUESTA ya tiene lo que haya llegado.
+    return 0
+}
+
+# preguntar_borrar <qué> -> 0 solo si el operador escribió exactamente BORRAR.
+preguntar_borrar() {
+    printf '¿Borrar %s? Escribí BORRAR para borrarlo; cualquier otra cosa lo conserva:\n' "$1"
+    leer_respuesta
+    [[ "$RESPUESTA" == "BORRAR" ]]
+}
+
+sha_de() {
+    local sha
+    sha="$(sha256sum -- "$1")" || return 1
+    printf '%s' "${sha%% *}"
+}
+
+# logs_auditoria_del_manifiesto <manifiesto> -> LOGS_MANIFIESTO (la línea LogsAuditoria de [conteos]).
+LOGS_MANIFIESTO=""
+logs_auditoria_del_manifiesto() {
+    local linea dentro=0 n=0 re=$'^LogsAuditoria\t([0-9]+)$'
+    LOGS_MANIFIESTO=""
+    while IFS= read -r linea || [[ -n "$linea" ]]; do
+        if [[ "$linea" == "[conteos]" ]]; then
+            dentro=1
+        elif [[ "$dentro" -eq 1 && "$linea" =~ $re ]]; then
+            LOGS_MANIFIESTO="${BASH_REMATCH[1]}"
+            n=$((n + 1))
+        fi
+    done < "$1" || abortar 8 "no pude leer el manifiesto $1."
+    if [[ "$n" -ne 1 ]]; then
+        abortar 8 "el manifiesto $1 no trae exactamente una línea LogsAuditoria en [conteos]: no puedo comprobar que el nuevo tenga toda la auditoría, y no sigo."
+    fi
+}
+
+# archivar_uno <origen> <destino> <sha-esperado|""> -> ARCHIVADO (movido|ya-estaba).
+# Mueve sin pisar, con el sha256 antes y después. Un archivo ya movido se verifica contra el sha esperado.
+ARCHIVADO=""
+archivar_uno() {
+    local origen="$1" destino="$2" esperado="$3" nombre="${1##*/}" antes despues
+    if [[ -e "$origen" && -e "$destino" ]]; then
+        abortar 5 "$nombre está en la corrida Y en el archivo ($destino): no se pisa ninguno. Mirá cuál es el bueno."
+    fi
+    if [[ ! -e "$origen" && ! -e "$destino" ]]; then
+        abortar 5 "no encuentro $nombre ni en la corrida ($origen) ni en el archivo ($destino)."
+    fi
+    if [[ ! -e "$origen" ]]; then
+        if [[ -z "$esperado" ]]; then
+            abortar 8 "$destino ya está en el archivo, pero el estado no dice qué sha256 tenía: no puedo verificarlo."
+        fi
+        despues="$(sha_de "$destino")" || abortar 5 "no pude calcular el sha256 de $destino."
+        if [[ "$despues" != "$esperado" ]]; then
+            abortar 5 "el sha256 de $destino ($despues) no es el esperado ($esperado): el archivo del corte cambió."
+        fi
+        echo "  - $nombre: ya estaba en el archivo, sha256 $despues"
+        ARCHIVADO="ya-estaba"
+        return 0
+    fi
+    antes="$(sha_de "$origen")" || abortar 5 "no pude calcular el sha256 de $origen."
+    if [[ -n "$esperado" && "$antes" != "$esperado" ]]; then
+        abortar 5 "el sha256 de $origen ($antes) no es el del estado del corte ($esperado): no es el volcado de este corte. No se movió nada."
+    fi
+    echo "  - $nombre: sha256 antes  $antes"
+    mv -n -- "$origen" "$destino" || abortar 5 "no pude mover $origen a $destino."
+    if [[ -e "$origen" || ! -f "$destino" ]]; then
+        abortar 5 "después del mv, $nombre no quedó solo en $destino."
+    fi
+    despues="$(sha_de "$destino")" || abortar 5 "no pude calcular el sha256 de $destino."
+    echo "  - $nombre: sha256 después $despues"
+    if [[ "$despues" != "$antes" ]]; then
+        abortar 5 "el sha256 de $destino cambió al moverlo ($antes -> $despues)."
+    fi
+    ARCHIVADO="movido"
+}
+
+post_corte_contexto() {
+    local congelado e ahora faltan
+    OBJETIVO="$POST_CORTE"
+    if [[ ! -d "$POST_CORTE" || ! -f "$POST_CORTE/estado" ]]; then
+        abortar 3 "$POST_CORTE no es una corrida con estado."
+    fi
+    # Los temporales (el stderr de ssh) van a la corrida del corte desde el primer comando: ninguno a /tmp.
+    ORQ_CORRIDA="$POST_CORTE"
+    leer_clave_continuar modo || abortar 3 "el estado de $POST_CORTE no dice el modo."
+    if [[ "$VALOR_CLAVE" != "corte" ]]; then
+        abortar 3 "el estado de $POST_CORTE dice modo=$VALOR_CLAVE: --post-corte es para un corte."
+    fi
+    # Solo tras un corte con GO: con cualquier otro resultado (o sin resultado) el viejo puede seguir
+    # siendo la única copia buena, y el dump del corte no es todavía "el archivo".
+    if ! leer_clave_continuar resultado; then
+        abortar 3 "la corrida $POST_CORTE no terminó (no tiene resultado=): --post-corte es solo para un corte con resultado=GO. No se tocó nada."
+    fi
+    if [[ "$VALOR_CLAVE" != "GO" ]]; then
+        abortar 3 "la corrida $POST_CORTE terminó con resultado=$VALOR_CLAVE: --post-corte es solo para un corte con resultado=GO. No se tocó nada."
+    fi
+    leer_clave_continuar congelado_utc || abortar 3 "el estado de $POST_CORTE no dice congelado_utc: no sé desde cuándo corre el plazo de $PLAZO_DIAS días."
+    congelado="$VALOR_CLAVE"
+    if ! e="$(date -u -d "$congelado" +%s 2>/dev/null)"; then
+        abortar 8 "no pude interpretar congelado_utc=$congelado del estado."
+    fi
+    ahora="$(date -u +%s)"
+    if [[ "$ahora" -lt $((e + PLAZO_DIAS * 86400)) ]]; then
+        PLAZO_CUMPLIDO=0
+        faltan=$(((e + PLAZO_DIAS * 86400 - ahora + 86399) / 86400))
+        if [[ "$ANTES_DE_PLAZO" -ne 1 ]]; then
+            abortar 3 "todavía no pasaron $PLAZO_DIAS días desde el congelamiento ($congelado; faltan $faltan): el rollback sigue abierto. Antes de eso, solo con --antes-de-plazo y la palabra BORRAR. No se tocó nada."
+        fi
+    fi
+    leer_clave_continuar env_nuevo || abortar 3 "el estado de $POST_CORTE no dice env_nuevo."
+    ENV_NUEVO="$VALOR_CLAVE"
+    cargar_parametros_de_arnes
+    cargar_config
+    exigir_terminal
+    verificar_identidad
+    leer_clave_continuar machine_id_nuevo || abortar 3 "el estado de $POST_CORTE no dice machine_id_nuevo: no puedo comprobar que el nuevo sea el del corte."
+    if [[ "$VALOR_CLAVE" != "$MACHINE_ID_NUEVO" ]]; then
+        abortar 9 "el VPS nuevo de $ENV_NUEVO (machine-id ${MACHINE_ID_NUEVO:0:8}) no es el del corte (${VALOR_CLAVE:0:8}): no se archiva ni se borra nada. No se tocó nada."
+    fi
+    cargar_volcado_dir
+    leer_clave_continuar volcado || abortar 3 "el estado de $POST_CORTE no dice volcado=: no sé cuál es el dump del corte."
+    VOLCADO="$VALOR_CLAVE"
+    if [[ ! "$VOLCADO" =~ ^volcado-([0-9]{8}T[0-9]{6}Z)\.dump$ ]]; then
+        abortar 3 "volcado=$VOLCADO del estado no tiene la forma que deja migrar."
+    fi
+    MANIFIESTO="volcado-${BASH_REMATCH[1]}.manifiesto"
+    leer_clave_continuar sha256 || abortar 3 "el estado de $POST_CORTE no dice sha256= del dump del corte."
+    SHA_VOLCADO="$VALOR_CLAVE"
+    ARCHIVO_CORTE="$HOME/stockapp-backups-vps/${POST_CORTE##*/}"
+}
+
+post_corte_auditoria() {
+    local manifiesto actual
+    pc_paso 2 "LogsAuditoria del nuevo >= manifiesto"
+    if [[ -f "$POST_CORTE/$VOLCADO_DIR/$MANIFIESTO" ]]; then
+        manifiesto="$POST_CORTE/$VOLCADO_DIR/$MANIFIESTO"
+    elif [[ -f "$ARCHIVO_CORTE/$MANIFIESTO" ]]; then
+        manifiesto="$ARCHIVO_CORTE/$MANIFIESTO"
+    else
+        abortar 5 "no encuentro el manifiesto del corte ($MANIFIESTO) ni en la corrida ni en $ARCHIVO_CORTE."
+    fi
+    logs_auditoria_del_manifiesto "$manifiesto"
+    psql_nuevo 'SELECT count(*) FROM "LogsAuditoria";'
+    if [[ "$ORQ_RC" -ne 0 || ! "$ORQ_SALIDA" =~ ^[0-9]+$ ]]; then
+        volcar_stderr
+        abortar 8 "no pude contar LogsAuditoria en el VPS nuevo (salió con $ORQ_RC): sin ese dato no se archiva ni se borra nada. Esto NO es 'cero'."
+    fi
+    actual="$ORQ_SALIDA"
+    if [[ "$actual" -lt "$LOGS_MANIFIESTO" ]]; then
+        abortar 3 "LogsAuditoria del VPS nuevo tiene $actual registros y el manifiesto del corte $LOGS_MANIFIESTO: falta auditoría en el nuevo. No se archiva ni se borra nada."
+    fi
+    pc_fin OK "$actual >= $LOGS_MANIFIESTO"
+}
+
+post_corte_archivar() {
+    local dir="$POST_CORTE/$VOLCADO_DIR" sha_man="" modo_dir hubo=0
+    pc_paso 3 "archivar el dump del corte"
+    echo "  - archivo: $ARCHIVO_CORTE"
+    if [[ ! -d "$ARCHIVO_CORTE" ]]; then
+        ( umask 077; mkdir -p -- "${ARCHIVO_CORTE%/*}" ) || abortar 5 "no pude crear ${ARCHIVO_CORTE%/*}."
+        mkdir -m 700 -- "$ARCHIVO_CORTE" || abortar 5 "no pude crear $ARCHIVO_CORTE."
+    fi
+    modo_dir="$(stat -c %a -- "$ARCHIVO_CORTE")" || abortar 5 "no pude leer los permisos de $ARCHIVO_CORTE."
+    if [[ "$modo_dir" != "700" ]]; then
+        abortar 5 "$ARCHIVO_CORTE tiene permisos $modo_dir: el archivo del corte tiene que ser 700 (lleva datos de producción)."
+    fi
+    archivar_uno "$dir/$VOLCADO" "$ARCHIVO_CORTE/$VOLCADO" "$SHA_VOLCADO"
+    [[ "$ARCHIVADO" == "movido" ]] && hubo=1
+    if leer_clave_continuar sha256_manifiesto_corte; then
+        sha_man="$VALOR_CLAVE"
+    fi
+    archivar_uno "$dir/$MANIFIESTO" "$ARCHIVO_CORTE/$MANIFIESTO" "$sha_man"
+    [[ "$ARCHIVADO" == "movido" ]] && hubo=1
+    if [[ -z "$sha_man" ]]; then
+        sha_man="$(sha_de "$ARCHIVO_CORTE/$MANIFIESTO")" || abortar 5 "no pude calcular el sha256 del manifiesto archivado."
+        orq_estado_poner sha256_manifiesto_corte "$sha_man"
+    fi
+    orq_estado_poner archivo_corte "$ARCHIVO_CORTE"
+    if [[ "$hubo" -eq 1 ]]; then
+        pc_fin OK "sha256 verificado antes y después"
+    else
+        pc_fin "YA ESTABA" "sha256 verificado"
+    fi
+}
+
+# Los candidatos locales: lo que hay en ~/stockapp-backups-vps y sus corridas, y al final la propia corrida
+# del corte. Se excluyen el archivo de un corte (corte-<ts>, este o uno anterior: NUNCA se ofrece) y las
+# corridas sin terminar (pueden ser lo único que dice cómo revertir algo).
+CANDIDATOS_LOCALES=()
+candidatos_locales() {
+    local base="$HOME/stockapp-backups-vps" d nombre rc
+    CANDIDATOS_LOCALES=()
+    for d in "$base"/*/; do
+        d="${d%/}"
+        [[ -d "$d" ]] || continue
+        nombre="${d##*/}"
+        [[ "$nombre" == "corridas" ]] && continue
+        if [[ "$nombre" =~ ^corte-[0-9]{8}T[0-9]{6}Z$ ]]; then
+            continue
+        fi
+        CANDIDATOS_LOCALES+=("$d")
+    done
+    for d in "$base/corridas"/*/; do
+        d="${d%/}"
+        [[ -d "$d" && "$d" != "$POST_CORTE" ]] || continue
+        if [[ -f "$d/estado" ]]; then
+            rc=0
+            orq_estado_de "$d/estado" resultado >/dev/null 2>&1 || rc=$?
+            if [[ "$rc" -ne 0 ]]; then
+                echo "  - se conserva (sin terminar): $d"
+                continue
+            fi
+        fi
+        CANDIDATOS_LOCALES+=("$d")
+    done
+    CANDIDATOS_LOCALES+=("$POST_CORTE")
+}
+
+post_corte_borrar() {
+    local nombres=() n tam d borrados=0 conservados=0 rc
+    pc_paso 4 "borrar copias, una por una"
+    # En el VPS nuevo: los directorios de ~/stockapp-deploy/migracion (corridas, con su seguridad/, y lo
+    # apartado). Primero, mientras la corrida del corte (donde van los temporales) todavía existe.
+    orq_ssh NUEVO "find \"\$HOME/stockapp-deploy/migracion\" -mindepth 1 -maxdepth 1 -type d -printf '%f\\n'"
+    consulta_ok "los directorios de ~/stockapp-deploy/migracion en el VPS nuevo"
+    # A un arreglo, no a un `while read ... <<<`: dentro del bucle, la respuesta del operador se lee de
+    # stdin, y la redirección del bucle se la comería.
+    mapfile -t nombres < <(printf '%s\n' "$ORQ_SALIDA" | LC_ALL=C sort)
+    for n in "${nombres[@]}"; do
+        [[ -n "$n" ]] || continue
+        if [[ ! "$n" =~ $NOMBRE_SEGURO ]]; then
+            echo "  - se conserva (nombre inesperado): ~/stockapp-deploy/migracion/$n"
+            continue
+        fi
+        orq_ssh NUEVO "du -sh -- \"\$HOME/stockapp-deploy/migracion/$n\""
+        consulta_ok "el tamaño de ~/stockapp-deploy/migracion/$n en el VPS nuevo"
+        tam="${ORQ_SALIDA%%[[:space:]]*}"
+        if preguntar_borrar "en el VPS nuevo ~/stockapp-deploy/migracion/$n ($tam)"; then
+            orq_ssh NUEVO "rm -r -- \"\$HOME/stockapp-deploy/migracion/$n\""
+            falla_remota 5 "el borrado de ~/stockapp-deploy/migracion/$n en el VPS nuevo"
+            echo "  - borrado: ~/stockapp-deploy/migracion/$n (VPS nuevo)"
+            borrados=$((borrados + 1))
+        else
+            echo "  - se conserva: ~/stockapp-deploy/migracion/$n (VPS nuevo)"
+            conservados=$((conservados + 1))
+        fi
+    done
+
+    # En esta máquina, por ruta exacta; la corrida del corte va última (con ella se va su registro.log).
+    candidatos_locales
+    for d in "${CANDIDATOS_LOCALES[@]}"; do
+        rc=0
+        tam="$(du -sh -- "$d")" || rc=$?
+        if [[ "$rc" -ne 0 ]]; then
+            abortar 8 "no pude medir $d: no lo ofrezco a ciegas."
+        fi
+        tam="${tam%%[[:space:]]*}"
+        if preguntar_borrar "$d ($tam)"; then
+            rm -r -- "$d" || abortar 5 "no pude borrar $d."
+            if [[ -e "$d" ]]; then
+                abortar 5 "después del borrado, $d sigue existiendo."
+            fi
+            echo "  - borrado: $d"
+            borrados=$((borrados + 1))
+        else
+            echo "  - se conserva: $d"
+            conservados=$((conservados + 1))
+        fi
+    done
+    pc_fin OK "$borrados borrados, $conservados conservados; el archivo del corte no se ofrece"
+}
+
+post_corte_referencia() {
+    pc_paso 5 "referencia para desmantelar el VPS viejo"
+    cat <<EOF
+  Referencia para desmantelar el VPS viejo: no se ejecuta nada desde acá (desmantelarlo es una decisión de
+  Martin). Siempre acotado por nombre a StockApp: el VPS viejo es compartido con otra aplicación. En el VPS
+  viejo, como el usuario de deploy:
+    cd ~/stockapp-deploy && docker compose -f docker-compose.postgres.yml --env-file .env down
+      (sin la opción que borra volúmenes: los datos siguen en stockapp_pgdata hasta el comando siguiente)
+    docker volume rm stockapp_pgdata
+      (recién ahora tiene respaldo: el dump del corte está en ${ARCHIVO_CORTE}, verificado, y LogsAuditoria
+      del nuevo es >= al del manifiesto)
+    stockapp-api queda enmascarada y no arranca; un systemctl disable solo tiene sentido después de un unmask.
+  El certificado del dominio viejo queda a decisión de Martin. El proxy de la otra aplicación no se toca.
+EOF
+    pc_fin OK "impresa, no ejecutada"
+}
+
+post_corte() {
+    # Fase A, de solo lectura: el corte (GO y el plazo), su .env del nuevo y la identidad del nuevo.
+    post_corte_contexto
+
+    # Fase B: el log del corte (se agrega) y el lock.
+    orq_log_iniciar
+    orq_lock
+    LOCK_TOMADO=1
+    echo "migrar-vps: --post-corte"
+    echo "  corrida del corte: $POST_CORTE"
+    echo "  nuevo: $NUEVO_VPS_HOST (machine-id ${MACHINE_ID_NUEVO:0:8})"
+
+    pc_paso 1 "corte con GO y plazo de $PLAZO_DIAS días"
+    if [[ "$PLAZO_CUMPLIDO" -eq 1 ]]; then
+        pc_fin OK "GO, pasaron $PLAZO_DIAS días desde el congelamiento"
+    else
+        orq_confirmar BORRAR "$(
+            cat <<EOF
+
+== Confirmación (--antes-de-plazo) ==
+El corte $POST_CORTE todavía está dentro de los $PLAZO_DIAS días de rollback: después de esto, el dump del corte
+queda solo en el archivo y se ofrece borrar las copias. Para continuar escribí exactamente BORRAR y Enter.
+Cualquier otra cosa cancela sin tocar nada:
+EOF
+        )"
+        pc_fin OK "GO, antes del plazo (--antes-de-plazo confirmado)"
+    fi
+    post_corte_auditoria
+    post_corte_archivar
+    post_corte_borrar
+    post_corte_referencia
+    exit 0
+}
+
+# ---------------------------------------------------------------------------------------
+# --desde-backup <dump> [--manifiesto <m>] (spec 6.5.7): la mitad "VPS nuevo" de la secuencia
+# ---------------------------------------------------------------------------------------
+# Los mismos pasos del corte, con los números del corte: 3, 4, 8, 9, 11, 12 y 13. El 5, 6, 7 y 10 son del
+# VPS viejo o de su volcado y quedan OMITIDO. Nunca escribe congelado_utc: el trap cierra la corrida que
+# falla (FALLO-<n>) y la salida es volver a correrla entera.
+
+desde_backup() {
+    local omitido="desde-backup: no hay VPS viejo"
+    PASO_NOMBRES[12]="verificación (V1-V8)"
+    V_ORDEN=(V1 V2 V3 V4 V5 V6 V7 V8)
+    orq_estado_poner modo "$MODO"
+    orq_estado_poner inicio_utc "$(ahora_utc)"
+    orq_estado_poner env_nuevo "$ENV_NUEVO"
+    orq_estado_poner machine_id_nuevo "$MACHINE_ID_NUEVO"
+    orq_estado_poner contenedor_nuevo "$CONTENEDOR_NUEVO"
+    orq_estado_poner raiz_remota_nuevo "$RAIZ_NUEVO"
+    orq_estado_poner backup "$BACKUP"
+    orq_estado_poner volcado "$VOLCADO"
+    orq_estado_poner sha256 "$SHA_VOLCADO"
+    orq_estado_poner fecha_backup "$FECHA_BACKUP"
+    if [[ -n "$MANIFIESTO_RUTA" ]]; then
+        orq_estado_poner manifiesto "$MANIFIESTO_RUTA"
+    fi
+
+    abrir_paso 1 "pre-vuelo"
+    prevuelo_desde_backup
+    cerrar_paso 1 OK
+
+    abrir_paso 2 "confirmación"
+    confirmacion_desde_backup
+    cerrar_paso 2 OK
+
+    corte_paso3
+    corte_paso4
+    omitir_paso 5 "$omitido"
+    omitir_paso 6 "$omitido"
+    omitir_paso 7 "$omitido: el backup ya se identificó en el pre-vuelo"
+    corte_paso8
+    corte_paso9
+    omitir_paso 10 "el backup no trae el historial de backups"
     corte_paso11
     corte_paso12
     corte_paso13
