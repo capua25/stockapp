@@ -138,10 +138,12 @@ public class MigrarVpsTests : IDisposable
     private const string VolcadoFalso = "#!/usr/bin/env bash\n" + EntornoDeHijos + "\n" + """
         salida=""
         ensayo=0
+        raiz=""
         args=("$@")
         while [[ $# -gt 0 ]]; do
             case "$1" in
                 --salida) salida="$2"; shift 2 ;;
+                --raiz-remota) raiz="$2"; shift 2 ;;
                 --ensayo) ensayo=1; shift ;;
                 *) shift ;;
             esac
@@ -156,6 +158,13 @@ public class MigrarVpsTests : IDisposable
         if [[ "${STUB_VOLCADO_CONGELA:-1}" == 1 && ( "$ensayo" == 0 || "${STUB_VOLCADO_ENSAYO_ENMASCARA-}" == 1 ) ]]; then
             echo inactive > "$ESTADO/viejo/active"
             echo masked > "$ESTADO/viejo/enabled"
+        fi
+        # Murió entre el mv de la unit y el mask: la unit está en .congelado y systemctl ya no la
+        # encuentra (is-enabled sin palabra, como el real con la unit inexistente).
+        if [[ -n "${STUB_VOLCADO_MUEVE_SIN_MASK-}" ]]; then
+            echo inactive > "$ESTADO/viejo/active"
+            : > "$ESTADO/viejo/enabled"
+            echo "${raiz}/etc/systemd/system/stockapp-api.service.congelado" >> "$ESTADO/viejo/existen"
         fi
         # El directorio remoto lleva el nombre de la corrida, que se conoce recién al correr.
         if [[ -n "${STUB_PLANTAR_DIR_REMOTO-}" ]]; then
@@ -2283,6 +2292,10 @@ public class MigrarVpsTests : IDisposable
     // --continuar (spec 6.5.4 "--continuar", A13, R4, R32)
     // =====================================================================================
 
+    // R38: el contexto que migrar guarda en toda corrida (los defaults de un corte real).
+    private const string ContextoDelArnesPorDefecto =
+        "contenedor_viejo=stockapp-pg\ncontenedor_nuevo=stockapp-pg\nraiz_remota_viejo=\nraiz_remota_nuevo=\n";
+
     private Resultado CorrerContinuar(string corrida, string[]? extra = null, IDictionary<string, string>? env = null) =>
         Correr(new[] { "--continuar", corrida }.Concat(extra ?? []).ToArray(), stdin: "", env: env, conArgumentosBase: false);
 
@@ -2329,13 +2342,27 @@ public class MigrarVpsTests : IDisposable
     [InlineData(10)]
     [InlineData(11)]
     [InlineData(12)]
-    public void Continuar_RetomaEnElPasoQueFallo(int paso)
+    [InlineData(7, true)]
+    public void Continuar_RetomaEnElPasoQueFallo(int paso, bool seisReintentado = false)
     {
         var env = RomperPaso(paso);
-        var primera = CorrerCorte(env: env);
+        Resultado primera;
+        string corrida;
+        if (seisReintentado)
+        {
+            // El 6 falla, se retoma y vuelca en volcado-2/, y entonces falla el 7.
+            var falloDelSeis = CorrerCorte(env: Entorno(("STUB_VOLCADO_EXIT", "8")));
+            Assert.True(falloDelSeis.Exit == 6, falloDelSeis.Todo);
+            corrida = UnaCorrida("corte");
+            primera = CorrerContinuar(corrida, env: env);
+        }
+        else
+        {
+            primera = CorrerCorte(env: env);
+            corrida = UnaCorrida("corte");
+        }
 
         Assert.True(primera.Exit == (paso >= 11 ? 7 : 6), primera.Todo);
-        var corrida = UnaCorrida("corte");
         var congelado = ClaveDeEstado(corrida, "congelado_utc");
         Assert.NotNull(congelado);
         // El estado de los hosts según lo que hizo el corte: el viejo congelado (detenido y enmascarado);
@@ -2378,6 +2405,9 @@ public class MigrarVpsTests : IDisposable
         AfirmarViejoEnListaBlanca(r.Rastro);
         foreach (var n in Enumerable.Range(1, 13))
             Assert.Matches(@"^ok ", PasoDeEstado(corrida, n) ?? $"(falta paso_{n})");
+
+        if (seisReintentado)
+            Assert.Equal("volcado-2", ClaveDeEstado(corrida, "volcado_dir"));
 
         if (paso == 6)
         {
@@ -2468,7 +2498,7 @@ public class MigrarVpsTests : IDisposable
         // Murió antes de congelar (un SIGKILL en el paso 5, por ejemplo): sin congelado_utc ni resultado.
         var corrida = PlantarCorrida("corte-20260101T090000Z",
             $"modo=corte\ninicio_utc=2026-01-01T09:00:00Z\nenv_viejo={EnvViejo}\nenv_nuevo={EnvNuevo}\n" +
-            $"machine_id_viejo={MachineViejo}\nmachine_id_nuevo={MachineNuevo}\n" +
+            $"machine_id_viejo={MachineViejo}\nmachine_id_nuevo={MachineNuevo}\n" + ContextoDelArnesPorDefecto +
             "paso_1=ok 2026-01-01T09:00:10Z 10\npaso_2=ok 2026-01-01T09:00:20Z 10\npaso_3=ok 2026-01-01T09:00:21Z 1\n");
 
         var r = CorrerContinuar(corrida);
@@ -2490,7 +2520,8 @@ public class MigrarVpsTests : IDisposable
     public void Continuar_CorridaTerminada_SeNiega3SinTocarla(string resultado)
     {
         var estado = $"modo=corte\ninicio_utc=2026-01-01T09:00:00Z\nenv_viejo={EnvViejo}\nenv_nuevo={EnvNuevo}\n" +
-                     $"machine_id_viejo={MachineViejo}\nmachine_id_nuevo={MachineNuevo}\ncongelado_utc=2026-01-01T09:05:00Z\n" +
+                     $"machine_id_viejo={MachineViejo}\nmachine_id_nuevo={MachineNuevo}\n" + ContextoDelArnesPorDefecto +
+                     "congelado_utc=2026-01-01T09:05:00Z\n" +
                      $"paso_1=ok 2026-01-01T09:00:10Z 10\nresultado={resultado}\n";
         var corrida = PlantarCorrida("corte-20260101T090000Z", estado);
 
@@ -2672,5 +2703,125 @@ public class MigrarVpsTests : IDisposable
         Assert.True(r.Exit == 6, r.Todo);
         Assert.Contains("la API nueva está detenida (inactive)", r.Salida);
         Assert.Equal("5", ClaveDeEstado(UnaCorrida("corte"), "restaurar_salio"));
+    }
+
+    // ---------- Fix round 1: lo retomado sale del estado (I1, R38) y el mensaje de R39 ----------
+
+    /// <summary>Planta en <paramref name="dir"/> un volcado completo y coherente, distinto del de la corrida.</summary>
+    private static string PlantarVolcadoValido(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        const string ts = "20990101T000000Z";
+        var dump = Path.Combine(dir, $"volcado-{ts}.dump");
+        File.WriteAllText(dump, "PGDMP-plantado-de-otro-intento\n");
+        File.WriteAllText(Path.Combine(dir, $"volcado-{ts}.manifiesto"),
+            "# manifiesto-migracion v1\n" +
+            $"fecha_utc={DateTime.UtcNow:yyyy-MM-dd'T'HH:mm:ss'Z'}\n" +
+            $"dump=volcado-{ts}.dump\nsha256={Sha256(dump)}\nultima_migracion=20260101000000_Inicial\n[conteos]\nUsuarios\t3\n");
+        File.WriteAllBytes(Path.Combine(dir, "backups-historial.tar"), new byte[10240]);
+        return $"volcado-{ts}.dump";
+    }
+
+    [Fact]
+    public void Continuar_DesdeEl7TrasReintentarEl6_RestauraElVolcadoDeVolcadoDir()
+    {
+        var r1 = CorrerCorte(env: Entorno(("STUB_VOLCADO_EXIT", "8")));
+        Assert.True(r1.Exit == 6, r1.Todo);
+        var corrida = UnaCorrida("corte");
+        var env = Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "7"));
+        var r2 = CorrerContinuar(corrida, env: env);
+        Assert.True(r2.Exit == 6, r2.Todo);
+        Assert.Equal("volcado-2", ClaveDeEstado(corrida, "volcado_dir"));
+        var delSegundo = Path.GetFileName(Assert.Single(Directory.GetFiles(Path.Combine(corrida, "volcado-2"), "volcado-*.dump")));
+        // En volcado/ (el del primer intento) aparece otro volcado válido: no es el de esta corrida.
+        var plantado = PlantarVolcadoValido(Path.Combine(corrida, "volcado"));
+
+        File.Delete(Rastro);
+        var r = CorrerContinuar(corrida, env: env);
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        Assert.Contains("retoma en el paso 7", r.Stdout);
+        Assert.Equal(delSegundo, ClaveDeEstado(corrida, "volcado"));
+        var restaurar = Assert.Single(LineasDeBloque(r.Rastro, "restaurar"), l => !l.Contains("--verificar-post-arranque"));
+        Assert.Contains(delSegundo, restaurar);
+        Assert.DoesNotContain(plantado, r.Rastro);
+    }
+
+    private static readonly string[] ArgumentosDelArnes =
+        ["--contenedor-viejo", "stockapp-ensayo-origen", "--contenedor-nuevo", "stockapp-ensayo-destino",
+         "--raiz-remota-viejo", "/hosts/viejo", "--raiz-remota-nuevo", "/hosts/nuevo"];
+
+    private string CorteDelArnesQueFallaEn9()
+    {
+        PonerViejo("contenedores", "stockapp-ensayo-origen\n");
+        PonerViejo("fragment", "/hosts/viejo/etc/systemd/system/stockapp-api.service\n");
+        var r = Correr(ArgumentosDelArnes, stdin: "CONGELAR\n", env: Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "9")));
+        Assert.True(r.Exit == 6, r.Todo);
+        return UnaCorrida("corte");
+    }
+
+    [Fact]
+    public void Continuar_ParametrosDelArnes_SeLeenDelEstado()
+    {
+        var corrida = CorteDelArnesQueFallaEn9();
+        Assert.Equal("stockapp-ensayo-destino", ClaveDeEstado(corrida, "contenedor_nuevo"));
+        Assert.Equal("/hosts/nuevo", ClaveDeEstado(corrida, "raiz_remota_nuevo"));
+
+        File.Delete(Rastro);
+        var r = CorrerContinuar(corrida, env: Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "9")));
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        var restaurar = LineasDeBloque(r.Rastro, "restaurar").ToList();
+        Assert.Equal(2, restaurar.Count);
+        Assert.All(restaurar, l => Assert.Contains("--contenedor stockapp-ensayo-destino", l));
+        Assert.DoesNotContain("stockapp-pg", r.Rastro);
+        var cmds = ComandosRemotos(r.Rastro).ToList();
+        Assert.Contains(cmds, c => c.Lado == "viejo" && c.Cmd == "cat /hosts/viejo/etc/machine-id");
+        Assert.Contains(cmds, c => c.Lado == "nuevo" && c.Cmd.StartsWith("sudo -n tar -C /hosts/nuevo/"));
+        Assert.Contains(cmds, c => c.Lado == "nuevo" && c.Cmd.Contains("docker exec -i stockapp-ensayo-destino psql"));
+    }
+
+    [Theory]
+    [InlineData("--contenedor-nuevo", "stockapp-otro")]
+    [InlineData("--contenedor-viejo", "stockapp-otro")]
+    [InlineData("--raiz-remota-nuevo", "/hosts/otra")]
+    [InlineData("--raiz-remota-viejo", "/hosts/otra")]
+    public void Continuar_ParametroDelArnesDistintoDelEstado_Rechaza2SinTocarNada(string parametro, string valor)
+    {
+        var corrida = CorteDelArnesQueFallaEn9();
+        var antes = File.ReadAllText(Path.Combine(corrida, "estado"));
+
+        File.Delete(Rastro);
+        var r = CorrerContinuar(corrida, [parametro, valor], env: Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "9")));
+
+        Assert.True(r.Exit == 2, r.Todo);
+        Assert.Contains(parametro, r.Salida);
+        Assert.Equal("", r.Rastro);
+        Assert.Equal(antes, File.ReadAllText(Path.Combine(corrida, "estado")));
+    }
+
+    [Fact]
+    public void Corte_VolcadoDejaLaUnitMovidaSinEnmascarar_RecomiendaSoloRevertir()
+    {
+        var r = CorrerCorte(env: Entorno(("STUB_VOLCADO_EXIT", "8"), ("STUB_VOLCADO_MUEVE_SIN_MASK", "1")));
+
+        Assert.True(r.Exit == 6, r.Todo);
+        var corrida = UnaCorrida("corte");
+        Assert.Contains(".congelado", r.Salida);
+        Assert.Contains("no enmascarada", r.Salida);
+        Assert.Contains($"deploy/migrar-vps.sh --revertir {corrida}", r.Salida);
+        // R39: no se ofrece el comando de retomar, que no avanzaría.
+        Assert.DoesNotContain("deploy/migrar-vps.sh --continuar", r.Salida);
+
+        // Y si igual se intenta continuar, se niega con el mismo consejo y sin volver a volcar.
+        File.Delete(Rastro);
+        var otra = CorrerContinuar(corrida);
+
+        Assert.True(otra.Exit == 3, otra.Todo);
+        Assert.Contains("no enmascarada", otra.Salida);
+        Assert.Contains($"deploy/migrar-vps.sh --revertir {corrida}", otra.Salida);
+        Assert.DoesNotContain("deploy/migrar-vps.sh --continuar", otra.Salida);
+        Assert.Empty(LineasDeBloque(otra.Rastro, "volcado"));
+        Assert.Empty(Escrituras(otra.Rastro));
     }
 }

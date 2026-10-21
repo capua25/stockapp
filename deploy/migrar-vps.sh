@@ -234,6 +234,7 @@ abortar() {
 #   reintentar-restauracion   la base quedó restaurada pero no verifica: lo decide un humano
 #   investigar                no se pudo consultar o el código no se puede clasificar
 #   revisar                   alcance (9): NO se ofrece --continuar hasta que un humano mire
+#   solo-revertir             la unit quedó movida sin enmascarar: retomar no avanzaría (R39)
 resumen_de_fallo() {
     local codigo="$1" que="el corte"
     [[ "$MODO" == "ensayo" ]] && que="el ensayo"
@@ -260,6 +261,9 @@ resumen_de_fallo() {
                 ;;
             revisar)
                 echo "Es un problema de alcance: un humano tiene que mirar antes de seguir. No se ofrece retomar."
+                ;;
+            solo-revertir)
+                echo "No se ofrece retomar: $MOTIVO_SOLO_REVERTIR"
                 ;;
             *)
                 echo "Para seguir:"
@@ -352,6 +356,7 @@ RAIZ_VIEJO=""
 RAIZ_NUEVO=""
 SIN_VERIFICAR_PREPARACION=0
 ARNES_USADO=()
+declare -A ARNES_DADO=()
 CONTINUAR=""
 REINTENTAR_RESTAURACION=0
 ENV_EXPLICITO=0
@@ -411,24 +416,28 @@ while [[ $# -gt 0 ]]; do
             valor_contenedor "$@"
             CONTENEDOR_VIEJO="$2"
             ARNES_USADO+=("$1")
+            ARNES_DADO[$1]=1
             shift 2
             ;;
         --contenedor-nuevo)
             valor_contenedor "$@"
             CONTENEDOR_NUEVO="$2"
             ARNES_USADO+=("$1")
+            ARNES_DADO[$1]=1
             shift 2
             ;;
         --raiz-remota-viejo)
             valor_raiz "$@"
             RAIZ_VIEJO="$2"
             ARNES_USADO+=("$1")
+            ARNES_DADO[$1]=1
             shift 2
             ;;
         --raiz-remota-nuevo)
             valor_raiz "$@"
             RAIZ_NUEVO="$2"
             ARNES_USADO+=("$1")
+            ARNES_DADO[$1]=1
             shift 2
             ;;
         --sin-verificar-preparacion)
@@ -1375,6 +1384,20 @@ corte_paso5() {
     cerrar_paso 5 OK
 }
 
+# unit_movida_sin_enmascarar: 0 si la unit del viejo está en .congelado pero is-enabled no dice masked
+# (el volcado murió entre el mv y el mask). En ese estado el volcado se niega a correr otra vez (su
+# exit 8, ".congelado ya existe") y --continuar desde el 6 no avanzaría nunca: la salida es
+# --revertir. No aborta: lo que no se puede consultar es 1 y lo decide el resto.
+MOTIVO_SOLO_REVERTIR="la unit de stockapp-api del VPS viejo quedó movida a .congelado pero no enmascarada: retomar la corrida volvería a correr el volcado, que con un .congelado ya existente se niega (exit 8), y no avanzaría nunca. La salida es --revertir, que devuelve la unit a su lugar y vuelve a arrancar el viejo; después, una corrida nueva."
+unit_movida_sin_enmascarar() {
+    orq_ssh VIEJO "test -e ${RAIZ_VIEJO}/etc/systemd/system/stockapp-api.service.congelado"
+    if [[ "$ORQ_RC" -ne 0 ]]; then
+        return 1
+    fi
+    orq_ssh VIEJO "systemctl is-enabled stockapp-api"
+    [[ "$ORQ_SALIDA" != "masked" ]]
+}
+
 # viejo_intacto: 0 si el viejo sigue sirviendo como antes del bloque (active y con la habilitación
 # del paso 5, sin enmascarar). Lo que no se puede consultar sale con 8: no se adivina.
 viejo_intacto() {
@@ -1444,6 +1467,11 @@ corte_paso6() {
         *)
             # 3, 8 o 2: si el bloque no llegó a detener nada, el viejo sigue sirviendo (exit 5). Se
             # confirma mirando el viejo, no el código.
+            if unit_movida_sin_enmascarar; then
+                SALIDA_SUGERIDA="solo-revertir"
+                ESTADO_VIEJO_TXT="detenido, con la unit movida a .congelado y no enmascarada."
+                abortar 6 "volcado-final-vps.sh salió con $rc después del stop: $MOTIVO_SOLO_REVERTIR"
+            fi
             if viejo_intacto; then
                 echo "  - el VPS viejo sigue sirviendo: $ESTADO_VIEJO_TXT"
                 abortar 5 "volcado-final-vps.sh salió con $rc antes del stop: el VPS viejo sigue intacto y sirviendo. Re-correr arranca una corrida nueva."
@@ -2187,19 +2215,25 @@ paso_hecho() {
 
 # recargar_volcado: el volcado de la corrida (pasos 6 y 7 ya hechos) desde el estado, verificado contra
 # los archivos locales: el mismo nombre, el mismo sha256 y el manifiesto que lo nombra.
+# cargar_volcado_dir: la carpeta del último intento del paso 6, del estado y nunca por defecto: si el 6
+# se reintentó, la del primer intento puede tener otro volcado (A11).
+cargar_volcado_dir() {
+    leer_clave_continuar volcado_dir || abortar 3 "el estado no tiene volcado_dir= aunque el paso 6 está hecho: no sé en qué carpeta quedó el volcado de esta corrida, y no lo adivino (A11)."
+    if [[ ! "$VALOR_CLAVE" =~ ^volcado(-[0-9]+)?$ || ! -d "$ORQ_CORRIDA/$VALOR_CLAVE" ]]; then
+        abortar 3 "volcado_dir=$VALOR_CLAVE del estado no es una carpeta de volcado de esta corrida."
+    fi
+    VOLCADO_DIR="$VALOR_CLAVE"
+}
+
 recargar_volcado() {
     local dir sha_local linea
-    VOLCADO_DIR="volcado"
-    if leer_clave_continuar volcado_dir; then
-        VOLCADO_DIR="$VALOR_CLAVE"
-    fi
     leer_clave_continuar volcado || abortar 3 "el estado no tiene volcado= aunque el paso 7 está hecho: no sé qué volcado restaurar."
     VOLCADO="$VALOR_CLAVE"
     leer_clave_continuar sha256 || abortar 3 "el estado no tiene sha256= aunque el paso 7 está hecho."
     SHA_VOLCADO="$VALOR_CLAVE"
     dir="$ORQ_CORRIDA/$VOLCADO_DIR"
-    if [[ ! "$VOLCADO_DIR" =~ ^volcado(-[0-9]+)?$ || ! "$VOLCADO" =~ ^volcado-([0-9]{8}T[0-9]{6}Z)\.dump$ ]]; then
-        abortar 3 "volcado_dir=$VOLCADO_DIR o volcado=$VOLCADO del estado no tienen la forma que deja migrar."
+    if [[ ! "$VOLCADO" =~ ^volcado-([0-9]{8}T[0-9]{6}Z)\.dump$ ]]; then
+        abortar 3 "volcado=$VOLCADO del estado no tiene la forma que deja migrar."
     fi
     MANIFIESTO="volcado-${BASH_REMATCH[1]}.manifiesto"
     if ! sha_local="$(sha256sum -- "$dir/$VOLCADO" 2>/dev/null)" || [[ "${sha_local%% *}" != "$SHA_VOLCADO" ]]; then
@@ -2221,6 +2255,9 @@ recargar_volcado() {
 # volvió a arrancar, restaurar el volcado perdería lo escrito después del dump.
 viejo_sigue_congelado() {
     local desde="$1"
+    if [[ "$desde" -eq 6 ]] && unit_movida_sin_enmascarar; then
+        abortar 3 "no se retoma: $MOTIVO_SOLO_REVERTIR No se tocó nada. deploy/migrar-vps.sh --revertir $ORQ_CORRIDA"
+    fi
     estado_api VIEJO
     habilitacion_viejo
     if [[ "$desde" -eq 6 ]]; then
@@ -2273,6 +2310,42 @@ desde_donde_retomar() {
     fi
 }
 
+# cargar_parametros_de_arnes: contenedores y raíces remotas salen del estado de la corrida (R38). Uno
+# pasado explícito con otro valor sale 2 sin tocar nada: cambiar de contenedor a mitad de una corrida
+# es empezar otra. Un valor que no es el default cuenta como parámetro de arnés: con hosts reales,
+# cargar_config lo rechaza.
+cargar_parametros_de_arnes() {
+    local clave opcion variable defecto
+    for clave in contenedor_viejo contenedor_nuevo raiz_remota_viejo raiz_remota_nuevo; do
+        case "$clave" in
+            contenedor_viejo) opcion=--contenedor-viejo variable=CONTENEDOR_VIEJO defecto=stockapp-pg ;;
+            contenedor_nuevo) opcion=--contenedor-nuevo variable=CONTENEDOR_NUEVO defecto=stockapp-pg ;;
+            raiz_remota_viejo) opcion=--raiz-remota-viejo variable=RAIZ_VIEJO defecto="" ;;
+            raiz_remota_nuevo) opcion=--raiz-remota-nuevo variable=RAIZ_NUEVO defecto="" ;;
+        esac
+        leer_clave_continuar "$clave" || abortar 3 "el estado de $CONTINUAR no dice $clave: no sé contra qué contenedor o raíz retomar, y no lo adivino."
+        if [[ -n "${ARNES_DADO[$opcion]-}" && "${!variable}" != "$VALOR_CLAVE" ]]; then
+            abortar 2 "$opcion '${!variable}' no es el de la corrida ('$VALOR_CLAVE'): --continuar retoma con el contexto de su estado. No se tocó nada."
+        fi
+        case "$clave" in
+            contenedor_*)
+                if [[ ! "$VALOR_CLAVE" =~ ^stockapp[a-z0-9-]*$ ]]; then
+                    abortar 3 "$clave='$VALOR_CLAVE' del estado no matchea ^stockapp[a-z0-9-]*\$."
+                fi
+                ;;
+            raiz_remota_*)
+                if [[ -n "$VALOR_CLAVE" && ( ! "$VALOR_CLAVE" =~ ^/[A-Za-z0-9._/-]+$ || "$VALOR_CLAVE" == *..* ) ]]; then
+                    abortar 3 "$clave='$VALOR_CLAVE' del estado no es una ruta absoluta sin '..'."
+                fi
+                ;;
+        esac
+        printf -v "$variable" '%s' "$VALOR_CLAVE"
+        if [[ "$VALOR_CLAVE" != "$defecto" && -z "${ARNES_DADO[$opcion]-}" ]]; then
+            ARNES_USADO+=("$clave (del estado)")
+        fi
+    done
+}
+
 continuar() {
     local modo rc=0 n
     ORQ_CORRIDA=""
@@ -2290,6 +2363,7 @@ continuar() {
     ENV_VIEJO="$VALOR_CLAVE"
     leer_clave_continuar env_nuevo || abortar 3 "el estado de $CONTINUAR no dice env_nuevo."
     ENV_NUEVO="$VALOR_CLAVE"
+    cargar_parametros_de_arnes
     cargar_config
     verificar_identidad
     leer_clave_continuar machine_id_viejo || VALOR_CLAVE=""
@@ -2331,6 +2405,10 @@ continuar() {
     fi
     obtener_contrasena
     leer_version_del_feed
+    # Todo paso retomado lee su entrada del estado: desde el 7, la carpeta del volcado.
+    if [[ "$DESDE" -ge 7 ]]; then
+        cargar_volcado_dir
+    fi
     if [[ "$DESDE" -ge 8 ]]; then
         recargar_volcado
     fi
@@ -2388,6 +2466,11 @@ main() {
     orq_estado_poner env_nuevo "$ENV_NUEVO"
     orq_estado_poner machine_id_viejo "$MACHINE_ID_VIEJO"
     orq_estado_poner machine_id_nuevo "$MACHINE_ID_NUEVO"
+    # R38: el contexto del arnés (vacío o el default en un corte real) también se relee al continuar.
+    orq_estado_poner contenedor_viejo "$CONTENEDOR_VIEJO"
+    orq_estado_poner contenedor_nuevo "$CONTENEDOR_NUEVO"
+    orq_estado_poner raiz_remota_viejo "$RAIZ_VIEJO"
+    orq_estado_poner raiz_remota_nuevo "$RAIZ_NUEVO"
 
     abrir_paso 1 "pre-vuelo"
     prevuelo
