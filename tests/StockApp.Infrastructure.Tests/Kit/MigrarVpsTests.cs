@@ -322,6 +322,24 @@ public class MigrarVpsTests : IDisposable
                 if [[ "$destino" == "$(cat "$E/fragment")" ]]; then echo enabled > "$E/enabled"; fi
                 : > "$E/recarga-pendiente"
                 ;;
+            # La API nueva: enable antes del start del corte y disable en --revertir (R44). Como systemd
+            # 255: idempotentes, avisan "Created symlink"/"Removed" en stderr y salen 0; is-enabled lee el disco.
+            "sudo -n systemctl enable stockapp-api")
+                [[ "$lado" == nuevo ]] || { echo "stub ssh: enable no previsto en el $lado" >&2; exit 99; }
+                if falla enable; then echo "Failed to enable unit: Access denied" >&2; exit 1; fi
+                if [[ "$(cat "$E/enabled")" != enabled ]]; then
+                    echo enabled > "$E/enabled"
+                    echo "Created symlink /etc/systemd/system/multi-user.target.wants/stockapp-api.service → /etc/systemd/system/stockapp-api.service." >&2
+                fi
+                ;;
+            "sudo -n systemctl disable stockapp-api")
+                [[ "$lado" == nuevo ]] || { echo "stub ssh: disable no previsto en el $lado" >&2; exit 99; }
+                if falla disable; then echo "Failed to disable unit: Access denied" >&2; exit 1; fi
+                if [[ "$(cat "$E/enabled")" == enabled && ! -f "$E/no-se-deshabilita" ]]; then
+                    echo disabled > "$E/enabled"
+                    echo "Removed \"/etc/systemd/system/multi-user.target.wants/stockapp-api.service\"." >&2
+                fi
+                ;;
             "sudo -n systemctl daemon-reload")
                 [[ "$lado" == viejo ]] || { echo "stub ssh: daemon-reload no previsto en el $lado" >&2; exit 99; }
                 if falla daemon-reload; then echo "Failed to reload daemon: Access denied" >&2; exit 1; fi
@@ -585,6 +603,7 @@ public class MigrarVpsTests : IDisposable
         PonerNuevo("env-claves", "POSTGRES_USER\nPOSTGRES_PASSWORD\nPOSTGRES_DB\nJWT_SECRET\n");
         PonerNuevo("active", "active\n");
         PonerNuevo("al-arrancar", "active\n");
+        PonerNuevo("enabled", "enabled\n");
         PonerNuevo("http-raiz", "ok\n");
         PonerNuevo("migracion", "20260101000000_Inicial\n");
         PonerNuevo("logs-auditoria", "42\n");
@@ -2991,6 +3010,8 @@ public class MigrarVpsTests : IDisposable
         var propia = UnaCorrida("revertir");
         Assert.Equal("resultado=REVERTIDO", File.ReadAllLines(Path.Combine(propia, "estado")).Last());
         Assert.Equal(corte, ClaveDeEstado(propia, "corrida_revertida"));
+        // El resultado que tenía la corrida revertida no se pierde.
+        Assert.Equal("GO", ClaveDeEstado(corte, "resultado_previo"));
         Assert.Contains("REVERTIDO", File.ReadAllText(Path.Combine(propia, "registro.log")));
         // Ningún secreto en la salida ni en el log.
         Assert.DoesNotContain(Contrasena, r.Salida);
@@ -3040,6 +3061,8 @@ public class MigrarVpsTests : IDisposable
         Assert.Equal(existen, ExistenEnElViejo());
         AfirmarViejoServidoComoAntes();
         Assert.Equal("resultado=REVERTIDO", File.ReadAllLines(Path.Combine(corte, "estado")).Last());
+        // Re-revertir no pisa el resultado previo con REVERTIDO.
+        Assert.Equal("GO", ClaveDeEstado(corte, "resultado_previo"));
     }
 
     public static TheoryData<string> EstadosDelCongelamiento => new()
@@ -3376,6 +3399,8 @@ public class MigrarVpsTests : IDisposable
 
     [Theory]
     [InlineData("--env-viejo", "x")]
+    [InlineData("--env-nuevo", "x")]
+    [InlineData("--reintentar-restauracion", null)]
     [InlineData("--ensayo", null)]
     [InlineData("--continuar", "x")]
     public void Revertir_ConOpcionesQueSalenDelEstado_Rechaza2(string opcion, string? valor)
@@ -3402,5 +3427,121 @@ public class MigrarVpsTests : IDisposable
 
         Assert.True(r.Exit == 2, r.Todo);
         Assert.Equal("", r.Rastro);
+    }
+
+    // ---------- R43, R44, R46 ----------
+
+    [Fact]
+    public void Revertir_ContenedoresDelViejoCambiaron_CierraRevertidoYSale9SeparandoPropiosDeAjenos()
+    {
+        var primera = CorrerCorte(env: Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "9")));
+        Assert.True(primera.Exit == 6, primera.Todo);
+        var corte = UnaCorrida("corte");
+        // Cambió un contenedor nuestro y uno de la otra aplicación del VPS compartido.
+        PonerViejo("contenedores", "stockapp-pg-otro\npinar-db-2\n");
+        File.Delete(Rastro);
+
+        var r = CorrerRevertir();
+
+        Assert.True(r.Exit == 9, r.Todo);
+        // R-A se cumplió: el viejo atiende y el nuevo está detenido. La corrida se cierra igual (R43).
+        AfirmarViejoServidoComoAntes();
+        Assert.Equal("resultado=REVERTIDO", File.ReadAllLines(Path.Combine(corte, "estado")).Last());
+        Assert.Equal("resultado=REVERTIDO", File.ReadAllLines(Path.Combine(UnaCorrida("revertir"), "estado")).Last());
+        var lineas = r.Salida.Split('\n');
+        var propios = Assert.Single(lineas, l => l.Contains("propios (stockapp*)"));
+        var ajenos = Assert.Single(lineas, l => l.Contains("ajenos"));
+        Assert.Contains("stockapp-pg-otro", propios);
+        Assert.Contains("stockapp-pg", propios.Replace("stockapp-pg-otro", ""));
+        Assert.DoesNotContain("pinar", propios);
+        Assert.Contains("pinar-db-2", ajenos);
+        Assert.Contains("solo informativo", ajenos);
+        Assert.DoesNotContain("stockapp", ajenos);
+    }
+
+    [Fact]
+    public void Revertir_SoloCambiaronContenedoresAjenos_PropiosSinCambiosYSale9()
+    {
+        CorteConGo();
+        PonerViejo("contenedores", "stockapp-pg\npinar-db\npinar-web\n");
+
+        var r = CorrerRevertir();
+
+        Assert.True(r.Exit == 9, r.Todo);
+        var lineas = r.Salida.Split('\n');
+        Assert.Contains("sin cambios", Assert.Single(lineas, l => l.Contains("propios (stockapp*)")));
+        Assert.Contains("pinar-web", Assert.Single(lineas, l => l.Contains("ajenos")));
+        Assert.Equal("resultado=REVERTIDO", File.ReadAllLines(Path.Combine(UnaCorrida("corte"), "estado")).Last());
+    }
+
+    [Fact]
+    public void Revertir_DeshabilitaLaApiNueva_AntesDeTocarElViejo()
+    {
+        CorteConGo();
+        Assert.Equal("enabled", File.ReadAllText(Host("nuevo", "enabled")).Trim());
+
+        var r = CorrerRevertir();
+
+        Assert.True(r.Exit == 0, r.Todo);
+        // R44: detenida Y deshabilitada: un reinicio del VPS nuevo no la vuelve a arrancar.
+        Assert.Equal("disabled", File.ReadAllText(Host("nuevo", "enabled")).Trim());
+        var stop = Linea(r.Rastro, l => l == StopNuevo);
+        var disable = Linea(r.Rastro, l => l == "nuevo\tsudo -n systemctl disable stockapp-api");
+        var primeraDelViejo = Linea(r.Rastro, l => l.StartsWith("viejo\t") && VueltaAtrasViejo.Any(x => x.IsMatch(l["viejo\t".Length..])));
+        Assert.True(stop >= 0 && stop < disable && disable < primeraDelViejo, r.Todo);
+    }
+
+    [Fact]
+    public void Revertir_LaApiNuevaNoQuedaDeshabilitada_Sale6SinTocarElViejo()
+    {
+        CorteConGo();
+        PonerNuevo("no-se-deshabilita", "");
+
+        var r = CorrerRevertir();
+
+        Assert.True(r.Exit == 6, r.Todo);
+        Assert.Empty(EscriturasDeRevertir(r.Rastro).Where(e => e.StartsWith("viejo:")));
+        Assert.Equal("masked", File.ReadAllText(Host("viejo", "enabled")).Trim());
+    }
+
+    [Fact]
+    public void Corte_Paso11_HabilitaLaApiNuevaAntesDelStart()
+    {
+        // Como la deja un --revertir anterior (R44): deshabilitada.
+        PonerNuevo("enabled", "disabled\n");
+
+        var r = CorrerCorte();
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        var enable = Linea(r.Rastro, l => l == "nuevo\tsudo -n systemctl enable stockapp-api");
+        var start = Linea(r.Rastro, l => l == StartNuevo);
+        Assert.True(enable >= 0 && enable < start, r.Todo);
+        Assert.Equal("enabled", File.ReadAllText(Host("nuevo", "enabled")).Trim());
+    }
+
+    [Fact]
+    public void Corte_Paso11_SiNoQuedaHabilitada_Sale7SinArrancar()
+    {
+        PonerNuevo("falla-enable", "");
+
+        var r = CorrerCorte();
+
+        Assert.True(r.Exit == 7, r.Todo);
+        Assert.DoesNotContain(StartNuevo, r.Rastro);
+    }
+
+    [Fact]
+    public void Revertir_NuevoInalcanzable_Sale8SinTocarElViejo_YLaAyudaNombraElPanel()
+    {
+        CorteConGo();
+        PonerNuevo("ssh-caido", "");
+
+        var r = CorrerRevertir();
+
+        Assert.True(r.Exit == 8, r.Todo);
+        Assert.Empty(EscriturasDeRevertir(r.Rastro));
+        Assert.Equal("masked", File.ReadAllText(Host("viejo", "enabled")).Trim());
+        // R46: por ssh no se lo puede detener; hay que apagarlo desde el panel del proveedor.
+        Assert.Contains("panel del proveedor", r.Salida);
     }
 }

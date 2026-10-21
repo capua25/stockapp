@@ -43,7 +43,12 @@
 #                   Es idempotente: re-correrlo da YA ESTABA en cada paso y no modifica nada. Códigos: 0
 #                   revertido, 2 uso, 3 precondición o escrituras reales (R-B), 4 sin confirmar, 6 falló un
 #                   paso de la vuelta (re-correr), 8 no pude consultar o la unit no se puede devolver sin
-#                   pisar, 9 otros servidores que los de la corrida o el docker ps del viejo cambió.
+#                   pisar, 9 otros servidores que los de la corrida o el docker ps del viejo cambió (en ese
+#                   caso la vuelta atrás ya se hizo y la corrida queda REVERTIDO: se informa separando los
+#                   contenedores stockapp* de los ajenos). La API nueva queda detenida Y deshabilitada (el
+#                   paso 11 de un corte posterior la vuelve a habilitar); el resultado previo de la corrida
+#                   revertida queda en resultado_previo. Con el VPS nuevo inalcanzable sale 8 sin tocar el
+#                   viejo: hay que apagar el nuevo desde el panel del proveedor.
 #   --env-viejo     .env del operador para el VPS viejo. Default: deploy/.env.
 #                   Además de los VPS_*: VPS_ADMIN_USER (obligatorio; no cae a BOOTSTRAP_ADMIN_USER)
 #                   y VPS_ADMIN_PASSWORD. La contraseña sale del entorno, si no del archivo y, si
@@ -107,7 +112,8 @@
 #    8  directorio remoto NUEVO (mkdir sin -p), scp, chmod y sha256sum remoto igual al del estado.
 #    9  restaurar-backup.sh --recrear-base por ssh. Con un código distinto de 0 NO se arranca la API.
 #   10  extrae el historial de backups y le da dueño stockapp.
-#   11  arranca la API nueva y espera (120 s, reloj monotónico) active y GET / por loopback.
+#   11  habilita (enable) y arranca la API nueva, y espera (120 s, reloj monotónico) active y GET / por
+#       loopback.
 #   12  V1-V8 y V10; anota LogsAuditoria para --revertir.
 #   13  resumen: GO (0) o NO-GO (7), fin_rollback = congelado + 14 días y el comando de vuelta atrás.
 # Después del congelamiento, todo fallo deja la corrida abierta (sin resultado=) y dice cómo seguir
@@ -1743,6 +1749,17 @@ corte_paso10() {
 corte_paso11() {
     local limite
     paso 11
+    # R44: habilitada antes del start (un --revertir anterior la deja deshabilitada): si el VPS nuevo se
+    # reinicia después del corte, la API vuelve a arrancar sola.
+    orq_ssh NUEVO "sudo -n systemctl enable stockapp-api"
+    falla_remota 7 "'systemctl enable stockapp-api' en el VPS nuevo"
+    orq_ssh NUEVO "systemctl is-enabled stockapp-api"
+    if [[ "$ORQ_RC" -eq 255 ]]; then
+        consulta_ok "la habilitación de stockapp-api en el VPS nuevo"
+    fi
+    if [[ "$ORQ_SALIDA" != "enabled" ]]; then
+        abortar 7 "tras el enable, stockapp-api del VPS nuevo dice '${ORQ_SALIDA}' (se esperaba enabled): no se arranca."
+    fi
     orq_ssh NUEVO "sudo -n systemctl start stockapp-api"
     if [[ "$ORQ_RC" -eq 255 ]]; then
         falla_remota 7 "'systemctl start stockapp-api' en el VPS nuevo"
@@ -2550,10 +2567,13 @@ ayuda_de_revertir() {
         if [[ -n "${ORQ_CORRIDA:-}" ]]; then
             echo "Registro: $ORQ_CORRIDA/registro.log"
         fi
-        echo "Es seguro re-correrla (cada paso mira el estado real y hace solo lo que falta):"
+        echo "Re-correrla no rompe nada (cada paso mira el estado real y hace solo lo que falta):"
         echo "    deploy/migrar-vps.sh --revertir${OBJETIVO:+ $OBJETIVO}"
         echo "A mano: primero, en el VPS nuevo,"
         echo "    sudo systemctl stop stockapp-api"
+        echo "    sudo systemctl disable stockapp-api"
+        echo "Si el VPS nuevo no responde por ssh, apagalo desde el panel del proveedor (o asegurate de que su"
+        echo "API no atiende) antes de tocar el viejo: con dos APIs vivas, lo escrito en la nueva se pierde."
         echo "y después, en el VPS viejo y en este orden (el unmask si is-enabled dice masked; el mv solo si"
         echo "existe el .congelado y NO existe la unit; si existen los dos, no pises ninguno):"
         comandos_de_vuelta_atras
@@ -2755,21 +2775,51 @@ EOF
 }
 
 # Paso 4: la API nueva, PRIMERO: con dos APIs vivas, lo escrito en la nueva se perdería.
+# habilitacion_nuevo -> HABILITACION_NUEVO: la palabra de is-enabled de la API nueva (0 y 1 son respuestas).
+HABILITACION_NUEVO=""
+habilitacion_nuevo() {
+    orq_ssh NUEVO "systemctl is-enabled stockapp-api"
+    case "$ORQ_RC" in
+        0 | 1) ;;
+        *) consulta_ok "la habilitación de stockapp-api en el VPS nuevo" ;;
+    esac
+    if [[ ! "$ORQ_SALIDA" =~ ^[a-z-]+$ ]]; then
+        abortar 8 "no pude interpretar 'systemctl is-enabled stockapp-api' del VPS nuevo: '${ORQ_SALIDA}'."
+    fi
+    HABILITACION_NUEVO="$ORQ_SALIDA"
+}
+
+# Paso 4, también: deshabilitada (R44), para que un reinicio del VPS nuevo no la vuelva a arrancar con el
+# viejo sirviendo. El paso 11 del corte la vuelve a habilitar.
 revertir_detener_nuevo() {
+    local hizo=0
     abrir_paso 4 "detener la API nueva"
     estado_api NUEVO
-    if [[ "$ESTADO_API" == "inactive" || "$ESTADO_API" == "failed" ]]; then
-        cerrar_paso 4 "YA ESTABA" "stockapp-api dice $ESTADO_API"
-        return 0
-    fi
-    orq_ssh NUEVO "sudo -n systemctl stop stockapp-api"
-    falla_remota 6 "'systemctl stop stockapp-api' en el VPS nuevo"
-    estado_api NUEVO
-    # failed tampoco atiende (R36): ningún proceso de la API nueva escribe en la base.
     if [[ "$ESTADO_API" != "inactive" && "$ESTADO_API" != "failed" ]]; then
-        abortar 6 "tras el stop, stockapp-api del VPS nuevo dice '$ESTADO_API': no se toca el viejo con dos APIs vivas. El viejo no se tocó."
+        orq_ssh NUEVO "sudo -n systemctl stop stockapp-api"
+        falla_remota 6 "'systemctl stop stockapp-api' en el VPS nuevo"
+        hizo=1
+        estado_api NUEVO
+        # failed tampoco atiende (R36): ningún proceso de la API nueva escribe en la base.
+        if [[ "$ESTADO_API" != "inactive" && "$ESTADO_API" != "failed" ]]; then
+            abortar 6 "tras el stop, stockapp-api del VPS nuevo dice '$ESTADO_API': no se toca el viejo con dos APIs vivas. El viejo no se tocó."
+        fi
     fi
-    cerrar_paso 4 OK
+    habilitacion_nuevo
+    if [[ "$HABILITACION_NUEVO" == "enabled" ]]; then
+        orq_ssh NUEVO "sudo -n systemctl disable stockapp-api"
+        falla_remota 6 "'systemctl disable stockapp-api' en el VPS nuevo"
+        hizo=1
+        habilitacion_nuevo
+        if [[ "$HABILITACION_NUEVO" == "enabled" ]]; then
+            abortar 6 "tras el disable, stockapp-api del VPS nuevo sigue enabled: un reinicio la volvería a arrancar. El viejo no se tocó."
+        fi
+    fi
+    if [[ "$hizo" -eq 1 ]]; then
+        cerrar_paso 4 OK "$ESTADO_API y $HABILITACION_NUEVO"
+    else
+        cerrar_paso 4 "YA ESTABA" "stockapp-api dice $ESTADO_API y $HABILITACION_NUEVO"
+    fi
 }
 
 # Pasos 5 a 8: los cuatro comandos de R-A, cada uno solo si hace falta.
@@ -2833,6 +2883,36 @@ revertir_viejo() {
 
 # Paso 9: el viejo active Y atendiendo por loopback (espera acotada, reloj monotónico), no enmascarado,
 # con el mismo docker ps que antes del corte; el nuevo, detenido.
+# diferencia_de_contenedores <antes> <ahora> -> CONTENEDORES_CAMBIARON (texto, vacío si no hay
+# diferencias): los stockapp* (nuestros: hay que investigar) separados de los ajenos (la otra
+# aplicación del VPS compartido: solo informativo).
+CONTENEDORES_CAMBIARON=""
+diferencia_de_contenedores() {
+    local faltan nuevos fp="" np="" fa="" na="" c
+    faltan="$(LC_ALL=C comm -23 <(printf '%s\n' "$1") <(printf '%s\n' "$2"))"
+    nuevos="$(LC_ALL=C comm -13 <(printf '%s\n' "$1") <(printf '%s\n' "$2"))"
+    while IFS= read -r c; do
+        [[ -n "$c" ]] || continue
+        if [[ "$c" == stockapp* ]]; then fp+="${fp:+ }$c"; else fa+="${fa:+ }$c"; fi
+    done <<< "$faltan"
+    while IFS= read -r c; do
+        [[ -n "$c" ]] || continue
+        if [[ "$c" == stockapp* ]]; then np+="${np:+ }$c"; else na+="${na:+ }$c"; fi
+    done <<< "$nuevos"
+    CONTENEDORES_CAMBIARON="  - propios (stockapp*): "
+    if [[ -z "$fp$np" ]]; then
+        CONTENEDORES_CAMBIARON+="sin cambios"
+    else
+        CONTENEDORES_CAMBIARON+="faltan: ${fp:-(ninguno)}; nuevos: ${np:-(ninguno)}. Son de StockApp: investigalo."
+    fi
+    CONTENEDORES_CAMBIARON+=$'\n'"  - ajenos (la otra aplicación del VPS compartido; solo informativo): "
+    if [[ -z "$fa$na" ]]; then
+        CONTENEDORES_CAMBIARON+="sin cambios"
+    else
+        CONTENEDORES_CAMBIARON+="faltan: ${fa:-(ninguno)}; nuevos: ${na:-(ninguno)}"
+    fi
+}
+
 revertir_verificar() {
     local limite actual esperado lista="$OBJETIVO/contenedores-viejo.txt"
     abrir_paso 9 "verificación"
@@ -2866,12 +2946,18 @@ revertir_verificar() {
     if [[ -f "$lista" ]]; then
         orq_ssh VIEJO "docker ps --format '{{.Names}}'"
         consulta_ok "la lista de contenedores del VPS viejo"
+        if [[ -z "$ORQ_SALIDA" ]]; then
+            abortar 8 "la lista de contenedores del VPS viejo vino vacía: no puedo interpretarla."
+        fi
         actual="$(printf '%s\n' "$ORQ_SALIDA" | LC_ALL=C sort)"
         esperado="$(cat "$lista")" || abortar 8 "no pude leer $lista."
-        if [[ -z "$ORQ_SALIDA" || "$actual" != "$esperado" ]]; then
-            abortar 9 "la lista de contenedores del VPS viejo cambió: antes '$(printf '%s' "$esperado" | tr '\n' ' ')', ahora '$(printf '%s' "$actual" | tr '\n' ' ')'. stockapp-api del viejo ya atiende; un humano tiene que mirar los contenedores."
+        if [[ "$actual" != "$esperado" ]]; then
+            # R43: R-A ya se cumplió; la diferencia se informa al final, con la corrida cerrada.
+            diferencia_de_contenedores "$esperado" "$actual"
+            echo "  - viejo: la lista de contenedores NO es la de antes del corte (ver el final)"
+        else
+            echo "  - viejo: los mismos contenedores que antes del corte"
         fi
-        echo "  - viejo: los mismos contenedores que antes del corte"
     else
         echo "  - viejo: la corrida no guardó contenedores-viejo.txt (no llegó al paso 5): no se compara"
     fi
@@ -2879,7 +2965,11 @@ revertir_verificar() {
     if [[ "$ESTADO_API" != "inactive" && "$ESTADO_API" != "failed" ]]; then
         abortar 6 "stockapp-api del VPS nuevo dice '$ESTADO_API': tiene que quedar detenida (dos APIs vivas)."
     fi
-    echo "  - nuevo: stockapp-api detenida ($ESTADO_API)"
+    habilitacion_nuevo
+    if [[ "$HABILITACION_NUEVO" == "enabled" ]]; then
+        abortar 6 "stockapp-api del VPS nuevo quedó enabled: un reinicio la volvería a arrancar."
+    fi
+    echo "  - nuevo: stockapp-api detenida ($ESTADO_API) y $HABILITACION_NUEVO"
     cerrar_paso 9 OK
 }
 
@@ -2914,6 +3004,10 @@ revertir() {
     revertir_viejo
     revertir_verificar
 
+    # El resultado que tenía (GO, NO-GO, FALLO-<n>) no se pierde; re-revertir no lo pisa con REVERTIDO.
+    if leer_clave_continuar resultado && [[ "$VALOR_CLAVE" != "REVERTIDO" ]]; then
+        poner_en_objetivo resultado_previo "$VALOR_CLAVE" || abortar 8 "no pude escribir resultado_previo en $OBJETIVO/estado."
+    fi
     poner_en_objetivo resultado REVERTIDO || abortar 8 "el viejo ya atiende, pero no pude escribir resultado=REVERTIDO en $OBJETIVO/estado."
     orq_estado_poner resultado REVERTIDO
     echo
@@ -2921,6 +3015,14 @@ revertir() {
     echo "  corrida revertida: $OBJETIVO (resultado=REVERTIDO)"
     echo "  VPS nuevo: stockapp-api detenida; no la arranques a mano mientras el viejo sirve."
     echo "  Para migrar otra vez: una corrida nueva (deploy/migrar-vps.sh --ensayo y después el corte)."
+    if [[ -n "$CONTENEDORES_CAMBIARON" ]]; then
+        # R43: la corrida queda cerrada (si no, R24 bloquearía todo corte por un cambio de la otra app).
+        echo
+        echo "ATENCIÓN: la lista de contenedores del VPS viejo no es la de antes del corte ($OBJETIVO/contenedores-viejo.txt):"
+        printf '%s\n' "$CONTENEDORES_CAMBIARON"
+        SIN_AYUDA_DE_REVERTIR=1
+        abortar 9 "la vuelta atrás se hizo (el viejo atiende, el nuevo está detenido y la corrida quedó REVERTIDO), pero cambiaron contenedores del VPS viejo: un humano tiene que mirarlos."
+    fi
     exit 0
 }
 
