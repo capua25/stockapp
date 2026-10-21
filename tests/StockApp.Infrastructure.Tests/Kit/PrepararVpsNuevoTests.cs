@@ -684,6 +684,279 @@ public class PrepararVpsNuevoTests
         Assert.Equal("755", h.Ejecutar("sudo stat -c %a /var/lib/stockapp/.local/share").Salida.Trim());
     }
 
+    // ---------- Paso 3: firewall con reversa (A8) ----------
+
+    private const string Reversa = "stockapp-ufw-reversa";
+    private const string TimerDeLaReversa = "/run/systemd/transient/stockapp-ufw-reversa.timer";
+
+    private static bool TimerArmado(HostSimulado h) =>
+        h.Ejecutar($"test -f {TimerDeLaReversa}").ExitCode == 0;
+
+    /// <summary>
+    /// Reemplaza un shim del host por un envoltorio que, ante los argumentos dados, hace como
+    /// que anduvo (exit 0, sin tocar nada) y, ante cualquier otra cosa, delega en el shim
+    /// original (movido a `.real`). Sirve para simular un ufw que ignora una regla, un
+    /// systemd-run que no arma nada o un systemctl que no para un timer.
+    /// </summary>
+    private static void Envolver(HostSimulado h, string ruta, string patronDeArgumentos)
+    {
+        Assert.Equal(0, h.Ejecutar($"sudo mv {ruta} {ruta}.real").ExitCode);
+        h.Escribir(ruta,
+            "#!/bin/bash\n" +
+            $"case \"$*\" in\n  {patronDeArgumentos}) exit 0 ;;\nesac\n" +
+            $"exec {ruta}.real \"$@\"\n");
+        Assert.Equal(0, h.Ejecutar($"sudo chmod 0755 {ruta}").ExitCode);
+    }
+
+    private static void Desenvolver(HostSimulado h, string ruta) =>
+        Assert.Equal(0, h.Ejecutar($"sudo mv {ruta}.real {ruta}").ExitCode);
+
+    private static int Indice(string[] lineas, int desde, Func<string, bool> condicion) =>
+        Array.FindIndex(lineas, desde, l => condicion(l));
+
+    [Fact]
+    public void Firewall_Orden()
+    {
+        using var h = CrearHost();
+
+        var r = Correr(h, ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*3/10\) firewall \.+ OK", r.Stdout);
+        var l = LineasSsh(h);
+        var texto = string.Join('\n', l);
+        var iAllowSsh = Indice(l, 0, x => x.Contains($"ufw allow {h.PuertoSsh}/tcp"));
+        var iAllow80 = Indice(l, 0, x => x.Contains("ufw allow 80/tcp"));
+        var iAllowApi = Indice(l, 0, x => x.Contains("ufw allow 8443/tcp"));
+        var iReversa = Indice(l, 0, x => x.Contains($"systemd-run --unit={Reversa}"));
+        var iEnable = Indice(l, 0, x => x.Contains("ufw --force enable"));
+        var iNueva = iEnable < 0 ? -1 : Indice(l, iEnable + 1, x => x.Contains("sudo -n true") && x.Contains("ControlMaster=no"));
+        var iStop = iNueva < 0 ? -1 : Indice(l, iNueva + 1, x => x.Contains($"systemctl stop {Reversa}.timer"));
+
+        Assert.True(iAllowSsh >= 0 && iAllow80 >= 0 && iAllowApi >= 0, "faltan los tres ufw allow:\n" + texto);
+        Assert.True(iReversa >= 0, "no se armó la reversa:\n" + texto);
+        Assert.True(iEnable >= 0, "no hay ufw --force enable:\n" + texto);
+        Assert.True(iNueva >= 0, "no hay una conexión nueva después del enable:\n" + texto);
+        Assert.True(iStop >= 0, "no se desarmó la reversa después de la conexión nueva:\n" + texto);
+        // El orden exacto: los tres allow < la reversa < el enable < la conexión nueva < el stop.
+        Assert.True(Math.Max(iAllowSsh, Math.Max(iAllow80, iAllowApi)) < iReversa, texto);
+        Assert.True(iReversa < iEnable, texto);
+        Assert.Contains("--on-active=120", l[iReversa]);
+        Assert.Contains("/usr/sbin/ufw disable", l[iReversa]);
+        // Con una conexión que no sale del cliente: sin maestro, sin esperar de más, sin preguntar.
+        Assert.Contains("ControlPath=none", l[iNueva]);
+        Assert.Contains("ConnectTimeout=", l[iNueva]);
+        Assert.Contains("BatchMode=yes", l[iNueva]);
+
+        // El resultado: firewall activo con las tres reglas y ninguna reversa pendiente.
+        var estado = h.EstadoUfw();
+        Assert.Contains("Status: active", estado);
+        foreach (var regla in new[] { $"{h.PuertoSsh}/tcp", "80/tcp", "8443/tcp" })
+            Assert.Matches($@"(?m)^{Regex.Escape(regla)}\s+ALLOW\s+Anywhere$", estado);
+        Assert.False(TimerArmado(h), "la reversa quedó armada");
+    }
+
+    [Fact]
+    public void Firewall_PuertoSshDelEnv_NoElDe22()
+    {
+        using var h = HostSimulado.Crear(puertoSsh: 2222);
+        h.ResolverDominio(Dominio);
+
+        var r = Correr(h, ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Contains("ufw allow 2222/tcp", string.Join('\n', LineasSsh(h)));
+        Assert.Matches(@"(?m)^2222/tcp\s+ALLOW\s+Anywhere$", h.EstadoUfw());
+    }
+
+    [Fact]
+    public void Firewall_NuncaReset()
+    {
+        using var h = CrearHost();
+
+        var r = Correr(h, ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        var todo = string.Join('\n', LineasSsh(h)) + "\n" + h.RastroHost();
+        Assert.DoesNotContain("ufw reset", todo);
+        Assert.DoesNotContain("ufw delete", todo);
+        Assert.DoesNotContain("--force reset", todo);
+    }
+
+    [Fact]
+    public void Firewall_ReChequeoFallido_Sale6ConLaReversaArmada()
+    {
+        using var h = CrearHost();
+        // Un ufw que "acepta" la regla del puerto ssh y no la crea: el caso del puerto mal tipeado.
+        Envolver(h, "/usr/sbin/ufw", $"\"allow {h.PuertoSsh}/tcp\"");
+
+        var r = Correr(h, ConBase());
+
+        Assert.True(r.Exit == 6, r.Todo);
+        Assert.Contains("la reversa deshace el firewall en 120 s; esperá y re-corré", r.Stderr);
+        Assert.Matches(@"\(\s*3/10\) firewall \.+ FALLÓ", r.Stdout);
+        Assert.True(TimerArmado(h), "la reversa no está armada y el operador quedó afuera");
+        Assert.DoesNotContain(LineasSsh(h), x => x.Contains($"systemctl stop {Reversa}"));
+        Assert.Contains("Status: active", h.EstadoUfw());
+        // Nada de lo que sigue al firewall corrió.
+        Assert.DoesNotMatch(@"\(\s*4/10\)", r.Stdout);
+    }
+
+    [Fact]
+    public void Firewall_ReChequeo_NoReusaElMaestroSsh()
+    {
+        using var h = CrearHost();
+        Envolver(h, "/usr/sbin/ufw", $"\"allow {h.PuertoSsh}/tcp\"");
+
+        var r = Correr(h, ConBase());
+
+        // El maestro ya estaba abierto (lo abrió el pre-vuelo): una conexión que lo reutilizara
+        // diría "anda" con el firewall cerrado y desarmaría la reversa. Tiene que salir 6.
+        Assert.True(File.Exists(Path.Combine(h.DirOperador, $"maestro-{HostSimulado.Usuario}-{h.PuertoSsh}")),
+            "el test no abrió el maestro: no prueba nada");
+        Assert.True(r.Exit == 6, r.Todo);
+        var l = LineasSsh(h);
+        var iEnable = Indice(l, 0, x => x.Contains("ufw --force enable"));
+        Assert.True(iEnable >= 0, string.Join('\n', l));
+        var recheck = l[(iEnable + 1)..].Where(x => x.Contains("sudo -n true")).ToArray();
+        Assert.NotEmpty(recheck);
+        Assert.All(recheck, x =>
+        {
+            Assert.Contains("ControlMaster=no", x);
+            Assert.Contains("ControlPath=none", x);
+        });
+        Assert.True(TimerArmado(h));
+    }
+
+    [Fact]
+    public void Firewall_TrasLaReversa_ReCorrerCompleta()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        Envolver(h, "/usr/sbin/ufw", $"\"allow {h.PuertoSsh}/tcp\"");
+        Assert.Equal(6, arbol.Correr(ConBase()).Exit);
+        // El timer vence: la reversa corre `ufw disable` y la unidad transitoria se borra.
+        Assert.Equal(0, h.Ejecutar($"sudo systemctl start {Reversa}.service").ExitCode);
+        Assert.DoesNotContain("Status: active", h.EstadoUfw());
+        Assert.False(TimerArmado(h));
+        Desenvolver(h, "/usr/sbin/ufw");
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*3/10\) firewall \.+ OK", r.Stdout);
+        Assert.Contains("Status: active", h.EstadoUfw());
+        Assert.False(TimerArmado(h));
+    }
+
+    [Fact]
+    public void Firewall_YaActivo_NoReArmaNiReHabilita()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        Assert.Equal(0, arbol.Correr(ConBase()).Exit);
+        var sshAntes = LineasSsh(h).Length;
+        var hostAntes = h.RastroHost();
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*3/10\) firewall \.+ YA ESTABA", r.Stdout);
+        var nuevas = string.Join('\n', LineasSsh(h)[sshAntes..]) + "\n" + string.Join('\n', LineasAdicionales(hostAntes, h.RastroHost()));
+        Assert.DoesNotContain("systemd-run", nuevas);
+        Assert.DoesNotContain("enable", nuevas);
+        Assert.DoesNotContain("ufw allow", nuevas);
+    }
+
+    [Fact]
+    public void Firewall_ActivoSinUnaRegla_LaAgregaSinReArmarNiReHabilitar()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        Assert.Equal(0, arbol.Correr(ConBase()).Exit);
+        Assert.Equal(0, h.Ejecutar("sudo sed -i '/^8443\\/tcp$/d' /var/lib/hostsim/ufw/reglas").ExitCode);
+        Assert.DoesNotMatch(@"(?m)^8443/tcp", h.EstadoUfw());
+        var sshAntes = LineasSsh(h).Length;
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*3/10\) firewall \.+ OK", r.Stdout);
+        Assert.Matches(@"(?m)^8443/tcp\s+ALLOW\s+Anywhere$", h.EstadoUfw());
+        var nuevas = string.Join('\n', LineasSsh(h)[sshAntes..]);
+        Assert.DoesNotContain("systemd-run", nuevas);
+        Assert.DoesNotContain("ufw --force enable", nuevas);
+    }
+
+    [Fact]
+    public void Firewall_ReversaYaArmada_NoReArmaYLaDesarmaTrasVerificar()
+    {
+        // Una corrida anterior que murió con la reversa armada y el firewall todavía activo.
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        Assert.Equal(0, arbol.Correr(ConBase()).Exit);
+        Assert.Equal(0, h.Ejecutar($"sudo systemd-run --unit={Reversa} --on-active=120 /usr/sbin/ufw disable").ExitCode);
+        Assert.True(TimerArmado(h));
+        var sshAntes = LineasSsh(h).Length;
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.DoesNotMatch(@"\(\s*3/10\) firewall \.+ YA ESTABA", r.Stdout);   // con la reversa armada NO está hecho
+        var nuevas = LineasSsh(h)[sshAntes..];
+        Assert.DoesNotContain(nuevas, x => x.Contains("systemd-run"));
+        Assert.DoesNotContain(nuevas, x => x.Contains("ufw --force enable"));
+        var iNueva = Indice(nuevas, 0, x => x.Contains("sudo -n true") && x.Contains("ControlMaster=no"));
+        var iStop = Indice(nuevas, 0, x => x.Contains($"systemctl stop {Reversa}.timer"));
+        Assert.True(iNueva >= 0 && iStop > iNueva, string.Join('\n', nuevas));
+        Assert.False(TimerArmado(h));
+        Assert.Contains("Status: active", h.EstadoUfw());
+    }
+
+    [Fact]
+    public void Firewall_ElStopNoDesarmaLaReversa_Sale6()
+    {
+        using var h = CrearHost();
+        // Un systemctl que dice que paró el timer y no lo paró: el exit 0 no alcanza.
+        Envolver(h, "/usr/local/sbin/systemctl", $"\"stop {Reversa}.timer\"");
+
+        var r = Correr(h, ConBase());
+
+        Assert.True(r.Exit == 6, r.Todo);
+        Assert.Contains("la reversa deshace el firewall en 120 s; esperá y re-corré", r.Stderr);
+        Assert.True(TimerArmado(h));
+    }
+
+    [Fact]
+    public void Firewall_LaReversaNoQuedaArmada_NoHabilitaElFirewall()
+    {
+        using var h = CrearHost();
+        // Un systemd-run que sale 0 sin crear el timer: habilitar sin red de seguridad es el riesgo.
+        Envolver(h, "/usr/local/sbin/systemd-run", "*");
+
+        var r = Correr(h, ConBase());
+
+        Assert.True(r.Exit == 5, r.Todo);
+        Assert.DoesNotContain("ufw --force enable", string.Join('\n', LineasSsh(h)) + h.RastroHost());
+        Assert.DoesNotContain("Status: active", h.EstadoUfw());
+        Assert.DoesNotMatch(@"\(\s*4/10\)", r.Stdout);
+    }
+
+    [Fact]
+    public void Verificar_FirewallSinActivar_PendienteYSoloLee()
+    {
+        using var h = CrearHost();
+
+        var r = Correr(h, ConBase("--verificar"));
+
+        Assert.True(r.Exit == 5, r.Todo);
+        Assert.Matches(@"\(\s*3/10\) firewall \.+ PENDIENTE", r.Stdout);
+        var todo = string.Join('\n', LineasSsh(h)) + "\n" + h.RastroHost();
+        Assert.DoesNotContain("ufw allow", todo);
+        Assert.DoesNotContain("systemd-run", todo);
+        Assert.DoesNotContain("enable", todo);
+    }
+
     // ---------- Lock ----------
 
     [Fact]

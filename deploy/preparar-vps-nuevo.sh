@@ -521,14 +521,186 @@ paso2_aplicar() {
 }
 
 # ---------------------------------------------------------------------------------------
+# Paso 3: firewall con reversa automática (A8)
+# ---------------------------------------------------------------------------------------
+
+# Nombre EXACTO del timer transitorio de la reversa y su plazo.
+FW_REVERSA="stockapp-ufw-reversa"
+FW_REVERSA_SEGUNDOS=120
+FW_MENSAJE_REVERSA="la reversa deshace el firewall en ${FW_REVERSA_SEGUNDOS} s; esperá y re-corré"
+
+# fw_estado: deja FW_ACTIVO (1 activo, 0 inactivo) y FW_REGLAS_FALTAN (las reglas que no están,
+# separadas por espacio). rc 0 / 8 (no pude consultar o la salida no es la de ufw).
+fw_estado() {
+    local linea primera="" campos regla
+    FW_ACTIVO=0
+    FW_REGLAS_FALTAN=""
+    orq_ssh NUEVO "sudo -n ufw status"
+    if [[ "$ORQ_RC" -ne 0 ]]; then
+        PASO_DETALLE="'ufw status' salió con $ORQ_RC. ${ORQ_STDERR}"
+        return 8
+    fi
+    primera="${ORQ_SALIDA%%$'\n'*}"
+    case "$primera" in
+        "Status: active") FW_ACTIVO=1 ;;
+        "Status: inactive") FW_ACTIVO=0 ;;
+        *)
+            PASO_DETALLE="la salida de 'ufw status' no es la esperada."
+            return 8
+            ;;
+    esac
+    for regla in "${NUEVO_VPS_SSH_PORT}/tcp" "80/tcp" "${NUEVO_API_PORT}/tcp"; do
+        local esta=0
+        while IFS= read -r linea; do
+            read -r -a campos <<< "$linea"
+            if [[ "${campos[0]:-}" == "$regla" && "${campos[1]:-}" == "ALLOW" ]]; then
+                esta=1
+            fi
+        done <<< "$ORQ_SALIDA"
+        if [[ "$esta" -eq 0 ]]; then
+            FW_REGLAS_FALTAN+="${FW_REGLAS_FALTAN:+ }$regla"
+        fi
+    done
+    # Con el firewall inactivo las reglas guardadas no figuran en `status`: se vuelven a pedir.
+    if [[ "$FW_ACTIVO" -eq 0 ]]; then
+        FW_REGLAS_FALTAN="${NUEVO_VPS_SSH_PORT}/tcp 80/tcp ${NUEVO_API_PORT}/tcp"
+    fi
+}
+
+# fw_reversa_armada: deja FW_ARMADA (1 el timer existe, 0 no existe). rc 0 / 8.
+fw_reversa_armada() {
+    FW_ARMADA=0
+    orq_ssh NUEVO "systemctl show -p LoadState --value ${FW_REVERSA}.timer"
+    if [[ "$ORQ_RC" -ne 0 ]]; then
+        PASO_DETALLE="no pude consultar el timer ${FW_REVERSA}.timer (salió con $ORQ_RC). ${ORQ_STDERR}"
+        return 8
+    fi
+    case "$ORQ_SALIDA" in
+        not-found) FW_ARMADA=0 ;;
+        loaded) FW_ARMADA=1 ;;
+        *)
+            PASO_DETALLE="respuesta ilegible sobre el timer ${FW_REVERSA}.timer."
+            return 8
+            ;;
+    esac
+}
+
+# Hecho = activo + las tres reglas + SIN reversa armada (una reversa pendiente deshace el firewall).
+paso3_hecho() {
+    local rc=0
+    fw_estado || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        return "$rc"
+    fi
+    if [[ "$FW_ACTIVO" -ne 1 || -n "$FW_REGLAS_FALTAN" ]]; then
+        return 1
+    fi
+    fw_reversa_armada || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        return "$rc"
+    fi
+    if [[ "$FW_ARMADA" -eq 1 ]]; then
+        return 1
+    fi
+    return 0
+}
+
+# fw_permitir <puerto>: `ufw allow` es idempotente (si la regla ya existe, la saltea). Nunca se
+# reinicia el firewall ni se borra ninguna regla: solo se agregan.
+fw_permitir() {
+    orq_ssh NUEVO "sudo -n ufw allow ${1}/tcp"
+    if [[ "$ORQ_RC" -ne 0 ]]; then
+        volcar_error
+        if [[ "$ORQ_RC" -eq 255 ]]; then
+            return 8
+        fi
+        PASO_DETALLE="'ufw allow ${1}/tcp' salió con $ORQ_RC."
+        return 1
+    fi
+}
+
+# El orden es el de la spec (6.4, Firewall) y no se altera: SSH primero, reversa armada, enable,
+# re-chequeo con una conexión NUEVA y, solo si respondió, se desarma la reversa.
+paso3_aplicar() {
+    local rc=0
+
+    # 1. Las tres reglas, la de ssh primero.
+    fw_permitir "$NUEVO_VPS_SSH_PORT" || return $?
+    fw_permitir 80 || return $?
+    fw_permitir "$NUEVO_API_PORT" || return $?
+
+    fw_estado || return $?
+    fw_reversa_armada || return $?
+
+    # 2. Si ya estaba activo y sin reversa pendiente, se termina acá (las reglas ya se re-verificaron).
+    if [[ "$FW_ACTIVO" -eq 1 && "$FW_ARMADA" -eq 0 ]]; then
+        return 0
+    fi
+
+    # 3. La reversa, ANTES del enable. Una reversa que quedó armada de una corrida anterior se
+    #    conserva (systemd-run falla si el nombre existe): igual se la desarma después del re-chequeo.
+    if [[ "$FW_ARMADA" -eq 0 ]]; then
+        orq_ssh NUEVO "sudo -n systemd-run --unit=${FW_REVERSA} --on-active=${FW_REVERSA_SEGUNDOS} /usr/sbin/ufw disable"
+        if [[ "$ORQ_RC" -ne 0 ]]; then
+            volcar_error
+            if [[ "$ORQ_RC" -eq 255 ]]; then
+                return 8
+            fi
+            PASO_DETALLE="no pude armar la reversa del firewall (systemd-run salió con $ORQ_RC): no se habilita el firewall sin ella."
+            return 1
+        fi
+        # Un systemd-run que sale 0 y no dejó el timer no es una red de seguridad.
+        fw_reversa_armada || return $?
+        if [[ "$FW_ARMADA" -ne 1 ]]; then
+            PASO_DETALLE="la reversa del firewall no quedó armada: no se habilita el firewall sin ella."
+            return 1
+        fi
+    fi
+
+    # 4. Habilitar (si ya estaba activo, con la reversa de una corrida anterior, no se repite).
+    if [[ "$FW_ACTIVO" -eq 0 ]]; then
+        orq_ssh NUEVO "sudo -n ufw --force enable"
+        if [[ "$ORQ_RC" -ne 0 ]]; then
+            volcar_error
+            PASO_DETALLE="'ufw --force enable' salió con $ORQ_RC y el estado del firewall es incierto: ${FW_MENSAJE_REVERSA}."
+            return 6
+        fi
+    fi
+
+    # 5. Re-chequeo con una conexión ssh NUEVA (sin maestro, ConnectTimeout corto, BatchMode).
+    orq_ssh_nueva_conexion NUEVO "sudo -n true"
+    if [[ "$ORQ_RC" -ne 0 ]]; then
+        volcar_error
+        PASO_DETALLE="con el firewall habilitado no respondió una conexión ssh nueva (salió con $ORQ_RC): ${FW_MENSAJE_REVERSA}."
+        return 6
+    fi
+
+    # 6. Respondió: se desarma la reversa con el nombre exacto y se verifica que ya no exista.
+    orq_ssh NUEVO "sudo -n systemctl stop ${FW_REVERSA}.timer"
+    rc="$ORQ_RC"
+    if [[ "$rc" -ne 0 ]]; then
+        volcar_error
+    fi
+    if ! fw_reversa_armada; then
+        PASO_DETALLE="no pude confirmar que la reversa quedó desarmada: ${FW_MENSAJE_REVERSA}."
+        return 6
+    fi
+    if [[ "$FW_ARMADA" -eq 1 ]]; then
+        PASO_DETALLE="el timer ${FW_REVERSA}.timer sigue armado después de 'systemctl stop' (salió con $rc): ${FW_MENSAJE_REVERSA}."
+        return 6
+    fi
+}
+
+# ---------------------------------------------------------------------------------------
 # Programa principal
 # ---------------------------------------------------------------------------------------
 
 # Cada paso es el par pasoN_hecho / pasoN_aplicar; se registra acá con su nombre.
-PASOS=(1 2)
+PASOS=(1 2 3)
 declare -A PASOS_NOMBRE=(
     [1]="Docker"
     [2]="usuario y directorios"
+    [3]="firewall"
 )
 
 main() {
