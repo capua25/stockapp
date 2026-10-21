@@ -49,10 +49,19 @@ public class MigracionVpsSincroniaTests
 
     private const string Runbook = "deploy/MIGRACION-VPS.md";
 
-    /// <summary>Los scripts nuevos más el runbook: ninguno puede traer un host cableado.</summary>
+    /// <summary>
+    /// preparar-vps-nuevo.sh opera sobre el VPS NUEVO y dedicado: instala paquetes, maneja el
+    /// firewall y emite el certificado, así que no entra en <see cref="ScriptsNuevos"/> (que
+    /// prohíbe esos comandos) sino en su propio test de exención. Hosts cableados, en cambio,
+    /// tampoco puede tener.
+    /// </summary>
+    private const string Preparar = "deploy/preparar-vps-nuevo.sh";
+
+    /// <summary>Los scripts nuevos, preparar y el runbook: ninguno puede traer un host cableado.</summary>
     public static TheoryData<string> CasosSinHosts()
     {
         var datos = CasosScriptsNuevos();
+        datos.Add(Preparar);
         datos.Add(Runbook);
         return datos;
     }
@@ -82,29 +91,61 @@ public class MigracionVpsSincroniaTests
     [MemberData(nameof(CasosScriptsNuevos))]
     public void ScriptsNuevos_SinComandosGlobalesProhibidos(string script)
     {
-        var texto = Texto(script);
+        // El hook de certbot documenta en su encabezado cómo se registra (`certbot certonly ...
+        // --deploy-hook`): queda exento SOLO del token "certbot".
+        AfirmarSinComandosGlobales(Texto(script), script == HookTls ? ["certbot"] : []);
+    }
+
+    /// <summary>
+    /// preparar-vps-nuevo.sh está exento de `ufw` y de `certbot` (es su trabajo sobre un VPS
+    /// dedicado) y de NADA más: el resto de la lista aplica igual, y además no puede resetear ni
+    /// borrar reglas del firewall, actualizar el sistema ni nombrar el proxy de la otra app.
+    /// </summary>
+    [Fact]
+    public void Preparar_ExentoSoloDeUfwCertbotYAptGet()
+    {
+        var texto = Texto(Preparar);
+
+        AfirmarSinComandosGlobales(texto, "ufw", "certbot");
+        Assert.DoesNotContain("ufw reset", texto);
+        Assert.DoesNotContain("ufw delete", texto);
+        Assert.DoesNotContain("apt-get upgrade", texto);
+        Assert.DoesNotContain("nginx", texto);
+    }
+
+    /// <summary>
+    /// La lista de prohibidos, en un solo lugar. <paramref name="exentos"/> son los tokens que
+    /// ese script puede nombrar (el hook, "certbot"; preparar, "ufw" y "certbot"); todo lo demás
+    /// se afirma ausente, comentarios incluidos.
+    /// </summary>
+    private static void AfirmarSinComandosGlobales(string texto, params string[] exentos)
+    {
+        void Ausente(string token)
+        {
+            if (!exentos.Contains(token)) Assert.DoesNotContain(token, texto);
+        }
 
         // La lista de DeployVpsTests.ElScript_NuncaContieneUnComandoDeAlcanceGlobalProhibido...
-        Assert.DoesNotContain("docker system prune", texto);
-        Assert.DoesNotContain("image prune", texto);
-        Assert.DoesNotContain("volume prune", texto);
-        Assert.DoesNotContain("container prune", texto);
-        Assert.DoesNotContain("systemctl restart docker", texto);
-        Assert.DoesNotContain("systemctl stop docker", texto);
-        Assert.DoesNotContain("ufw", texto);
-        Assert.DoesNotContain("apt-get upgrade", texto);
-        Assert.DoesNotContain("dist-upgrade", texto);
-        Assert.DoesNotContain("autoremove", texto);
-        Assert.DoesNotContain("reboot", texto);
-        Assert.DoesNotContain("shutdown", texto);
+        Ausente("docker system prune");
+        Ausente("image prune");
+        Ausente("volume prune");
+        Ausente("container prune");
+        Ausente("systemctl restart docker");
+        Ausente("systemctl stop docker");
+        Ausente("ufw");
+        Ausente("apt-get upgrade");
+        Ausente("dist-upgrade");
+        Ausente("autoremove");
+        Ausente("reboot");
+        Ausente("shutdown");
         Assert.DoesNotMatch(@"docker\s+stop\s+\$\(", texto);
-        Assert.DoesNotContain("pkill", texto);
+        Ausente("pkill");
         Assert.DoesNotMatch(@"docker compose down(?!.*(-f|-p))", texto);
         // ...más lo propio de la migración: ni el proxy ni los certificados de la otra app, y
         // ningún borrado recursivo sobre una ruta que sale de una variable.
-        Assert.DoesNotContain("nginx", texto);
-        if (script != HookTls) Assert.DoesNotContain("certbot", texto);
-        Assert.DoesNotContain("rm -rf \"$", texto);
+        Ausente("nginx");
+        Ausente("certbot");
+        Ausente("rm -rf \"$");
     }
 
     // ---------- Los 7 catálogos con Nombre único: tres copias, un solo conjunto ----------
