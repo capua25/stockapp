@@ -38,10 +38,6 @@ public class MigrarVpsTests : IDisposable
     // El corte completo, con todas las V automáticas OK: GO técnico.
     private const int ExitGo = 0;
 
-    // --ensayo todavía termina después de la confirmación omitida, con este código (nunca 0: un 0
-    // sería un GO técnico que no ocurrió). Su secuencia (volcado --ensayo, V10 invertido) es aparte.
-    private const int ExitEnsayoSinSecuencia = 1;
-
     private const string TokenNuevo = "TOKEN-NUEVO-DEF";
     private const string TokenViejo = "TOKEN-FALSO-ABC";
     private const string UnitCongelada = "/etc/systemd/system/stockapp-api.service.congelado";
@@ -133,14 +129,20 @@ public class MigrarVpsTests : IDisposable
     /// volcado-final-vps.sh falso. Como el real en modo final: detiene y enmascara la API vieja en
     /// los primeros segundos (STUB_VOLCADO_CONGELA=0 lo evita: "falló antes del stop") y, solo si sale
     /// con 0, deja en --salida el dump, su manifiesto (mismo formato que escribir_manifiesto), el tar
-    /// del historial y los overrides. Registra si el estado de la corrida ya tenía congelado_utc.
+    /// del historial y los overrides (STUB_VOLCADO_OVERRIDES, nombres). Como el real con --ensayo
+    /// (volcado-final-vps.sh, paso 8 del trap): no enmascara y vuelve a arrancar la API si estaba
+    /// activa, así que el viejo termina como empezó; STUB_VOLCADO_ENSAYO_ENMASCARA=1 simula un bloque
+    /// que con --ensayo igual lo deja congelado. Registra si el estado de la corrida ya tenía
+    /// congelado_utc.
     /// </summary>
     private const string VolcadoFalso = "#!/usr/bin/env bash\n" + EntornoDeHijos + "\n" + """
         salida=""
+        ensayo=0
         args=("$@")
         while [[ $# -gt 0 ]]; do
             case "$1" in
                 --salida) salida="$2"; shift 2 ;;
+                --ensayo) ensayo=1; shift ;;
                 *) shift ;;
             esac
         done
@@ -151,7 +153,7 @@ public class MigrarVpsTests : IDisposable
             echo "$PPID" > "$STUB_VOLCADO_PID"
             read -r _ < "$STUB_VOLCADO_FIFO" || :
         fi
-        if [[ "${STUB_VOLCADO_CONGELA:-1}" == 1 ]]; then
+        if [[ "${STUB_VOLCADO_CONGELA:-1}" == 1 && ( "$ensayo" == 0 || "${STUB_VOLCADO_ENSAYO_ENMASCARA-}" == 1 ) ]]; then
             echo inactive > "$ESTADO/viejo/active"
             echo masked > "$ESTADO/viejo/enabled"
         fi
@@ -186,7 +188,7 @@ public class MigrarVpsTests : IDisposable
             printf 'Usuarios\t3\n'
         } > "$salida/volcado-$ts.manifiesto"
         tar -cf "$salida/backups-historial.tar" --files-from /dev/null
-        : > "$salida/overrides-api-env.txt"
+        printf '%b' "${STUB_VOLCADO_OVERRIDES-}" > "$salida/overrides-api-env.txt"
         # El extra se ordena DESPUÉS del de esta corrida: así solo lo detecta el control de "exactamente uno".
         if [[ -n "${STUB_VOLCADO_EXTRA-}" ]]; then printf 'otro\n' > "$salida/volcado-29991231T235959Z.dump"; fi
         """;
@@ -461,10 +463,16 @@ public class MigrarVpsTests : IDisposable
             */backups)
                 con_token
                 printf '%s' "$entrada" > "$ESTADO/backups-operador-stdin.txt"
-                if [[ "$metodo" == POST ]]; then : > "$ESTADO/post-backups"; exit 0; fi
+                # Como la API real, cada POST crea una corrida nueva (ids 12, 13...): una segunda
+                # verificación (--continuar) espera la suya, no la del primer intento.
+                if [[ "$metodo" == POST ]]; then echo post >> "$ESTADO/post-backups"; exit 0; fi
                 nueva=""
                 if [[ -f "$ESTADO/post-backups" ]]; then
-                    nueva=',{"id":12,"finalizadaEn":"2026-10-21T03:00:00Z","resultado":"'"$(modo v8-resultado Exitosa)"'","nombreArchivo":"backup_n.dump","tamanioBytes":2048}'
+                    k=0
+                    while IFS= read -r _; do
+                        k=$((k + 1))
+                        nueva+=',{"id":'"$((11 + k))"',"finalizadaEn":"2026-10-21T03:00:00Z","resultado":"'"$(modo v8-resultado Exitosa)"'","nombreArchivo":"backup_n.dump","tamanioBytes":2048}'
+                    done < "$ESTADO/post-backups"
                 fi
                 echo '[{"id":9,"finalizadaEn":"2026-10-19T03:00:00Z","resultado":"Exitosa","nombreArchivo":"backup_x.dump","tamanioBytes":2048},{"id":5,"finalizadaEn":"2026-09-01T03:00:00Z","resultado":"Exitosa","nombreArchivo":"backup_v.dump","tamanioBytes":2048}'"$nueva"']'
                 ;;
@@ -724,18 +732,6 @@ public class MigrarVpsTests : IDisposable
     private static string Permisos(string ruta) =>
         Convert.ToString((int)(File.GetUnixFileMode(ruta) & (UnixFileMode)0b111_111_111), 8);
 
-    [Fact]
-    public void Ensayo_NoPideConfirmacion_YLaCorridaEsDeEnsayo()
-    {
-        var r = Correr(["--ensayo"], stdin: "");
-
-        Assert.True(r.Exit == ExitEnsayoSinSecuencia, r.Todo);
-        Assert.DoesNotContain("CONGELAR", r.Salida);
-        Assert.Matches(@"confirmación \.+ OMITIDO", r.Stdout);
-        var corrida = UnaCorrida("ensayo");
-        Assert.Equal("ensayo", ClaveDeEstado(corrida, "modo"));
-        Assert.Empty(Escrituras(r.Rastro));
-    }
 
     // =====================================================================================
     // Identidad de los hosts (A9, spec 6.3.4)
@@ -811,7 +807,7 @@ public class MigrarVpsTests : IDisposable
         Assert.Contains("ensayo", corte.Salida);
 
         var ensayo = Correr(["--ensayo"], stdin: "");
-        Assert.True(ensayo.Exit == ExitEnsayoSinSecuencia, ensayo.Todo);
+        Assert.True(ensayo.Exit == ExitGo, ensayo.Todo);
     }
 
     // =====================================================================================
@@ -2205,5 +2201,476 @@ public class MigrarVpsTests : IDisposable
         Assert.Contains("ssh\t", entorno.Replace(Bin + "/", ""));
         foreach (var secreto in new[] { Contrasena, TokenNuevo, TokenViejo })
             Assert.DoesNotContain(secreto, entorno);
+    }
+
+    // =====================================================================================
+    // --ensayo (spec 6.5.5): la misma secuencia, sin confirmación, volcado --ensayo y V10 invertido
+    // =====================================================================================
+
+    private static string? PasoDeEstado(string corrida, int n) => ClaveDeEstado(corrida, $"paso_{n}");
+
+    [Fact]
+    public void Ensayo_SinConfirmacion_VolcadoConEnsayo_V10ExigeActive()
+    {
+        var r = Correr(["--ensayo"], stdin: "");
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        Assert.DoesNotContain("CONGELAR", r.Salida);
+        Assert.Matches(@"confirmación \.+ OMITIDO", r.Stdout);
+        var corrida = UnaCorrida("ensayo");
+        Assert.Equal("ensayo", ClaveDeEstado(corrida, "modo"));
+        Assert.Equal("GO", ClaveDeEstado(corrida, "resultado"));
+        Assert.Equal("resultado=GO", File.ReadAllLines(Path.Combine(corrida, "estado")).Last());
+        // Contrato de los pasos: ok u omitido (el 2, que el ensayo no tiene), nada más.
+        Assert.Matches(@"^omitido \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z \d+$", PasoDeEstado(corrida, 2) ?? "");
+        foreach (var n in new[] { 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13 })
+            Assert.Matches(@"^ok \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z \d+$", PasoDeEstado(corrida, n) ?? $"(falta paso_{n})");
+
+        // La misma secuencia: el volcado recibe --ensayo (nunca congela de forma permanente), y después
+        // restaurar, el historial y el arranque.
+        var volcado = Assert.Single(LineasDeBloque(r.Rastro, "volcado"));
+        Assert.Contains(" --ensayo", volcado);
+        Assert.True(Linea(r.Rastro, l => l.StartsWith("volcado\t")) < Linea(r.Rastro, l => l.StartsWith("restaurar\t")), r.Todo);
+        Assert.True(Linea(r.Rastro, l => l.StartsWith("restaurar\t")) < Linea(r.Rastro, l => l == StartNuevo), r.Todo);
+
+        // V10 invertido: el viejo de testing quedó como estaba (active, no masked, mismo docker ps).
+        Assert.Matches(@"(?m)^\s*V10 .* OK", r.Stdout);
+        Assert.Equal("active", File.ReadAllText(Host("viejo", "active")).Trim());
+        Assert.Equal("enabled", File.ReadAllText(Host("viejo", "enabled")).Trim());
+        Assert.Null(ClaveDeEstado(corrida, "fin_rollback"));
+        Assert.DoesNotContain("--revertir", r.Stdout);
+        Assert.Contains("detiene testing", r.Salida);
+    }
+
+    [Fact]
+    public void Ensayo_ViejoQuedaMasked_EsNoGo()
+    {
+        var r = Correr(["--ensayo"], stdin: "", env: Entorno(("STUB_VOLCADO_ENSAYO_ENMASCARA", "1")));
+
+        Assert.True(r.Exit == 7, r.Todo);
+        Assert.Matches(@"(?m)^\s*V10 .* FALLÓ .*masked", r.Stdout);
+        Assert.Equal("NO-GO", ClaveDeEstado(UnaCorrida("ensayo"), "resultado"));
+    }
+
+    [Fact]
+    public void Ensayo_ResumenConTablaDeTiemposYOverridesFaltantes()
+    {
+        var r = Correr(["--ensayo"], stdin: "", env: Entorno(("STUB_VOLCADO_OVERRIDES", "Smtp__Host\\nJWT_SECRET\\n")));
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        Assert.Contains("| Paso | Resultado | Duración |", r.Stdout);
+        Assert.Matches(@"(?m)^\| \( 6/13\) congelar y volcar el VPS viejo \| ok \| \d+ s \|$", r.Stdout);
+        Assert.Matches(@"(?m)^\| \( 2/13\) confirmación \| omitido \| \d+ s \|$", r.Stdout);
+        Assert.Matches(@"(?m)^\| Indisponibilidad estimada del corte .*\| \d+ min \d+ s \|$", r.Stdout);
+        Assert.Matches(@"(?m)^Overrides que faltan en el \.env del servidor nuevo: Smtp__Host$", r.Stdout);
+    }
+
+    [Fact]
+    public void Ensayo_ConUnaCorridaSinTerminar_SeNiega3()
+    {
+        var abierta = PlantarCorrida("corte-20260101T090000Z",
+            $"modo=corte\ninicio_utc=2026-01-01T09:00:00Z\nmachine_id_viejo={MachineViejo}\nmachine_id_nuevo={MachineNuevo}\ncongelado_utc=2026-01-01T09:05:00Z\n");
+
+        var r = Correr(["--ensayo"], stdin: "");
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.Contains($"--continuar {abierta}", r.Salida);
+        Assert.Empty(LineasDeBloque(r.Rastro, "volcado"));
+        Assert.Empty(Escrituras(r.Rastro));
+    }
+
+    // =====================================================================================
+    // --continuar (spec 6.5.4 "--continuar", A13, R4, R32)
+    // =====================================================================================
+
+    private Resultado CorrerContinuar(string corrida, string[]? extra = null, IDictionary<string, string>? env = null) =>
+        Correr(new[] { "--continuar", corrida }.Concat(extra ?? []).ToArray(), stdin: "", env: env, conArgumentosBase: false);
+
+    /// <summary>Cómo falla el corte en cada paso retomable (bloque falso, ssh falso o la inyección del arnés).</summary>
+    private Dictionary<string, string>? RomperPaso(int paso)
+    {
+        switch (paso)
+        {
+            case 6: return Entorno(("STUB_VOLCADO_EXIT", "8"));
+            case 7: return Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "7"));
+            case 8: PonerNuevo("falla-scp", ""); return null;
+            case 9: return Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "9"));
+            case 10: PonerNuevo("falla-tar", ""); return null;
+            case 11: return Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "11"));
+            case 12: File.WriteAllText(Path.Combine(Estado, "licencia"), "no\n"); return null;
+            default: throw new ArgumentOutOfRangeException(nameof(paso));
+        }
+    }
+
+    private void RepararPaso(int paso)
+    {
+        switch (paso)
+        {
+            case 8: File.Delete(Host("nuevo", "falla-scp")); break;
+            case 10: File.Delete(Host("nuevo", "falla-tar")); break;
+            case 12: File.Delete(Path.Combine(Estado, "licencia")); break;
+        }
+    }
+
+    private static bool HuboRestauracion(string rastro) =>
+        LineasDeBloque(rastro, "restaurar").Any(l => !l.Contains("--verificar-post-arranque"));
+
+    private void AfirmarViejoEnListaBlanca(string rastro)
+    {
+        foreach (var (lado, cmd) in ComandosRemotos(rastro).Where(c => c.Lado == "viejo"))
+            Assert.True(LecturasViejo.Any(x => x.IsMatch(cmd)), $"comando al viejo fuera de la lista blanca: {cmd}");
+    }
+
+    [Theory]
+    [InlineData(6)]
+    [InlineData(7)]
+    [InlineData(8)]
+    [InlineData(9)]
+    [InlineData(10)]
+    [InlineData(11)]
+    [InlineData(12)]
+    public void Continuar_RetomaEnElPasoQueFallo(int paso)
+    {
+        var env = RomperPaso(paso);
+        var primera = CorrerCorte(env: env);
+
+        Assert.True(primera.Exit == (paso >= 11 ? 7 : 6), primera.Todo);
+        var corrida = UnaCorrida("corte");
+        var congelado = ClaveDeEstado(corrida, "congelado_utc");
+        Assert.NotNull(congelado);
+        // El estado de los hosts según lo que hizo el corte: el viejo congelado (detenido y enmascarado);
+        // el nuevo detenido desde el paso 3, salvo que el corte haya llegado a arrancarlo (NO-GO).
+        Assert.Equal("inactive", File.ReadAllText(Host("viejo", "active")).Trim());
+        Assert.Equal("masked", File.ReadAllText(Host("viejo", "enabled")).Trim());
+        Assert.Equal(paso == 12 ? "active" : "inactive", File.ReadAllText(Host("nuevo", "active")).Trim());
+        if (paso == 12)
+        {
+            Assert.Equal("NO-GO", ClaveDeEstado(corrida, "resultado"));
+        }
+        else
+        {
+            Assert.Null(ClaveDeEstado(corrida, "resultado"));
+            Assert.Null(PasoDeEstado(corrida, paso));
+            Assert.Contains($"--continuar {corrida}", primera.Salida);
+        }
+
+        RepararPaso(paso);
+        File.Delete(Rastro);
+        // La inyección del arnés falla solo la primera vez en la corrida: el entorno se repite igual.
+        var r = CorrerContinuar(corrida, env: paso is 7 or 9 or 11 ? env : null);
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        Assert.Equal("GO", ClaveDeEstado(corrida, "resultado"));
+        Assert.Equal("resultado=GO", File.ReadAllLines(Path.Combine(corrida, "estado")).Last());
+        Assert.Equal(congelado, ClaveDeEstado(corrida, "congelado_utc"));
+        Assert.Contains($"retoma en el paso {paso}", r.Stdout);
+        Assert.Single(Corridas());
+        // Ningún paso con ok se repite: ni el pre-vuelo (preparar, login al viejo) ni los pasos 3 a 5.
+        Assert.DoesNotContain(StopNuevo, r.Rastro);
+        Assert.Empty(LineasDeBloque(r.Rastro, "preparar"));
+        Assert.DoesNotContain("/auth/login -H", ComandosRemotos(r.Rastro).Where(c => c.Lado == "viejo").Select(c => c.Cmd).DefaultIfEmpty("").Aggregate((a, b) => a + "\n" + b));
+        Assert.DoesNotContain("-print -delete", r.Rastro);
+        Assert.Equal(paso == 6, LineasDeBloque(r.Rastro, "volcado").Any());
+        Assert.Equal(paso <= 8, r.Rastro.Contains("scp\t"));
+        Assert.Equal(paso <= 9, HuboRestauracion(r.Rastro));
+        Assert.Equal(paso <= 10, r.Rastro.Contains("-xpf"));
+        Assert.Equal(paso <= 11, r.Rastro.Contains(StartNuevo));
+        AfirmarViejoEnListaBlanca(r.Rastro);
+        foreach (var n in Enumerable.Range(1, 13))
+            Assert.Matches(@"^ok ", PasoDeEstado(corrida, n) ?? $"(falta paso_{n})");
+
+        if (paso == 6)
+        {
+            // El volcado se vuelve a correr en una carpeta NUEVA, con el viejo ya congelado.
+            Assert.Equal("volcado-2", ClaveDeEstado(corrida, "volcado_dir"));
+            Assert.Contains("CONGELADO_PREVIO=si", Assert.Single(LineasDeBloque(r.Rastro, "volcado")));
+            Assert.Contains("--salida " + Path.Combine(corrida, "volcado-2"), r.Rastro);
+        }
+
+        if (paso == 8)
+        {
+            // Directorio remoto nuevo: el del intento fallido no se reutiliza ni se mezcla.
+            Assert.Equal(2, Directory.GetDirectories(MigracionNuevo).Length);
+            Assert.Matches(@"^~/stockapp-deploy/migracion/corte-\d{8}T\d{6}Z-r\d{8}T\d{6}Z$", ClaveDeEstado(corrida, "dir_remoto") ?? "");
+        }
+    }
+
+    [Fact]
+    public void Continuar_Restaurar3_RepiteDesdeLaTransferencia_AUnDirectorioRemotoNuevo()
+    {
+        var primera = CorrerCorte(env: Entorno(("STUB_RESTAURAR_EXIT", "3")));
+        Assert.True(primera.Exit == 6, primera.Todo);
+        var corrida = UnaCorrida("corte");
+        var dirAnterior = ClaveDeEstado(corrida, "dir_remoto");
+
+        File.Delete(Rastro);
+        var r = CorrerContinuar(corrida);
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        Assert.Contains("retoma en el paso 8", r.Stdout);
+        Assert.Contains("scp\t", r.Rastro);
+        Assert.NotEqual(dirAnterior, ClaveDeEstado(corrida, "dir_remoto"));
+        Assert.Equal(2, Directory.GetDirectories(MigracionNuevo).Length);
+        Assert.Empty(LineasDeBloque(r.Rastro, "volcado"));
+    }
+
+    [Fact]
+    public void Continuar_Restaurar6SinReintentarRestauracion_SeNiega3()
+    {
+        var primera = CorrerCorte(env: Entorno(("STUB_RESTAURAR_EXIT", "6")));
+        Assert.True(primera.Exit == 6, primera.Todo);
+        var corrida = UnaCorrida("corte");
+
+        File.Delete(Rastro);
+        var r = CorrerContinuar(corrida);
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.False(HuboRestauracion(r.Rastro), r.Todo);
+        Assert.DoesNotContain(StartNuevo, r.Rastro);
+        Assert.Contains("--reintentar-restauracion", r.Salida);
+        Assert.Null(ClaveDeEstado(corrida, "resultado"));
+
+        // Con la decisión del humano, vuelve a --recrear-base (otro dump de seguridad) y sigue.
+        File.Delete(Rastro);
+        var otra = CorrerContinuar(corrida, ["--reintentar-restauracion"]);
+
+        Assert.True(otra.Exit == ExitGo, otra.Todo);
+        Assert.Contains("retoma en el paso 9", otra.Stdout);
+        Assert.Contains("--recrear-base", Assert.Single(LineasDeBloque(otra.Rastro, "restaurar"), l => !l.Contains("--verificar-post-arranque")));
+        Assert.DoesNotContain("scp\t", otra.Rastro);
+    }
+
+    [Fact]
+    public void Continuar_ReintentarRestauracionSinRestauracionQueNoVerifica_SeNiega3()
+    {
+        var primera = CorrerCorte(env: Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "9")));
+        Assert.True(primera.Exit == 6, primera.Todo);
+
+        File.Delete(Rastro);
+        var r = CorrerContinuar(UnaCorrida("corte"), ["--reintentar-restauracion"]);
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.False(HuboRestauracion(r.Rastro), r.Todo);
+    }
+
+    [Fact]
+    public void ReintentarRestauracion_SinContinuar_Rechaza2()
+    {
+        var r = Correr(["--reintentar-restauracion"], stdin: "CONGELAR\n");
+
+        Assert.True(r.Exit == 2, r.Todo);
+        Assert.Empty(r.Rastro);
+    }
+
+    [Fact]
+    public void Continuar_CorridaQueNoCongelo_SeNiega3()
+    {
+        // Murió antes de congelar (un SIGKILL en el paso 5, por ejemplo): sin congelado_utc ni resultado.
+        var corrida = PlantarCorrida("corte-20260101T090000Z",
+            $"modo=corte\ninicio_utc=2026-01-01T09:00:00Z\nenv_viejo={EnvViejo}\nenv_nuevo={EnvNuevo}\n" +
+            $"machine_id_viejo={MachineViejo}\nmachine_id_nuevo={MachineNuevo}\n" +
+            "paso_1=ok 2026-01-01T09:00:10Z 10\npaso_2=ok 2026-01-01T09:00:20Z 10\npaso_3=ok 2026-01-01T09:00:21Z 1\n");
+
+        var r = CorrerContinuar(corrida);
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.Contains("corrida nueva", r.Salida);
+        // R32: se cierra, para que no bloquee el corte nuevo (R24).
+        Assert.Equal("FALLO-ABANDONADA", ClaveDeEstado(corrida, "resultado"));
+        Assert.Equal("resultado=FALLO-ABANDONADA", File.ReadAllLines(Path.Combine(corrida, "estado")).Last());
+        Assert.Empty(Escrituras(r.Rastro));
+        Assert.Empty(LineasDeBloque(r.Rastro, "volcado"));
+    }
+
+    [Theory]
+    [InlineData("GO")]
+    [InlineData("FALLO-3")]
+    [InlineData("FALLO-ABANDONADA")]
+    [InlineData("REVERTIDO")]
+    public void Continuar_CorridaTerminada_SeNiega3SinTocarla(string resultado)
+    {
+        var estado = $"modo=corte\ninicio_utc=2026-01-01T09:00:00Z\nenv_viejo={EnvViejo}\nenv_nuevo={EnvNuevo}\n" +
+                     $"machine_id_viejo={MachineViejo}\nmachine_id_nuevo={MachineNuevo}\ncongelado_utc=2026-01-01T09:05:00Z\n" +
+                     $"paso_1=ok 2026-01-01T09:00:10Z 10\nresultado={resultado}\n";
+        var corrida = PlantarCorrida("corte-20260101T090000Z", estado);
+
+        var r = CorrerContinuar(corrida);
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.Contains("terminó", r.Salida);
+        Assert.Equal(estado, File.ReadAllText(Path.Combine(corrida, "estado")));
+        Assert.Empty(Escrituras(r.Rastro));
+    }
+
+    [Fact]
+    public void Continuar_MachineIdDistinto_Sale9()
+    {
+        var primera = CorrerCorte(env: Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "9")));
+        Assert.True(primera.Exit == 6, primera.Todo);
+        var corrida = UnaCorrida("corte");
+        PonerNuevo("machine-id", "cccccccc33333333cccccccc33333333\n");
+
+        File.Delete(Rastro);
+        var r = CorrerContinuar(corrida, env: Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "9")));
+
+        Assert.True(r.Exit == 9, r.Todo);
+        Assert.False(HuboRestauracion(r.Rastro), r.Todo);
+        Assert.Empty(Escrituras(r.Rastro));
+        Assert.Null(ClaveDeEstado(corrida, "resultado"));
+    }
+
+    [Fact]
+    public void Continuar_TodoOk_SoloVerifica()
+    {
+        // Murió después del resumen y antes de escribir resultado: todos los pasos ok.
+        var primera = CorrerCorte();
+        Assert.True(primera.Exit == ExitGo, primera.Todo);
+        var corrida = UnaCorrida("corte");
+        var archivo = Path.Combine(corrida, "estado");
+        File.WriteAllLines(archivo, File.ReadAllLines(archivo).Where(l => !l.StartsWith("resultado=")));
+
+        File.Delete(Rastro);
+        var r = CorrerContinuar(corrida);
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        Assert.Contains("retoma en el paso 12", r.Stdout);
+        Assert.Equal("GO", ClaveDeEstado(corrida, "resultado"));
+        Assert.Empty(LineasDeBloque(r.Rastro, "volcado"));
+        Assert.False(HuboRestauracion(r.Rastro), r.Todo);
+        Assert.DoesNotContain("scp\t", r.Rastro);
+        Assert.DoesNotContain(StartNuevo, r.Rastro);
+        Assert.DoesNotContain(StopNuevo, r.Rastro);
+        Assert.Contains("/licencia/estado", r.Rastro);
+        Assert.Matches(@"(?m)^\s*V10 .* OK", r.Stdout);
+    }
+
+    [Fact]
+    public void Continuar_InterrumpidoTrasEmpezar_LaCorridaQuedaSinTerminar()
+    {
+        // R4: --continuar quita resultado al empezar. Si se interrumpe, la corrida vuelve a contar como
+        // sin terminar y no queda un NO-GO viejo que la haga pasar por terminada.
+        RomperPaso(12);
+        var primera = CorrerCorte();
+        Assert.True(primera.Exit == 7, primera.Todo);
+        var corrida = UnaCorrida("corte");
+        Assert.Equal("NO-GO", ClaveDeEstado(corrida, "resultado"));
+        PonerViejo("active", "ilegible\n");
+
+        var r = CorrerContinuar(corrida);
+
+        Assert.True(r.Exit == 8, r.Todo);
+        Assert.Null(ClaveDeEstado(corrida, "resultado"));
+    }
+
+    [Fact]
+    public void Continuar_ViejoQueVuelveASservir_SeNiega3SinRestaurar()
+    {
+        var primera = CorrerCorte(env: Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "9")));
+        Assert.True(primera.Exit == 6, primera.Todo);
+        // Alguien lo revirtió a mano: restaurar ahora perdería lo escrito después del dump.
+        PonerViejo("active", "active\n");
+        PonerViejo("enabled", "enabled\n");
+
+        File.Delete(Rastro);
+        var r = CorrerContinuar(UnaCorrida("corte"), env: Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "9")));
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.False(HuboRestauracion(r.Rastro), r.Todo);
+        Assert.Empty(Escrituras(r.Rastro));
+        Assert.Contains("--revertir", r.Salida);
+    }
+
+    [Fact]
+    public void Continuar_PasoConUnValorQueNoEsDelContrato_Sale8()
+    {
+        var primera = CorrerCorte(env: Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "9")));
+        Assert.True(primera.Exit == 6, primera.Todo);
+        var corrida = UnaCorrida("corte");
+        var archivo = Path.Combine(corrida, "estado");
+        File.WriteAllLines(archivo, File.ReadAllLines(archivo).Select(l => l.StartsWith("paso_8=") ? "paso_8=hecho" : l));
+
+        File.Delete(Rastro);
+        var r = CorrerContinuar(corrida, env: Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "9")));
+
+        Assert.True(r.Exit == 8, r.Todo);
+        Assert.False(HuboRestauracion(r.Rastro), r.Todo);
+        Assert.Contains("paso_8", r.Salida);
+    }
+
+    [Theory]
+    [InlineData("/no/existe/corte-20260101T090000Z")]
+    [InlineData("relativa")]
+    public void Continuar_CorridaFueraDeLasCorridas_Rechaza2(string corrida)
+    {
+        var r = CorrerContinuar(corrida);
+
+        Assert.True(r.Exit == 2, r.Todo);
+        Assert.Empty(r.Rastro);
+    }
+
+    [Fact]
+    public void Continuar_ConEnvDeLaLineaDeComandos_Rechaza2()
+    {
+        var r = Correr(["--continuar", Path.Combine(CorridasDir, "corte-20260101T090000Z")], stdin: "");
+
+        Assert.True(r.Exit == 2, r.Todo);
+        Assert.Empty(r.Rastro);
+    }
+
+    [Fact]
+    public void Continuar_Ensayo_RetomaConLaSecuenciaDelEnsayo()
+    {
+        var env = Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "9"));
+        var primera = Correr(["--ensayo"], stdin: "", env: env);
+        Assert.True(primera.Exit == 6, primera.Todo);
+        var corrida = UnaCorrida("ensayo");
+        Assert.Null(ClaveDeEstado(corrida, "resultado"));
+        // R37: el resumen dice el estado OBSERVADO: el viejo de testing volvió a servir.
+        Assert.Contains("stockapp-api dice 'active'", primera.Salida);
+
+        File.Delete(Rastro);
+        var r = CorrerContinuar(corrida, env: env);
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        Assert.Matches(@"(?m)^\s*V10 .* OK", r.Stdout);
+        Assert.Equal("active", File.ReadAllText(Host("viejo", "active")).Trim());
+        Assert.Contains("| Paso | Resultado | Duración |", r.Stdout);
+    }
+
+    // ---------- Inyección de fallos del arnés y el resumen de fallo (R37) ----------
+
+    [Theory]
+    [InlineData("2")]
+    [InlineData("12")]
+    [InlineData("x")]
+    public void InyeccionDeFallos_PasoNoInyectable_Rechaza2(string paso)
+    {
+        var r = CorrerCorte(env: Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", paso)));
+
+        Assert.True(r.Exit == 2, r.Todo);
+        Assert.Empty(Corridas());
+    }
+
+    [Fact]
+    public void Corte_ApiNuevaQueQuedaFailed_ElResumenLoDice()
+    {
+        PonerNuevo("falla-start", "");
+
+        var r = CorrerCorte();
+
+        Assert.True(r.Exit == 7, r.Todo);
+        Assert.Contains("stockapp-api quedó en failed", r.Salida);
+        Assert.DoesNotContain("la API nueva está detenida", r.Salida);
+        Assert.Null(ClaveDeEstado(UnaCorrida("corte"), "resultado"));
+    }
+
+    [Fact]
+    public void Corte_ApiNuevaDetenida_ElResumenLoDice()
+    {
+        var r = CorrerCorte(env: Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "9")));
+
+        Assert.True(r.Exit == 6, r.Todo);
+        Assert.Contains("la API nueva está detenida (inactive)", r.Salida);
+        Assert.Equal("5", ClaveDeEstado(UnaCorrida("corte"), "restaurar_salio"));
     }
 }

@@ -6,12 +6,27 @@
 #
 # Uso:
 #   deploy/migrar-vps.sh [--ensayo] [--env-viejo <archivo>] [--env-nuevo <archivo>]
+#   deploy/migrar-vps.sh --continuar <corrida> [--reintentar-restauracion]
 #
 #   (sin --ensayo)  El corte. Pre-vuelo de SOLO LECTURA (config, identidad de los hosts, estado del
 #                   viejo, preparación del nuevo, overrides, credencial) y, recién después, una
 #                   confirmación escrita: hay que teclear exactamente CONGELAR en una terminal.
-#   --ensayo        La misma secuencia sin la confirmación: no congela el viejo. (En esta versión
-#                   termina después del pre-vuelo, sin tocar nada.)
+#   --ensayo        La misma secuencia sin la confirmación (paso 2 omitido) y sin congelar el viejo
+#                   de forma permanente: el volcado corre con --ensayo, que no enmascara y vuelve a
+#                   arrancar la API vieja, y V10 exige el viejo active y no masked. El viejo (testing)
+#                   queda sin API mientras dura el volcado. El resumen trae la tabla de tiempos para el
+#                   runbook y los overrides que faltan en el .env del servidor nuevo.
+#   --continuar     Retoma una corrida de corte o de ensayo que falló DESPUÉS de congelar. Relee su
+#                   estado (los .env salen de ahí: no se aceptan --env-*), exige los mismos machine-id,
+#                   toma el lock, quita resultado= y retoma en el primer paso que no está hecho, solo
+#                   entre el 6 y el 12. El paso 6 vuelve a volcar en una carpeta nueva (volcado-<n>/);
+#                   el 9 se reintenta tal cual si restaurar salió con 5, repite desde el 8 (directorio
+#                   remoto nuevo) con 3 o 4, y con 6 o 7 solo con --reintentar-restauracion (lo decide
+#                   un humano). Con todos los pasos hechos, o después de un NO-GO, repite la
+#                   verificación (12) y el resumen (13). Una corrida que no llegó a congelar se cierra
+#                   con resultado=FALLO-ABANDONADA y hay que empezar una nueva; una terminada (con
+#                   resultado=, salvo NO-GO) no se toca. En el corte, el viejo tiene que seguir
+#                   congelado: si alguien lo volvió a arrancar, se niega (3).
 #   --env-viejo     .env del operador para el VPS viejo. Default: deploy/.env.
 #                   Además de los VPS_*: VPS_ADMIN_USER (obligatorio; no cae a BOOTSTRAP_ADMIN_USER)
 #                   y VPS_ADMIN_PASSWORD. La contraseña sale del entorno, si no del archivo y, si
@@ -24,6 +39,9 @@
 #   --contenedor-viejo <n>   --contenedor-nuevo <n>     (default stockapp-pg; ^stockapp[a-z0-9-]*$)
 #   --raiz-remota-viejo <d>  --raiz-remota-nuevo <d>    (prefijo de las rutas absolutas remotas)
 #   --sin-verificar-preparacion                         (no llama a preparar-vps-nuevo.sh --verificar)
+#   STOCKAPP_ENSAYO_FALLAR_EN=<n>  (3 a 11) antes de correr el paso <n>, la primera vez en la corrida
+#                   (clave fallo_inyectado_<n>), lo marca FALLÓ con la clase que le corresponde: 3 a 6
+#                   antes de congelar -> 5; 9 como restaurar 5 -> 6; 11 -> 7; el resto -> 6.
 #
 # ⚠️  EL VPS VIEJO ES COMPARTIDO con otra aplicación. Sobre él, este script solo corre lecturas
 # acotadas POR NOMBRE a StockApp: systemctl is-active / is-enabled / show de stockapp-api,
@@ -52,7 +70,10 @@
 #   - Hasta la confirmación no se modifica nada. Un fallo del pre-vuelo cierra la corrida con
 #     resultado=FALLO-<n>, salvo que ya hubiera congelado el viejo.
 #
-# Secuencia del corte (pasos 3 a 13; cada uno deja paso_<n>=ok <utc> <segundos> en el estado):
+# Secuencia del corte (pasos 3 a 13). Contrato del estado: cada paso hecho deja
+# paso_<n>=ok <utc> <segundos>, y un paso que este modo no tiene (el 2 en el ensayo) deja
+# paso_<n>=omitido <utc> <segundos>. --continuar cuenta los dos como hechos y nada más: cualquier
+# otro valor de un paso_<n> es "no pude interpretar" (8) y no se retoma a ciegas (A13).
 #    3  detiene la API NUEVA (primero: con dos APIs vivas, lo escrito en la nueva se perdería) y
 #       exige que is-active ya no diga active.
 #    4  en el nuevo, borra uno por uno, por patrón y sin bajar de nivel, los backup_*.dump y *.tmp
@@ -73,7 +94,9 @@
 #   12  V1-V8 y V10; anota LogsAuditoria para --revertir.
 #   13  resumen: GO (0) o NO-GO (7), fin_rollback = congelado + 14 días y el comando de vuelta atrás.
 # Después del congelamiento, todo fallo deja la corrida abierta (sin resultado=) y dice cómo seguir
-# (--continuar <corrida>) o volver atrás (--revertir).
+# (--continuar <corrida>) o volver atrás (--revertir), con el estado OBSERVADO de la API nueva. Un
+# exit 7 del arranque (paso 11) también la deja abierta; el NO-GO de la verificación la cierra con
+# resultado=NO-GO, que --continuar vuelve a abrir para repetir la verificación.
 #
 # Códigos de salida (estables):
 #   0  GO técnico: todas las V automáticas OK. Quedan V9 y la decisión de Martin
@@ -82,7 +105,7 @@
 #   4  el operador no confirmó: no se tocó nada
 #   5  falló un paso antes de congelar el viejo, que sigue intacto y sirviendo. Re-correr arranca una corrida nueva
 #   6  falló un paso después de congelar el viejo, que quedó congelado. El resumen dice el estado exacto y la salida: --continuar <corrida> o --revertir
-#   7  NO-GO: la secuencia terminó, pero falló una V. La API nueva queda arriba para diagnosticar (las PCs no están instaladas: nadie escribe). Se imprime --revertir
+#   7  NO-GO: falló el arranque de la API nueva (la corrida queda abierta: --continuar la retoma en el paso 11) o falló una V (resultado=NO-GO: --continuar repite la verificación). La API nueva queda como esté para diagnosticar (las PCs no están instaladas: nadie escribe). Se imprime --revertir
 #   8  no se pudo consultar
 #   9  alcance: la lista de contenedores del viejo cambió, o los dos .env son el mismo servidor
 #
@@ -139,7 +162,9 @@ PASOS_TOTAL=13
 # is-active), así que no hay nada que retomar aunque congelado_utc ya esté escrito (R31).
 _migrar_salir() {
     local rc=$? resultado_rc=0 congelado_rc=0 archivo
-    if [[ "$rc" -ne 0 && -n "${ORQ_CORRIDA:-}" ]]; then
+    # Solo quien tiene el lock toca el estado: un --continuar que perdió el lock no puede cerrar la
+    # corrida que otro proceso está corriendo.
+    if [[ "$rc" -ne 0 && -n "${ORQ_CORRIDA:-}" && "$LOCK_TOMADO" -eq 1 ]]; then
         archivo="$ORQ_CORRIDA/estado"
         if [[ -f "$archivo" ]]; then
             orq_estado_de "$archivo" resultado >/dev/null 2>&1 || resultado_rc=$?
@@ -151,10 +176,11 @@ _migrar_salir() {
     fi
     _orq_tmp_limpiar
 }
+LOCK_TOMADO=0
 trap '_migrar_salir' EXIT
 
 uso() {
-    sed -n '/^# Uso:/,/^#   --sin-verificar-preparacion/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
+    sed -n '/^# Uso:/,/^#   STOCKAPP_ENSAYO_FALLAR_EN=/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
 }
 
 # ---------------------------------------------------------------------------------------
@@ -209,17 +235,20 @@ abortar() {
 #   investigar                no se pudo consultar o el código no se puede clasificar
 #   revisar                   alcance (9): NO se ofrece --continuar hasta que un humano mire
 resumen_de_fallo() {
-    local codigo="$1"
+    local codigo="$1" que="el corte"
+    [[ "$MODO" == "ensayo" ]] && que="el ensayo"
     {
         echo
-        echo "== El corte no terminó (exit $codigo) =="
+        echo "== ${que^} no terminó (exit $codigo) =="
         echo "Corrida: $ORQ_CORRIDA (queda abierta: sin resultado)"
         if [[ -n "$ESTADO_VIEJO_TXT" ]]; then
             echo "VPS viejo: $ESTADO_VIEJO_TXT"
+        elif [[ "$MODO" == "ensayo" ]]; then
+            echo "VPS viejo (testing): $(estado_observado VIEJO)"
         else
             echo "VPS viejo: quedó congelado: stockapp-api detenida (y enmascarada, si el volcado llegó hasta ahí). Nadie escribe en la base vieja."
         fi
-        echo "VPS nuevo: la API nueva está detenida; no la arranques a mano."
+        estado_nuevo_observado
         case "$SALIDA_SUGERIDA" in
             reintentar-restauracion)
                 echo "Sin retomar automático: la base del nuevo QUEDÓ restaurada pero no verifica. Investigá y después elegí:"
@@ -240,6 +269,43 @@ resumen_de_fallo() {
         echo "Para volver atrás (el viejo vuelve a servir):"
         echo "    deploy/migrar-vps.sh --revertir $ORQ_CORRIDA"
     } >&2
+}
+
+# estado_observado <PREFIJO>: lo que dice is-active (y, en el viejo, is-enabled) de stockapp-api, sin
+# abortar: se usa DENTRO de abortar, donde un "no pude consultar" se informa y no se vuelve a abortar.
+estado_observado() {
+    local palabra rc
+    orq_ssh "$1" "systemctl is-active stockapp-api"
+    palabra="$ORQ_SALIDA" rc="$ORQ_RC"
+    if [[ ( "$rc" -ne 0 && "$rc" -ne 3 ) || ! "$palabra" =~ ^[a-z-]+$ ]]; then
+        printf 'no pude consultar el estado de stockapp-api (salió con %s)' "$rc"
+        return 0
+    fi
+    if [[ "$1" == "VIEJO" ]]; then
+        orq_ssh VIEJO "systemctl is-enabled stockapp-api"
+        if [[ ( "$ORQ_RC" -eq 0 || "$ORQ_RC" -eq 1 ) && "$ORQ_SALIDA" =~ ^[a-z-]+$ ]]; then
+            printf "stockapp-api dice '%s' y su unit '%s'" "$palabra" "$ORQ_SALIDA"
+            return 0
+        fi
+    fi
+    printf "stockapp-api dice '%s'" "$palabra"
+}
+
+# estado_nuevo_observado: la línea del VPS nuevo del resumen de fallo, con lo que se OBSERVA (R37).
+estado_nuevo_observado() {
+    local rc
+    orq_ssh NUEVO "systemctl is-active stockapp-api"
+    rc="$ORQ_RC"
+    if [[ "$rc" -ne 0 && "$rc" -ne 3 ]]; then
+        echo "VPS nuevo: no pude consultar el estado de stockapp-api (salió con $rc): no la arranques a mano hasta saber cómo quedó."
+        return 0
+    fi
+    case "$ORQ_SALIDA" in
+        inactive) echo "VPS nuevo: la API nueva está detenida (inactive); no la arranques a mano." ;;
+        failed) echo "VPS nuevo: stockapp-api quedó en failed (no atiende); el journal está arriba. No la arranques a mano." ;;
+        active) echo "VPS nuevo: stockapp-api está ARRIBA (active), pero esto no es un GO: no instales las PCs." ;;
+        *) echo "VPS nuevo: stockapp-api dice '${ORQ_SALIDA}'." ;;
+    esac
 }
 
 # volcar_stderr: lo que dijo ssh o el comando remoto, con sangría. Solo el stderr, nunca la salida:
@@ -286,6 +352,9 @@ RAIZ_VIEJO=""
 RAIZ_NUEVO=""
 SIN_VERIFICAR_PREPARACION=0
 ARNES_USADO=()
+CONTINUAR=""
+REINTENTAR_RESTAURACION=0
+ENV_EXPLICITO=0
 
 valor_de() {
     if [[ $# -lt 2 || -z "$2" ]]; then
@@ -317,14 +386,25 @@ while [[ $# -gt 0 ]]; do
             MODO="ensayo"
             shift
             ;;
+        --continuar)
+            valor_de "$@"
+            CONTINUAR="$2"
+            shift 2
+            ;;
+        --reintentar-restauracion)
+            REINTENTAR_RESTAURACION=1
+            shift
+            ;;
         --env-viejo)
             valor_de "$@"
             ENV_VIEJO="$2"
+            ENV_EXPLICITO=1
             shift 2
             ;;
         --env-nuevo)
             valor_de "$@"
             ENV_NUEVO="$2"
+            ENV_EXPLICITO=1
             shift 2
             ;;
         --contenedor-viejo)
@@ -367,6 +447,24 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [[ -n "$CONTINUAR" ]]; then
+    # Los .env y el modo salen del estado de la corrida: otra cosa sería retomar contra otros servidores.
+    if [[ "$ENV_EXPLICITO" -eq 1 || "$MODO" != "corte" ]]; then
+        echo "migrar: --continuar no acepta --env-viejo, --env-nuevo ni --ensayo: salen del estado de la corrida." >&2
+        exit 2
+    fi
+    # Solo una corrida de corte o de ensayo, con su ruta absoluta bajo las corridas de este HOME.
+    CONTINUAR="${CONTINUAR%/}"
+    if [[ -z "${HOME:-}" || "${CONTINUAR%/*}" != "$HOME/stockapp-backups-vps/corridas" ||
+        ! "${CONTINUAR##*/}" =~ ^(corte|ensayo)-[0-9]{8}T[0-9]{6}Z$ ]]; then
+        echo "migrar: --continuar necesita la ruta de una corrida de corte o de ensayo, tal como la imprimió migrar (~/stockapp-backups-vps/corridas/<corte|ensayo>-<ts>): '$CONTINUAR'." >&2
+        exit 2
+    fi
+elif [[ "$REINTENTAR_RESTAURACION" -eq 1 ]]; then
+    echo "migrar: --reintentar-restauracion solo existe con --continuar <corrida>." >&2
+    exit 2
+fi
 
 # ---------------------------------------------------------------------------------------
 # Configuración (fase A: nada de esto crea una corrida ni escribe nada)
@@ -455,6 +553,9 @@ cargar_config() {
     # confirmación puede leerse de stdin (ORQ_ENSAYO, que solo se pone acá, nunca el entorno).
     if [[ -n "${STOCKAPP_ENSAYO_FALLAR_EN-}" ]]; then
         ARNES_USADO+=("STOCKAPP_ENSAYO_FALLAR_EN")
+        if [[ ! "$STOCKAPP_ENSAYO_FALLAR_EN" =~ ^([3-9]|1[01])$ ]]; then
+            abortar 2 "STOCKAPP_ENSAYO_FALLAR_EN='$STOCKAPP_ENSAYO_FALLAR_EN': solo se inyectan los pasos 3 a 11."
+        fi
     fi
     if orq_hosts_de_ensayo "$VIEJO_VPS_HOST" "$NUEVO_VPS_HOST"; then
         ORQ_ENSAYO=1
@@ -566,8 +667,9 @@ verificar_identidad() {
     if [[ "$MACHINE_ID_VIEJO" == "$MACHINE_ID_NUEVO" ]]; then
         abortar 9 "los dos hosts tienen el mismo /etc/machine-id: son el mismo servidor. No se tocó nada."
     fi
-    # Un corte contra otros servidores que los del último ensayo no es el que se ensayó.
-    if [[ "$MODO" == "corte" ]]; then
+    # Un corte contra otros servidores que los del último ensayo no es el que se ensayó. (Al continuar,
+    # la referencia es el estado de la propia corrida.)
+    if [[ "$MODO" == "corte" && -z "$CONTINUAR" ]]; then
         ensayo_previo_con machine_id_viejo machine_id_nuevo
         if [[ -n "$ENSAYO_PREVIO" ]]; then
             previo_viejo="$(orq_estado_de "$ENSAYO_PREVIO/estado" machine_id_viejo)"
@@ -828,35 +930,56 @@ prevuelo_nuevo() {
     echo "  - nuevo: feed en la versión $VERSION_NUEVO, base de $TAMANO_BASE_NUEVO bytes, espacio para el dump y la copia de seguridad"
 }
 
+# comparar_overrides <archivo>: los nombres de <archivo> que faltan en el .env del servidor nuevo ->
+# OVERRIDES_FALTAN y OVERRIDES_CANTIDAD. Sale 0, 3 si una línea no es un nombre de variable, u 8 si
+# no pudo leer las claves (ORQ_RC dice con qué salió). Solo los NOMBRES cruzan la red.
+OVERRIDES_FALTAN=""
+OVERRIDES_CANTIDAD=0
+comparar_overrides() {
+    local archivo="$1" nombre comando
+    OVERRIDES_FALTAN=""
+    OVERRIDES_CANTIDAD=0
+    comando='sed -n '\''s/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p'\'' "$HOME/stockapp-deploy/.env"'
+    orq_ssh NUEVO "$comando"
+    if [[ "$ORQ_RC" -ne 0 ]]; then
+        return 8
+    fi
+    while IFS= read -r nombre || [[ -n "$nombre" ]]; do
+        [[ -n "$nombre" ]] || continue
+        if [[ ! "$nombre" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+            return 3
+        fi
+        OVERRIDES_CANTIDAD=$((OVERRIDES_CANTIDAD + 1))
+        if ! contiene_linea "$ORQ_SALIDA" "$nombre"; then
+            OVERRIDES_FALTAN+="${OVERRIDES_FALTAN:+, }$nombre"
+        fi
+    done < "$archivo"
+}
+
 prevuelo_overrides() {
-    local archivo="" dir nombre faltan="" cantidad=0 comando
+    local archivo="" dir sub rc=0
     while IFS= read -r dir; do
-        if [[ -n "$dir" && -f "$dir/volcado/overrides-api-env.txt" ]]; then
-            archivo="$dir/volcado/overrides-api-env.txt"
+        [[ -n "$dir" ]] || continue
+        # La carpeta del volcado del ensayo: volcado/ o la del último reintento (volcado_dir).
+        sub="$(orq_estado_de "$dir/estado" volcado_dir 2>/dev/null)" || sub="volcado"
+        if [[ "$sub" =~ ^volcado(-[0-9]+)?$ && -f "$dir/$sub/overrides-api-env.txt" ]]; then
+            archivo="$dir/$sub/overrides-api-env.txt"
         fi
     done < <(ensayos_previos)
     if [[ -z "$archivo" ]]; then
         echo "  - overrides: no hay un ensayo anterior con lista de overrides; el primer ensayo la deja al final."
         return 0
     fi
-    # Solo los NOMBRES de las claves del .env del servidor cruzan la red.
-    comando='sed -n '\''s/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p'\'' "$HOME/stockapp-deploy/.env"'
-    orq_ssh NUEVO "$comando"
-    consulta_ok "las claves del .env del VPS nuevo"
-    while IFS= read -r nombre || [[ -n "$nombre" ]]; do
-        [[ -n "$nombre" ]] || continue
-        if [[ ! "$nombre" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
-            abortar 3 "$archivo tiene una línea que no es un nombre de variable."
-        fi
-        cantidad=$((cantidad + 1))
-        if ! contiene_linea "$ORQ_SALIDA" "$nombre"; then
-            faltan+="${faltan:+, }$nombre"
-        fi
-    done < "$archivo"
-    if [[ -n "$faltan" ]]; then
-        abortar 3 "faltan en el .env del servidor nuevo (~/stockapp-deploy/.env) los overrides del VPS viejo: $faltan. Cargalos a mano (solo se muestran los nombres)."
+    comparar_overrides "$archivo" || rc=$?
+    case "$rc" in
+        0) ;;
+        3) abortar 3 "$archivo tiene una línea que no es un nombre de variable." ;;
+        *) consulta_ok "las claves del .env del VPS nuevo" ;;
+    esac
+    if [[ -n "$OVERRIDES_FALTAN" ]]; then
+        abortar 3 "faltan en el .env del servidor nuevo (~/stockapp-deploy/.env) los overrides del VPS viejo: $OVERRIDES_FALTAN. Cargalos a mano (solo se muestran los nombres)."
     fi
-    echo "  - overrides: los $cantidad del último ensayo están en el .env del servidor nuevo"
+    echo "  - overrides: los $OVERRIDES_CANTIDAD del último ensayo están en el .env del servidor nuevo"
 }
 
 # obtener_contrasena: la de VPS_ADMIN_PASSWORD (entorno o .env del viejo) o, si no, se pide: por
@@ -1023,12 +1146,15 @@ PASO_NOMBRES=(
     "verificación (V1-V8, V10)"
     "resumen"
 )
+# El contrato de paso_<n> en el estado (ver el encabezado): ok u omitido, la hora UTC y los segundos.
+FORMA_DE_PASO='^(ok|omitido) [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z [0-9]+$'
 ARRANQUE_ESPERA=120
 FECHA_TOLERANCIA=300
 BACKUP_ESPERA=60
 
 DIR_STOCKAPP_NUEVO=""
 D_REL=""
+VOLCADO_DIR="volcado"
 VOLCADO=""
 MANIFIESTO=""
 SHA_VOLCADO=""
@@ -1040,6 +1166,54 @@ paso() {
     abrir_paso "$1" "${PASO_NOMBRES[$1]}"
     DETALLE_FALLO=""
     SALIDA_SUGERIDA="continuar"
+    inyectar_fallo "$1"
+}
+
+# inyectar_fallo <n>: solo arnés (STOCKAPP_ENSAYO_FALLAR_EN, rechazada con hosts reales). Antes de
+# correr el paso <n>, la primera vez en la corrida, lo marca FALLÓ con la clase que le corresponde.
+inyectar_fallo() {
+    local n="$1" rc=0
+    if [[ "${STOCKAPP_ENSAYO_FALLAR_EN-}" != "$n" ]]; then
+        return 0
+    fi
+    orq_estado_leer "fallo_inyectado_$n" >/dev/null 2>&1 || rc=$?
+    case "$rc" in
+        0) return 0 ;;
+        1) ;;
+        *) abortar 8 "no pude leer fallo_inyectado_$n del estado de la corrida." ;;
+    esac
+    orq_estado_poner "fallo_inyectado_$n" 1
+    DETALLE_FALLO="fallo inyectado (arnés)"
+    case "$n" in
+        3 | 4 | 5 | 6) abortar 5 "fallo inyectado en el paso $n (arnés), antes de congelar el viejo." ;;
+        9)
+            orq_estado_poner restaurar_salio 5
+            abortar 6 "fallo inyectado en el paso 9 (arnés), como restaurar-backup.sh con 5: la base del nuevo quedó VACÍA. --continuar reintenta la restauración tal cual."
+            ;;
+        11) abortar 7 "fallo inyectado en el paso 11 (arnés): la API nueva no arrancó." ;;
+        *) abortar 6 "fallo inyectado en el paso $n (arnés)." ;;
+    esac
+}
+
+# reloj_desde_congelado: arranca el reloj de indisponibilidad (ORQ_CONGELADO_SEG, en el reloj
+# monotónico de la lib) desde congelado_utc del estado. Al continuar, el congelamiento ocurrió en otro
+# proceso: se descuenta lo que pasó desde entonces según el reloj de pared, y nunca queda negativo.
+reloj_desde_congelado() {
+    local congelado e ahora transcurrido inicio
+    congelado="$(orq_estado_leer congelado_utc)" || return 0
+    if ! e="$(date -u -d "$congelado" +%s 2>/dev/null)"; then
+        return 0
+    fi
+    ahora="$(date -u +%s)"
+    transcurrido=$((ahora - e))
+    if [[ "$transcurrido" -lt 0 ]]; then
+        transcurrido=0
+    fi
+    inicio=$(($(orq_reloj) - transcurrido))
+    if [[ "$inicio" -lt 0 ]]; then
+        inicio=0
+    fi
+    ORQ_CONGELADO_SEG="$inicio"
 }
 
 # falla_remota <codigo> <qué>: tras orq_ssh. El 255 de ssh es "no pude consultar" (8); cualquier otro
@@ -1211,11 +1385,23 @@ viejo_intacto() {
 }
 
 corte_paso6() {
-    local salida="$ORQ_CORRIDA/volcado" args=() rc
+    local salida args=() rc n=2 congelado_rc=0
     paso 6
-    # Un --salida recién creado y vacío: lo que quede ahí es de esta corrida (A11, paso 7).
+    # Un --salida recién creado y vacío: lo que quede ahí es de esta corrida (A11, paso 7). Si un intento
+    # anterior (--continuar) ya usó volcado/, el siguiente va a volcado-2/, volcado-3/...
+    VOLCADO_DIR="volcado"
+    while [[ -e "$ORQ_CORRIDA/$VOLCADO_DIR" ]]; do
+        VOLCADO_DIR="volcado-$n"
+        n=$((n + 1))
+    done
+    salida="$ORQ_CORRIDA/$VOLCADO_DIR"
     if ! mkdir -m 700 -- "$salida" 2>/dev/null; then
         abortar 8 "no pude crear $salida vacío (¿ya existe?): el volcado de esta corrida tiene que caer en un directorio nuevo."
+    fi
+    orq_estado_poner volcado_dir "$VOLCADO_DIR"
+    # El ensayo nunca congela de forma permanente: el bloque no enmascara y vuelve a arrancar la API.
+    if [[ "$MODO" == "ensayo" ]]; then
+        args+=(--ensayo)
     fi
     if [[ "$CONTENEDOR_VIEJO" != "stockapp-pg" ]]; then
         args+=(--contenedor "$CONTENEDOR_VIEJO")
@@ -1225,9 +1411,17 @@ corte_paso6() {
     fi
 
     # Acá empieza el reloj de indisponibilidad, ANTES de llamar al bloque: su paso 2 detiene la API
-    # vieja en los primeros segundos.
-    orq_estado_poner congelado_utc "$(ahora_utc)"
-    ORQ_CONGELADO_SEG="$(orq_reloj)"
+    # vieja en los primeros segundos. Al reintentar (--continuar) el viejo ya estaba congelado desde el
+    # primer intento: congelado_utc no se pisa.
+    orq_estado_leer congelado_utc >/dev/null 2>&1 || congelado_rc=$?
+    case "$congelado_rc" in
+        0) reloj_desde_congelado ;;
+        1)
+            orq_estado_poner congelado_utc "$(ahora_utc)"
+            ORQ_CONGELADO_SEG="$(orq_reloj)"
+            ;;
+        *) abortar 8 "no pude leer congelado_utc del estado de la corrida." ;;
+    esac
     CONGELADO=1
 
     orq_bloque deploy/volcado-final-vps.sh "$ENV_VIEJO" --salida "$salida" "${args[@]}"
@@ -1258,6 +1452,13 @@ corte_paso6() {
             ;;
     esac
 
+    if [[ "$MODO" == "ensayo" ]]; then
+        # El viejo de testing vuelve a servir: el reloj de indisponibilidad se detiene acá. Que haya
+        # quedado como estaba lo verifica V10 (invertido).
+        unset ORQ_CONGELADO_SEG
+        cerrar_paso 6 OK
+        return 0
+    fi
     # El bloque dijo OK: el viejo TIENE que haber quedado congelado. Si sigue sirviendo, restaurar
     # este volcado perdería toda escritura posterior al dump.
     estado_api VIEJO
@@ -1272,7 +1473,7 @@ corte_paso6() {
 }
 
 corte_paso7() {
-    local dir="$ORQ_CORRIDA/volcado" dumps=() manifiestos=() ts_dump ts_man linea inicio
+    local dir="$ORQ_CORRIDA/$VOLCADO_DIR" dumps=() manifiestos=() ts_dump ts_man linea inicio
     local dump_m="" sha_m="" fecha_m="" migr_m="" n_dump=0 n_sha=0 n_fecha=0 n_migr=0 sha_local a b
     paso 7
     shopt -s nullglob
@@ -1359,8 +1560,15 @@ scp_al_nuevo() {
 }
 
 corte_paso8() {
-    local nombre="${ORQ_CORRIDA##*/}" dir="$ORQ_CORRIDA/volcado" sha_remoto
+    local nombre="${ORQ_CORRIDA##*/}" dir="$ORQ_CORRIDA/$VOLCADO_DIR" sha_remoto rc=0
     paso 8
+    # Si un intento anterior ya creó su directorio remoto (--continuar), este va a otro, también nuevo.
+    orq_estado_leer dir_remoto >/dev/null 2>&1 || rc=$?
+    case "$rc" in
+        0) nombre+="-r$(date -u +%Y%m%dT%H%M%SZ)" ;;
+        1) ;;
+        *) abortar 8 "no pude leer dir_remoto del estado de la corrida." ;;
+    esac
     D_REL="stockapp-deploy/migracion/$nombre"
     # Un directorio remoto NUEVO (mkdir sin -p): si ya existe, no se reutiliza ni se mezcla.
     orq_ssh NUEVO "mkdir -m 700 \"\$HOME/$D_REL\""
@@ -1734,7 +1942,10 @@ verificar_v8() {
 }
 
 verificar_v10() {
-    local actual esperado
+    if [[ "$MODO" == "ensayo" ]]; then
+        verificar_v10_ensayo
+        return 0
+    fi
     orq_ssh VIEJO "systemctl is-enabled stockapp-api"
     if [[ "$ORQ_SALIDA" != "masked" || ( "$ORQ_RC" -ne 0 && "$ORQ_RC" -ne 1 ) ]]; then
         v_falla V10 "is-enabled dice '${ORQ_SALIDA:-no pude consultar}' (se esperaba masked)"
@@ -1745,18 +1956,45 @@ verificar_v10() {
         v_falla V10 "is-active dice '${ORQ_SALIDA:-no pude consultar}' (se esperaba inactive)"
         return 0
     fi
+    misma_lista_de_contenedores V10 || return 0
+    v_ok V10
+}
+
+# misma_lista_de_contenedores <V>: docker ps del viejo igual a contenedores-viejo.txt (0) o v_falla (1).
+misma_lista_de_contenedores() {
+    local actual esperado
     orq_ssh VIEJO "docker ps --format '{{.Names}}'"
     if [[ "$ORQ_RC" -ne 0 || -z "$ORQ_SALIDA" ]]; then
-        v_falla V10 "no pude consultar la lista de contenedores (salió con $ORQ_RC)"
-        return 0
+        v_falla "$1" "no pude consultar la lista de contenedores (salió con $ORQ_RC)"
+        return 1
     fi
     actual="$(printf '%s\n' "$ORQ_SALIDA" | LC_ALL=C sort)"
     esperado="$(cat "$ORQ_CORRIDA/contenedores-viejo.txt" 2>/dev/null)" || esperado=""
     if [[ "$actual" != "$esperado" ]]; then
-        v_falla V10 "la lista de contenedores cambió: antes '$(printf '%s' "$esperado" | tr '\n' ' ')', ahora '$(printf '%s' "$actual" | tr '\n' ' ')'"
+        v_falla "$1" "la lista de contenedores cambió: antes '$(printf '%s' "$esperado" | tr '\n' ' ')', ahora '$(printf '%s' "$actual" | tr '\n' ' ')'"
+        return 1
+    fi
+}
+
+# V10 invertido del ensayo: el viejo (testing) quedó como estaba: active, con la misma habilitación
+# que antes del volcado (nunca masked) y el mismo docker ps.
+verificar_v10_ensayo() {
+    orq_ssh VIEJO "systemctl is-enabled stockapp-api"
+    if [[ ( "$ORQ_RC" -ne 0 && "$ORQ_RC" -ne 1 ) || ! "$ORQ_SALIDA" =~ ^[a-z-]+$ ]]; then
+        v_falla V10 "no pude consultar is-enabled (salió con $ORQ_RC)"
         return 0
     fi
-    v_ok V10
+    if [[ "$ORQ_SALIDA" == "masked" || "$ORQ_SALIDA" != "$HABILITACION_VIEJO" ]]; then
+        v_falla V10 "is-enabled dice '$ORQ_SALIDA' (antes del volcado decía '${HABILITACION_VIEJO:-?}'; el ensayo no enmascara)"
+        return 0
+    fi
+    orq_ssh VIEJO "systemctl is-active stockapp-api"
+    if [[ "$ORQ_SALIDA" != "active" || "$ORQ_RC" -ne 0 ]]; then
+        v_falla V10 "is-active dice '${ORQ_SALIDA:-no pude consultar}' (se esperaba active: el ensayo lo deja como estaba)"
+        return 0
+    fi
+    misma_lista_de_contenedores V10 || return 0
+    v_ok V10 "active y '$HABILITACION_VIEJO', como antes del ensayo"
 }
 
 V_FALLIDAS=""
@@ -1794,11 +2032,64 @@ corte_paso12() {
     fi
 }
 
+# tabla_de_tiempos: los pasos y la indisponibilidad del ensayo, en Markdown, para pegar en el runbook.
+tabla_de_tiempos() {
+    local n valor marca seg desde hasta a b
+    echo "Tiempos del ensayo (para pegar en el runbook):"
+    echo
+    echo "| Paso | Resultado | Duración |"
+    echo "|---|---|---|"
+    for ((n = 1; n <= PASOS_TOTAL; n++)); do
+        valor="$(orq_estado_leer "paso_$n" 2>/dev/null)" || valor=""
+        marca="${valor%% *}"
+        seg="${valor##* }"
+        if [[ "$valor" =~ $FORMA_DE_PASO ]]; then
+            printf '| (%2d/%d) %s | %s | %s s |\n' "$n" "$PASOS_TOTAL" "${PASO_NOMBRES[$n]}" "$marca" "$seg"
+        else
+            printf '| (%2d/%d) %s | — | — |\n' "$n" "$PASOS_TOTAL" "${PASO_NOMBRES[$n]}"
+        fi
+    done
+    desde="$(orq_estado_leer congelado_utc 2>/dev/null)" || desde=""
+    hasta="$(orq_estado_leer api_nueva_activa_utc 2>/dev/null)" || hasta=""
+    if a="$(date -u -d "$desde" +%s 2>/dev/null)" && b="$(date -u -d "$hasta" +%s 2>/dev/null)" && [[ "$b" -ge "$a" ]]; then
+        printf '| Indisponibilidad estimada del corte (congelamiento -> API nueva activa) | | %d min %d s |\n' $(((b - a) / 60)) $(((b - a) % 60))
+    else
+        echo "| Indisponibilidad estimada del corte (congelamiento -> API nueva activa) | | sin dato |"
+    fi
+    echo
+}
+
+# overrides_del_ensayo: los nombres de overrides-api-env.txt de este ensayo que faltan en el .env del
+# servidor nuevo. Solo informa: el ensayo no se frena por esto (el corte sí, en el pre-vuelo).
+overrides_del_ensayo() {
+    local archivo="$ORQ_CORRIDA/$VOLCADO_DIR/overrides-api-env.txt" rc=0
+    if [[ ! -f "$archivo" ]]; then
+        echo "Overrides: el volcado no dejó overrides-api-env.txt: no hay lista."
+        return 0
+    fi
+    comparar_overrides "$archivo" || rc=$?
+    case "$rc" in
+        0)
+            if [[ -n "$OVERRIDES_FALTAN" ]]; then
+                echo "Overrides que faltan en el .env del servidor nuevo: $OVERRIDES_FALTAN"
+                echo "  (cargalos a mano en ~/stockapp-deploy/.env del nuevo antes del corte; el pre-vuelo del corte lo exige)"
+            else
+                echo "Overrides: los $OVERRIDES_CANTIDAD del viejo ya están en el .env del servidor nuevo."
+            fi
+            ;;
+        3) echo "Overrides: $archivo tiene una línea que no es un nombre de variable." ;;
+        *) echo "Overrides: no pude leer las claves del .env del servidor nuevo (salió con $ORQ_RC): revisalo antes del corte." ;;
+    esac
+}
+
 corte_paso13() {
-    local congelado fin e n valor resultado nombre detalle
+    local congelado fin e n valor resultado nombre detalle que="corte"
     paso 13
+    [[ "$MODO" == "ensayo" ]] && que="ensayo"
     congelado="$(orq_estado_leer congelado_utc)" || congelado=""
-    if e="$(date -u -d "$congelado" +%s 2>/dev/null)"; then
+    if [[ "$MODO" == "ensayo" ]]; then
+        fin=""
+    elif e="$(date -u -d "$congelado" +%s 2>/dev/null)"; then
         fin="$(date -u -d "@$((e + 14 * 86400))" +%Y-%m-%dT%H:%M:%SZ)"
         orq_estado_poner fin_rollback "$fin"
     else
@@ -1811,7 +2102,7 @@ corte_paso13() {
     fi
 
     echo
-    echo "== Resumen del corte =="
+    echo "== Resumen del $que =="
     if [[ "$resultado" == "GO" ]]; then
         echo "Resultado: GO técnico: todas las verificaciones automáticas dieron OK."
     else
@@ -1829,18 +2120,32 @@ corte_paso13() {
             continue
         fi
         nombre="${V_NOMBRE[$v]}"
+        if [[ "$v" == "V10" && "$MODO" == "ensayo" ]]; then
+            nombre="VPS viejo active, sin enmascarar y sin cambios"
+        fi
         detalle="${V_DETALLE[$v]:-}"
         printf '  %-4s %-46s %s%s\n' "$v" "$nombre" "${V_ESTADO[$v]:-FALLÓ}" "${detalle:+  ($detalle)}"
     done
-    echo "Pendiente:"
-    echo "  - V9: el smoke de la GUI, por un agente con scripts/gui-verificacion"
-    echo "  - la decisión de GO de Martin"
-    echo "  - instalar las PCs"
-    echo "Fechas:"
-    echo "  - corte (congelamiento del viejo): $congelado"
-    echo "  - fin del rollback (D+14):         $fin"
-    echo "Para volver atrás (el viejo vuelve a servir y el nuevo se detiene):"
-    echo "    deploy/migrar-vps.sh --revertir $ORQ_CORRIDA"
+    if [[ "$MODO" == "ensayo" ]]; then
+        echo "Aviso: el ensayo detiene testing mientras dura el volcado (desde $congelado); --ensayo lo vuelve a arrancar y V10 lo comprueba."
+        echo "El VPS nuevo queda con los datos del ensayo y la API arriba; el corte los reemplaza con --recrear-base."
+        echo
+        tabla_de_tiempos
+        overrides_del_ensayo
+        echo "Pendiente:"
+        echo "  - V9: el smoke de la GUI sobre los datos del ensayo, por un agente con scripts/gui-verificacion"
+        echo "  - pegar la tabla de tiempos en el runbook y cargar los overrides que falten"
+    else
+        echo "Pendiente:"
+        echo "  - V9: el smoke de la GUI, por un agente con scripts/gui-verificacion"
+        echo "  - la decisión de GO de Martin"
+        echo "  - instalar las PCs"
+        echo "Fechas:"
+        echo "  - corte (congelamiento del viejo): $congelado"
+        echo "  - fin del rollback (D+14):         $fin"
+        echo "Para volver atrás (el viejo vuelve a servir y el nuevo se detiene):"
+        echo "    deploy/migrar-vps.sh --revertir $ORQ_CORRIDA"
+    fi
 
     cerrar_paso 13 OK
     # resultado es lo último que se escribe.
@@ -1855,7 +2160,209 @@ corte_paso13() {
 # Principal
 # ---------------------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------------------
+# --continuar <corrida> (spec 6.5.4, A13)
+# ---------------------------------------------------------------------------------------
+
+# leer_clave_continuar <clave> -> VALOR_CLAVE; sale 0 si está, 1 si no; un estado ilegible es 8.
+VALOR_CLAVE=""
+leer_clave_continuar() {
+    local rc=0
+    VALOR_CLAVE="$(orq_estado_de "$CONTINUAR/estado" "$1" 2>/dev/null)" || rc=$?
+    case "$rc" in
+        0 | 1) return "$rc" ;;
+        *) abortar 8 "no pude leer el estado de $CONTINUAR." ;;
+    esac
+}
+
+# paso_hecho <n>: 0 si paso_<n> es ok u omitido (el contrato), 1 si no está. Cualquier otro valor no
+# se interpreta: no se retoma a ciegas (A13).
+paso_hecho() {
+    leer_clave_continuar "paso_$1" || return 1
+    if [[ "$VALOR_CLAVE" =~ $FORMA_DE_PASO ]]; then
+        return 0
+    fi
+    abortar 8 "paso_$1='$VALOR_CLAVE' en $CONTINUAR/estado no es 'ok|omitido <utc> <segundos>': no sé dónde quedó la corrida y no la retomo a ciegas."
+}
+
+# recargar_volcado: el volcado de la corrida (pasos 6 y 7 ya hechos) desde el estado, verificado contra
+# los archivos locales: el mismo nombre, el mismo sha256 y el manifiesto que lo nombra.
+recargar_volcado() {
+    local dir sha_local linea
+    VOLCADO_DIR="volcado"
+    if leer_clave_continuar volcado_dir; then
+        VOLCADO_DIR="$VALOR_CLAVE"
+    fi
+    leer_clave_continuar volcado || abortar 3 "el estado no tiene volcado= aunque el paso 7 está hecho: no sé qué volcado restaurar."
+    VOLCADO="$VALOR_CLAVE"
+    leer_clave_continuar sha256 || abortar 3 "el estado no tiene sha256= aunque el paso 7 está hecho."
+    SHA_VOLCADO="$VALOR_CLAVE"
+    dir="$ORQ_CORRIDA/$VOLCADO_DIR"
+    if [[ ! "$VOLCADO_DIR" =~ ^volcado(-[0-9]+)?$ || ! "$VOLCADO" =~ ^volcado-([0-9]{8}T[0-9]{6}Z)\.dump$ ]]; then
+        abortar 3 "volcado_dir=$VOLCADO_DIR o volcado=$VOLCADO del estado no tienen la forma que deja migrar."
+    fi
+    MANIFIESTO="volcado-${BASH_REMATCH[1]}.manifiesto"
+    if ! sha_local="$(sha256sum -- "$dir/$VOLCADO" 2>/dev/null)" || [[ "${sha_local%% *}" != "$SHA_VOLCADO" ]]; then
+        abortar 6 "el volcado de esta corrida ($dir/$VOLCADO) falta o no tiene el sha256 del estado: no se restaura otro (A11)."
+    fi
+    ULTIMA_MIGRACION=""
+    while IFS= read -r linea || [[ -n "$linea" ]]; do
+        [[ "$linea" == "[conteos]" ]] && break
+        case "$linea" in
+            ultima_migracion=*) ULTIMA_MIGRACION="${linea#ultima_migracion=}" ;;
+        esac
+    done < "$dir/$MANIFIESTO" || abortar 6 "no pude leer el manifiesto $dir/$MANIFIESTO."
+    if ! grep -qxF -- "dump=$VOLCADO" "$dir/$MANIFIESTO" || [[ ! "$ULTIMA_MIGRACION" =~ ^[0-9]{14}_[A-Za-z0-9_]+$ ]]; then
+        abortar 6 "el manifiesto $dir/$MANIFIESTO no nombra a $VOLCADO o no trae una ultima_migracion legible."
+    fi
+}
+
+# viejo_sigue_congelado <desde>: en el corte, retomar exige que el viejo siga congelado. Si alguien lo
+# volvió a arrancar, restaurar el volcado perdería lo escrito después del dump.
+viejo_sigue_congelado() {
+    local desde="$1"
+    estado_api VIEJO
+    habilitacion_viejo
+    if [[ "$desde" -eq 6 ]]; then
+        # El volcado anterior pudo fallar antes de enmascarar: alcanza con que no esté sirviendo.
+        if [[ "$ESTADO_API" != "active" ]]; then
+            return 0
+        fi
+    elif [[ "$ESTADO_API" == "inactive" && "$HABILITACION" == "masked" ]]; then
+        return 0
+    fi
+    abortar 3 "el VPS viejo ya no está congelado (stockapp-api dice '$ESTADO_API' y su unit '$HABILITACION'): alguien lo volvió a arrancar y restaurar ahora perdería lo escrito después del dump. No se tocó nada. Para cerrar esta corrida: deploy/migrar-vps.sh --revertir $ORQ_CORRIDA; después, una corrida nueva."
+}
+
+# desde_donde_retomar -> DESDE: el primer paso sin hacer, con las reglas de las notas 1 y 2.
+DESDE=0
+desde_donde_retomar() {
+    local n primero=14 restaurar=""
+    for ((n = 1; n <= PASOS_TOTAL; n++)); do
+        if ! paso_hecho "$n"; then
+            primero="$n"
+            break
+        fi
+    done
+    if [[ "$primero" -lt 6 ]]; then
+        abortar 3 "la corrida registra el congelamiento pero no el paso $primero: no sé dónde quedó y no la retomo a ciegas. Mirá el estado del viejo y, si corresponde, deploy/migrar-vps.sh --revertir $ORQ_CORRIDA."
+    fi
+    if [[ "$primero" -ge 12 ]]; then
+        # Todo hecho, o un NO-GO: se repite la verificación y el resumen.
+        DESDE=12
+        return 0
+    fi
+    DESDE="$primero"
+    if [[ "$primero" -eq 9 ]]; then
+        if leer_clave_continuar restaurar_salio; then
+            restaurar="$VALOR_CLAVE"
+        fi
+        case "$restaurar" in
+            3 | 4) DESDE=8 ;;
+            6 | 7)
+                if [[ "$REINTENTAR_RESTAURACION" -ne 1 ]]; then
+                    abortar 3 "restaurar-backup.sh salió con $restaurar: la base del nuevo QUEDÓ restaurada pero no verifica, y eso lo decide un humano. Investigá y después elegí: deploy/migrar-vps.sh --continuar $ORQ_CORRIDA --reintentar-restauracion (vuelve a --recrear-base, con otro dump de seguridad) o deploy/migrar-vps.sh --revertir $ORQ_CORRIDA."
+                fi
+                ;;
+        esac
+        if [[ "$REINTENTAR_RESTAURACION" -eq 1 && "$restaurar" != 6 && "$restaurar" != 7 ]]; then
+            abortar 3 "--reintentar-restauracion es para una restauración que salió con 6 o 7, y esta salió con '${restaurar:-?}': sin la opción, --continuar ya sabe cómo seguir."
+        fi
+    elif [[ "$REINTENTAR_RESTAURACION" -eq 1 ]]; then
+        abortar 3 "--reintentar-restauracion es para una restauración que salió con 6 o 7, y esta corrida retoma en el paso $primero."
+    fi
+}
+
+continuar() {
+    local modo rc=0 n
+    ORQ_CORRIDA=""
+    if [[ ! -d "$CONTINUAR" || ! -f "$CONTINUAR/estado" ]]; then
+        abortar 3 "$CONTINUAR no es una corrida con estado: no hay nada que retomar."
+    fi
+    # Fase A, de solo lectura: el modo, los .env y la identidad de los hosts salen del estado.
+    leer_clave_continuar modo || abortar 3 "el estado de $CONTINUAR no dice el modo."
+    modo="$VALOR_CLAVE"
+    if [[ ( "$modo" != corte && "$modo" != ensayo ) || "${CONTINUAR##*/}" != "$modo-"* ]]; then
+        abortar 3 "el estado de $CONTINUAR dice modo=$modo: --continuar retoma corridas de corte o de ensayo."
+    fi
+    MODO="$modo"
+    leer_clave_continuar env_viejo || abortar 3 "el estado de $CONTINUAR no dice env_viejo."
+    ENV_VIEJO="$VALOR_CLAVE"
+    leer_clave_continuar env_nuevo || abortar 3 "el estado de $CONTINUAR no dice env_nuevo."
+    ENV_NUEVO="$VALOR_CLAVE"
+    cargar_config
+    verificar_identidad
+    leer_clave_continuar machine_id_viejo || VALOR_CLAVE=""
+    if [[ "$VALOR_CLAVE" != "$MACHINE_ID_VIEJO" ]]; then
+        abortar 9 "el VPS viejo de $ENV_VIEJO (machine-id ${MACHINE_ID_VIEJO:0:8}) no es el de la corrida (${VALOR_CLAVE:0:8}): un .env que cambió de servidor a mitad de una corrida es un error. No se tocó nada."
+    fi
+    leer_clave_continuar machine_id_nuevo || VALOR_CLAVE=""
+    if [[ "$VALOR_CLAVE" != "$MACHINE_ID_NUEVO" ]]; then
+        abortar 9 "el VPS nuevo de $ENV_NUEVO (machine-id ${MACHINE_ID_NUEVO:0:8}) no es el de la corrida (${VALOR_CLAVE:0:8}): un .env que cambió de servidor a mitad de una corrida es un error. No se tocó nada."
+    fi
+
+    # Fase B: el log de la corrida (se agrega al que ya tiene) y el lock. Recién con el lock se decide.
+    ORQ_CORRIDA="$CONTINUAR"
+    orq_log_iniciar
+    orq_lock
+    LOCK_TOMADO=1
+    echo "migrar-vps: --continuar ($MODO)"
+    echo "  corrida: $ORQ_CORRIDA"
+    echo "  viejo: $VIEJO_VPS_HOST (machine-id ${MACHINE_ID_VIEJO:0:8})"
+    echo "  nuevo: $NUEVO_VPS_HOST (machine-id ${MACHINE_ID_NUEVO:0:8})"
+
+    if leer_clave_continuar resultado && [[ "$VALOR_CLAVE" != "NO-GO" ]]; then
+        abortar 3 "la corrida ya terminó (resultado=$VALOR_CLAVE): no hay nada que retomar. No se tocó nada."
+    fi
+    leer_clave_continuar congelado_utc || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        # R32: murió antes de congelar. No hay nada que retomar, y abierta bloquearía todo corte nuevo.
+        orq_estado_poner resultado FALLO-ABANDONADA
+        abortar 3 "la corrida no llegó a congelar el VPS viejo, que siguió sirviendo: no hay nada que retomar. Quedó cerrada con resultado=FALLO-ABANDONADA; empezá una corrida nueva."
+    fi
+    # R4: desde acá la corrida vuelve a estar abierta (también si era un NO-GO) hasta su nuevo resultado.
+    orq_estado_quitar resultado
+
+    desde_donde_retomar
+    leer_clave_continuar habilitacion_viejo_inicial || VALOR_CLAVE=""
+    HABILITACION_VIEJO="$VALOR_CLAVE"
+    if [[ "$MODO" == "corte" ]]; then
+        viejo_sigue_congelado "$DESDE"
+    fi
+    obtener_contrasena
+    leer_version_del_feed
+    if [[ "$DESDE" -ge 8 ]]; then
+        recargar_volcado
+    fi
+    if [[ "$DESDE" -ge 9 ]]; then
+        leer_clave_continuar dir_remoto || abortar 3 "el estado no tiene dir_remoto= aunque el paso 8 está hecho."
+        D_REL="${VALOR_CLAVE#\~/}"
+        if [[ ! "$D_REL" =~ ^stockapp-deploy/migracion/(corte|ensayo)-[0-9]{8}T[0-9]{6}Z(-r[0-9]{8}T[0-9]{6}Z)?$ ]]; then
+            abortar 3 "dir_remoto=$VALOR_CLAVE del estado no tiene la forma que deja migrar."
+        fi
+    fi
+    if [[ "$DESDE" -ge 10 ]]; then
+        RESTAURAR_RC=0
+    fi
+    CONGELADO=1
+    # El reloj de indisponibilidad sigue corriendo en el corte. En el ensayo el viejo ya volvió a servir
+    # (salvo que se repita el volcado: el paso 6 lo arranca otra vez).
+    if [[ "$MODO" == "corte" ]]; then
+        reloj_desde_congelado
+    fi
+    echo "  retoma en el paso $DESDE (${PASO_NOMBRES[$DESDE]})"
+
+    for ((n = DESDE; n <= 11; n++)); do
+        "corte_paso$n"
+    done
+    corte_paso12
+    corte_paso13
+}
+
 main() {
+    if [[ -n "$CONTINUAR" ]]; then
+        continuar
+    fi
     cargar_config
     exigir_terminal
     verificar_identidad
@@ -1865,15 +2372,16 @@ main() {
     orq_dir_corrida "$MODO" >/dev/null
     orq_log_iniciar
     orq_lock
+    LOCK_TOMADO=1
 
     echo "migrar-vps: $MODO"
     echo "  corrida: $ORQ_CORRIDA"
     echo "  viejo: $VIEJO_VPS_HOST (machine-id ${MACHINE_ID_VIEJO:0:8})"
     echo "  nuevo: $NUEVO_VPS_HOST (machine-id ${MACHINE_ID_NUEVO:0:8})"
 
-    if [[ "$MODO" == "corte" ]]; then
-        verificar_corridas_sin_terminar
-    fi
+    # El ensayo también: opera los mismos dos servidores, y recrear la base del nuevo o volcar el viejo
+    # en medio de un corte sin terminar pisaría lo que ese corte dejó a medias.
+    verificar_corridas_sin_terminar
     orq_estado_poner modo "$MODO"
     orq_estado_poner inicio_utc "$(ahora_utc)"
     orq_estado_poner env_viejo "$ENV_VIEJO"
@@ -1895,13 +2403,7 @@ main() {
         cerrar_paso 2 OMITIDO "ensayo: sin confirmación" omitido
     fi
 
-    if [[ "$MODO" == "ensayo" ]]; then
-        # El ensayo corre la misma secuencia con el volcado --ensayo y V10 invertido; hasta que esté,
-        # termina acá sin tocar nada (correr la del corte enmascararía el viejo).
-        echo "migrar: la secuencia de --ensayo todavía no está en esta versión del script. No se tocó nada." >&2
-        exit 1
-    fi
-
+    # El ensayo corre la MISMA secuencia: el volcado con --ensayo (paso 6) y V10 invertido.
     corte_paso3
     corte_paso4
     corte_paso5
