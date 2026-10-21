@@ -53,8 +53,8 @@
 #                   viejo: hay que apagar el nuevo desde el panel del proveedor.
 #   --desde-backup  Recuperación ante desastres: el VPS viejo murió o no se puede congelar, y el VPS nuevo
 #                   (ya preparado) recibe un backup que el operador tiene en esta máquina (el que deja
-#                   bajar-backup-vps.sh, o el volcado de una corrida anterior). El viejo NO se nombra: ni
-#                   ssh, ni volcado, ni --env-viejo. Pre-vuelo, antes de tocar nada: el dump legible, de al
+#                   bajar-backup-vps.sh, o el volcado de una corrida anterior). Al VPS viejo no se le corre
+#                   nada: ni ssh ni volcado. Pre-vuelo, antes de tocar nada: el dump legible, de al
 #                   menos 1024 bytes y aceptado por pg_restore --list local (de ese listado sale la fecha,
 #                   "Archive created at"); si hay un <dump>.sha256 al lado, como el de bajar-backup-vps.sh,
 #                   tiene que coincidir; con --manifiesto, el manifiesto tiene que nombrar ese dump y su
@@ -64,8 +64,11 @@
 #                   verifica la estructura y no los conteos), 11 y 12; el 5, 6, 7 y 10 son del viejo o de su
 #                   volcado y quedan OMITIDO. Verificación: V1 a V5, V7 y V8 (sin historial: la descarga de
 #                   una corrida vieja se informa y no bloquea; el backup nuevo sí), V6 solo con manifiesto y
-#                   sin V10. El usuario real de V5 y V8 es VPS_ADMIN_USER del --env-nuevo (y su contraseña,
-#                   VPS_ADMIN_PASSWORD: entorno, archivo o terminal). Una corrida que falla se cierra
+#                   sin V10. El usuario real de V5 y V8 es VPS_ADMIN_USER del --env-viejo, que es el .env
+#                   LOCAL de siempre y existe aunque el VPS viejo esté muerto (de él se leen solo esa clave y
+#                   VPS_ADMIN_PASSWORD, si no viene del entorno o de la terminal; nunca el host), y
+#                   preparar --verificar lee de él la clave de licencias. Sin ese archivo o sin
+#                   VPS_ADMIN_USER sale 2. Una corrida que falla se cierra
 #                   (resultado=FALLO-<n>) y se vuelve a correr entera: no hay --continuar ni --revertir (el
 #                   paso 9 recrea la base con un dump de seguridad de lo que tenga). Códigos: los de la tabla,
 #                   sin el 9 de contenedores (no hay viejo); 6 es "falló un paso desde la transferencia".
@@ -73,11 +76,15 @@
 #                   solo con --antes-de-plazo y la palabra BORRAR). No toca el VPS viejo. En orden:
 #                   LogsAuditoria del nuevo >= el del manifiesto del corte (si no puede consultarlo, se
 #                   detiene); MUEVE el dump y el manifiesto del corte a ~/stockapp-backups-vps/corte-<ts>/
-#                   (700), con el sha256 antes y después (si falla, no sigue); después ofrece borrar, uno por
-#                   uno, con su ruta y su tamaño y la palabra BORRAR cada vez, los directorios de
-#                   ~/stockapp-deploy/migracion/ del nuevo, lo de ~/stockapp-backups-vps/ y sus corridas
-#                   terminadas, y al final la propia corrida del corte. Nunca ofrece el archivo de un corte
-#                   ni una corrida sin terminar. Por último IMPRIME (no ejecuta) la referencia para
+#                   (700), con el sha256 antes y después (si falla, no sigue), y copia ahí el estado y el
+#                   registro.log de la corrida (con lo que este modo borra) y el sha256 del dump y del
+#                   manifiesto. Después ofrece borrar, uno por uno, con su ruta, su tamaño y la palabra
+#                   BORRAR cada vez, por LISTA BLANCA: los directorios de ~/stockapp-deploy/migracion/ del
+#                   nuevo (si ya no existe, lo dice y sigue), las corridas de ensayo terminadas y lo que deja
+#                   el runbook manual (ensayo-<fecha>/, ensayo-e2-<fecha>/, migracion-<fecha>/,
+#                   contenedores-viejo-<fecha>.txt, v10-viejo.txt, token). NUNCA ofrece corte-* (de ningún
+#                   formato), inversa-*, una corrida de corte (tampoco esta) ni lo que no sea de la
+#                   migración: se lista como "se conserva". Por último IMPRIME (no ejecuta) la referencia para
 #                   desmantelar el viejo. Re-correrlo da YA ESTABA en el archivo. Códigos: 0 hecho, 2 uso, 3
 #                   precondición (sin GO, antes del plazo, LogsAuditoria menor que el manifiesto, lock), 4 sin
 #                   la palabra BORRAR del plazo, 5 falló el archivo o un borrado (lo hecho queda hecho;
@@ -609,9 +616,11 @@ fi
 
 if [[ -n "$DESDE_BACKUP" ]]; then
     # No hay VPS viejo: puede estar muerto, y nada de esta corrida lo nombra.
-    if [[ "$ENV_VIEJO_DADO" -eq 1 || -n "${ARNES_DADO[--contenedor-viejo]-}" || -n "${ARNES_DADO[--raiz-remota-viejo]-}" ||
+    # --env-viejo SÍ: es un archivo local del operador (de ahí salen la credencial de V5/V8 y la clave de
+    # licencias), y nunca se usa para conectarse al viejo.
+    if [[ -n "${ARNES_DADO[--contenedor-viejo]-}" || -n "${ARNES_DADO[--raiz-remota-viejo]-}" ||
         "$REINTENTAR_RESTAURACION" -eq 1 || "$AUN_CON_ESCRITURAS" -eq 1 ]]; then
-        echo "migrar: --desde-backup no acepta --env-viejo, --contenedor-viejo, --raiz-remota-viejo, --reintentar-restauracion ni --aun-con-escrituras: no hay VPS viejo, y una corrida que falla se vuelve a correr entera." >&2
+        echo "migrar: --desde-backup no acepta --contenedor-viejo, --raiz-remota-viejo, --reintentar-restauracion ni --aun-con-escrituras: no se opera el VPS viejo, y una corrida que falla se vuelve a correr entera." >&2
         exit 2
     fi
     MODO="desde-backup"
@@ -657,7 +666,7 @@ if [[ -n "$CONTINUAR" ]]; then
     # ruta absoluta bajo las corridas de este HOME.
     CONTINUAR="${CONTINUAR%/}"
     if ! ruta_de_corrida_valida "$CONTINUAR" 'corte|ensayo|desde-backup'; then
-        echo "migrar: --continuar necesita la ruta de una corrida de corte o de ensayo, tal como la imprimió migrar (~/stockapp-backups-vps/corridas/<corte|ensayo>-<ts>): '$CONTINUAR'." >&2
+        echo "migrar: --continuar necesita la ruta de una corrida de corte, de ensayo o de --desde-backup (esta última solo se cierra), tal como la imprimió migrar (~/stockapp-backups-vps/corridas/<corte|ensayo|desde-backup>-<ts>): '$CONTINUAR'." >&2
         exit 2
     fi
 elif [[ "$REINTENTAR_RESTAURACION" -eq 1 ]]; then
@@ -726,21 +735,31 @@ solo_nuevo() {
 USUARIO_VERIFICACION=""
 ENV_CREDENCIAL=""
 
-# cargar_config_solo_nuevo: lo mismo que cargar_config, sin leer ni nombrar el VPS viejo.
+# cargar_config_solo_nuevo: lo mismo que cargar_config, sin conectarse nunca al VPS viejo. En
+# --desde-backup el usuario real de V5/V8 y su contraseña salen del --env-viejo (spec 6.5.1), que es un
+# archivo LOCAL del operador y existe aunque el VPS viejo esté muerto: de él se leen SOLO esas dos claves
+# (nunca VPS_HOST), y preparar-vps-nuevo.sh --verificar lee de él la clave de licencias.
 cargar_config_solo_nuevo() {
-    orq_leer_env "$ENV_NUEVO" NUEVO "${CLAVES_COMUNES[@]}" VPS_ADMIN_USER VPS_ADMIN_PASSWORD
-    if [[ -z "$PW" && -n "${NUEVO_VPS_ADMIN_PASSWORD-}" ]]; then
-        PW="$NUEVO_VPS_ADMIN_PASSWORD"
-    fi
-    unset NUEVO_VPS_ADMIN_PASSWORD
+    orq_leer_env "$ENV_NUEVO" NUEVO "${CLAVES_COMUNES[@]}"
     NUEVO_POSTGRES_USER="${NUEVO_POSTGRES_USER:-stockapp}"
     NUEVO_POSTGRES_DB="${NUEVO_POSTGRES_DB:-stockapp}"
     exigir NUEVO "$ENV_NUEVO" VPS_HOST VPS_USER VPS_SSH_PORT API_SCHEME API_HOSTNAME API_PORT
     if [[ "$MODO" == "desde-backup" ]]; then
-        exigir NUEVO "$ENV_NUEVO" VPS_ADMIN_USER
+        ENV_VIEJO="$(realpath -m -- "$ENV_VIEJO")"
+        if [[ ! -f "$ENV_VIEJO" || ! -r "$ENV_VIEJO" ]]; then
+            abortar 2 "--desde-backup necesita --env-viejo (el .env LOCAL de siempre; no se contacta al VPS viejo): de ahí salen VPS_ADMIN_USER y VPS_ADMIN_PASSWORD para V5/V8 y la clave de licencias para preparar-vps-nuevo.sh --verificar. No puedo leer $ENV_VIEJO."
+        fi
+        orq_leer_env "$ENV_VIEJO" VIEJO VPS_ADMIN_USER VPS_ADMIN_PASSWORD
+        if [[ -z "${VIEJO_VPS_ADMIN_USER:-}" ]]; then
+            abortar 2 "falta VPS_ADMIN_USER en $ENV_VIEJO (--env-viejo): es el usuario real con el que V5 y V8 verifican la API nueva."
+        fi
+        if [[ -z "$PW" && -n "${VIEJO_VPS_ADMIN_PASSWORD-}" ]]; then
+            PW="$VIEJO_VPS_ADMIN_PASSWORD"
+        fi
+        unset VIEJO_VPS_ADMIN_PASSWORD
+        USUARIO_VERIFICACION="$VIEJO_VPS_ADMIN_USER"
+        ENV_CREDENCIAL="$ENV_VIEJO"
     fi
-    USUARIO_VERIFICACION="${NUEVO_VPS_ADMIN_USER-}"
-    ENV_CREDENCIAL="$ENV_NUEVO"
 
     if [[ -n "${STOCKAPP_ENSAYO_FALLAR_EN-}" ]]; then
         ARNES_USADO+=("STOCKAPP_ENSAYO_FALLAR_EN")
@@ -970,7 +989,7 @@ verificar_corridas_sin_terminar() {
                 echo "  $dir"
                 echo "    deploy/migrar-vps.sh --continuar $dir"
             done
-            echo "  o deshacer el congelamiento, si lo hubo:"
+            echo "  o, para una de corte o de ensayo, deshacer el congelamiento si lo hubo:"
             echo "    deploy/migrar-vps.sh --revertir"
         } >&2
         abortar 3 "una corrida sin terminar tiene que retomarse (--continuar) o revertirse (--revertir) antes de empezar otra. No se tocó nada."
@@ -1165,12 +1184,8 @@ prevuelo_nuevo() {
         echo "  - preparación del nuevo: OMITIDO (arnés)"
     else
         echo "  - preparación del nuevo (preparar-vps-nuevo.sh --verificar, versión $VERSION_NUEVO):"
-        # Sin viejo (--desde-backup), preparar lee la clave pública de licencias de su propio default.
-        local args_preparar=(--version "$VERSION_NUEVO")
-        if ! solo_nuevo; then
-            args_preparar+=(--env-viejo "$ENV_VIEJO")
-        fi
-        orq_bloque deploy/preparar-vps-nuevo.sh "$ENV_NUEVO" "${args_preparar[@]}" --verificar
+        # También en --desde-backup: el --env-viejo es local y trae la clave pública de licencias.
+        orq_bloque deploy/preparar-vps-nuevo.sh "$ENV_NUEVO" --version "$VERSION_NUEVO" --env-viejo "$ENV_VIEJO" --verificar
         echo "  bloque preparar-vps-nuevo.sh salió con $ORQ_RC_BLOQUE"
         case "$ORQ_RC_BLOQUE" in
             0) ;;
@@ -3736,53 +3751,110 @@ post_corte_archivar() {
     fi
 }
 
-# Los candidatos locales: lo que hay en ~/stockapp-backups-vps y sus corridas, y al final la propia corrida
-# del corte. Se excluyen el archivo de un corte (corte-<ts>, este o uno anterior: NUNCA se ofrece) y las
-# corridas sin terminar (pueden ser lo único que dice cómo revertir algo).
+# Los candidatos locales, por LISTA BLANCA (R48): las corridas de ensayo terminadas y lo que deja el runbook
+# manual, por patrón exacto (ensayo-<fecha>/, ensayo-e2-<fecha>/, migracion-<fecha>/,
+# contenedores-viejo-<fecha>.txt, v10-viejo.txt, token). NUNCA se ofrece: el archivo de un corte (corte-*,
+# de cualquier formato: el de este script o el corte-%Y%m%d del runbook manual), un volcado inverso
+# (inversa-*), una corrida de corte (ni esta, que se copió al archivo, ni otra con su volcado sin archivar),
+# ni lo que no sea de la migración (las salidas de bajar-backup-vps.sh son la última copia fuera del
+# servidor). Todo lo que no se ofrece se lista como "se conserva", con el motivo.
 CANDIDATOS_LOCALES=()
+FECHA_RUNBOOK='[0-9]{8}'
+conservar() {
+    anotar "  - se conserva ($1): $2"
+}
+
 candidatos_locales() {
-    local base="$HOME/stockapp-backups-vps" d nombre rc
+    local base="$HOME/stockapp-backups-vps" e nombre rc
     CANDIDATOS_LOCALES=()
-    for d in "$base"/*/; do
-        d="${d%/}"
-        [[ -d "$d" ]] || continue
-        nombre="${d##*/}"
-        [[ "$nombre" == "corridas" ]] && continue
-        if [[ "$nombre" =~ ^corte-[0-9]{8}T[0-9]{6}Z$ ]]; then
+    for e in "$base"/*; do
+        [[ -e "$e" ]] || continue
+        nombre="${e##*/}"
+        [[ "$nombre" == "corridas" && -d "$e" ]] && continue
+        [[ "$e" == "$ARCHIVO_CORTE" ]] && continue
+        if [[ "$nombre" == corte-* || "$nombre" == inversa-* ]]; then
+            conservar "nunca se ofrece: archivo de un corte o volcado inverso" "$e"
             continue
         fi
-        CANDIDATOS_LOCALES+=("$d")
-    done
-    for d in "$base/corridas"/*/; do
-        d="${d%/}"
-        [[ -d "$d" && "$d" != "$POST_CORTE" ]] || continue
-        if [[ -f "$d/estado" ]]; then
-            rc=0
-            orq_estado_de "$d/estado" resultado >/dev/null 2>&1 || rc=$?
-            if [[ "$rc" -ne 0 ]]; then
-                echo "  - se conserva (sin terminar): $d"
-                continue
-            fi
+        if [[ -d "$e" && ! -L "$e" && "$nombre" =~ ^(ensayo|ensayo-e2|migracion)-${FECHA_RUNBOOK}$ ]] ||
+            [[ -f "$e" && ! -L "$e" && ( "$nombre" =~ ^contenedores-viejo-${FECHA_RUNBOOK}\.txt$ || "$nombre" == "v10-viejo.txt" || "$nombre" == "token" ) ]]; then
+            CANDIDATOS_LOCALES+=("$e")
+            continue
         fi
-        CANDIDATOS_LOCALES+=("$d")
+        conservar "no es de esta migración" "$e"
     done
-    CANDIDATOS_LOCALES+=("$POST_CORTE")
+    for e in "$base/corridas"/*; do
+        [[ -e "$e" ]] || continue
+        nombre="${e##*/}"
+        if [[ "$nombre" == corte-* ]]; then
+            conservar "nunca se ofrece: una corrida de corte" "$e"
+            continue
+        fi
+        if [[ ! -d "$e" || -L "$e" || ! "$nombre" =~ ^ensayo-[0-9]{8}T[0-9]{6}Z$ ]]; then
+            conservar "no es una corrida de ensayo" "$e"
+            continue
+        fi
+        rc=0
+        orq_estado_de "$e/estado" resultado >/dev/null 2>&1 || rc=$?
+        if [[ "$rc" -ne 0 ]]; then
+            conservar "sin terminar" "$e"
+            continue
+        fi
+        CANDIDATOS_LOCALES+=("$e")
+    done
+}
+
+# anotar <línea>: a la pantalla (y al registro.log de la corrida, por el tee) Y, sincrónico, al
+# registro.log del archivo del corte: lo que se borró y lo que se conservó queda junto al dump (R49).
+anotar() {
+    printf '%s\n' "$1"
+    if [[ -n "$REGISTRO_ARCHIVO" ]]; then
+        printf '%s\n' "$1" >> "$REGISTRO_ARCHIVO" || abortar 5 "no pude escribir en $REGISTRO_ARCHIVO."
+    fi
+}
+
+# copiar_corrida_al_archivo (R49): la corrida del corte nunca se borra, pero su estado y su registro.log
+# (con este --post-corte) se copian además al archivo, junto al dump, con el sha256 del dump y del
+# manifiesto en formato de sha256sum: el archivo se explica solo aunque la corrida se pierda.
+REGISTRO_ARCHIVO=""
+copiar_corrida_al_archivo() {
+    local sha_dump sha_man
+    sha_dump="$(sha_de "$ARCHIVO_CORTE/$VOLCADO")" || abortar 5 "no pude calcular el sha256 de $ARCHIVO_CORTE/$VOLCADO."
+    sha_man="$(sha_de "$ARCHIVO_CORTE/$MANIFIESTO")" || abortar 5 "no pude calcular el sha256 de $ARCHIVO_CORTE/$MANIFIESTO."
+    (
+        umask 077
+        printf '%s  %s\n' "$sha_dump" "$VOLCADO" > "$ARCHIVO_CORTE/$VOLCADO.sha256" &&
+            printf '%s  %s\n' "$sha_man" "$MANIFIESTO" > "$ARCHIVO_CORTE/$MANIFIESTO.sha256" &&
+            cp -f -- "$POST_CORTE/estado" "$ARCHIVO_CORTE/estado" &&
+            cp -f -- "$POST_CORTE/registro.log" "$ARCHIVO_CORTE/registro.log" &&
+            chmod 600 -- "$ARCHIVO_CORTE/estado" "$ARCHIVO_CORTE/registro.log" "$ARCHIVO_CORTE/$VOLCADO.sha256" "$ARCHIVO_CORTE/$MANIFIESTO.sha256"
+    ) || abortar 5 "no pude copiar el estado, el registro y los sha256 del corte a $ARCHIVO_CORTE: no se ofrece borrar nada."
+    REGISTRO_ARCHIVO="$ARCHIVO_CORTE/registro.log"
+    anotar "  - copiados a $ARCHIVO_CORTE: estado, registro.log, $VOLCADO.sha256 y $MANIFIESTO.sha256"
 }
 
 post_corte_borrar() {
     local nombres=() n tam d borrados=0 conservados=0 rc
     pc_paso 4 "borrar copias, una por una"
+    copiar_corrida_al_archivo
+    anotar "== --post-corte $(ahora_utc): borrados =="
     # En el VPS nuevo: los directorios de ~/stockapp-deploy/migracion (corridas, con su seguridad/, y lo
-    # apartado). Primero, mientras la corrida del corte (donde van los temporales) todavía existe.
-    orq_ssh NUEVO "find \"\$HOME/stockapp-deploy/migracion\" -mindepth 1 -maxdepth 1 -type d -printf '%f\\n'"
-    consulta_ok "los directorios de ~/stockapp-deploy/migracion en el VPS nuevo"
-    # A un arreglo, no a un `while read ... <<<`: dentro del bucle, la respuesta del operador se lee de
-    # stdin, y la redirección del bucle se la comería.
-    mapfile -t nombres < <(printf '%s\n' "$ORQ_SALIDA" | LC_ALL=C sort)
+    # apartado). Si el directorio ya no existe, no hay nada que ofrecer ahí (R51): no es "no pude consultar".
+    orq_ssh NUEVO 'test -d "$HOME/stockapp-deploy/migracion"'
+    if [[ "$ORQ_RC" -eq 1 && -z "$ORQ_STDERR" ]]; then
+        anotar "  - ~/stockapp-deploy/migracion ya no estaba en el VPS nuevo: nada que ofrecer ahí"
+    else
+        consulta_ok "si existe ~/stockapp-deploy/migracion en el VPS nuevo"
+        orq_ssh NUEVO "find \"\$HOME/stockapp-deploy/migracion\" -mindepth 1 -maxdepth 1 -type d -printf '%f\\n'"
+        consulta_ok "los directorios de ~/stockapp-deploy/migracion en el VPS nuevo"
+        # A un arreglo, no a un `while read ... <<<`: dentro del bucle, la respuesta del operador se lee de
+        # stdin, y la redirección del bucle se la comería.
+        mapfile -t nombres < <(printf '%s\n' "$ORQ_SALIDA" | LC_ALL=C sort)
+    fi
     for n in "${nombres[@]}"; do
         [[ -n "$n" ]] || continue
         if [[ ! "$n" =~ $NOMBRE_SEGURO ]]; then
-            echo "  - se conserva (nombre inesperado): ~/stockapp-deploy/migracion/$n"
+            conservar "nombre inesperado" "~/stockapp-deploy/migracion/$n (VPS nuevo)"
             continue
         fi
         orq_ssh NUEVO "du -sh -- \"\$HOME/stockapp-deploy/migracion/$n\""
@@ -3791,15 +3863,15 @@ post_corte_borrar() {
         if preguntar_borrar "en el VPS nuevo ~/stockapp-deploy/migracion/$n ($tam)"; then
             orq_ssh NUEVO "rm -r -- \"\$HOME/stockapp-deploy/migracion/$n\""
             falla_remota 5 "el borrado de ~/stockapp-deploy/migracion/$n en el VPS nuevo"
-            echo "  - borrado: ~/stockapp-deploy/migracion/$n (VPS nuevo)"
+            anotar "  - borrado: ~/stockapp-deploy/migracion/$n (VPS nuevo)"
             borrados=$((borrados + 1))
         else
-            echo "  - se conserva: ~/stockapp-deploy/migracion/$n (VPS nuevo)"
+            anotar "  - se conserva: ~/stockapp-deploy/migracion/$n (VPS nuevo)"
             conservados=$((conservados + 1))
         fi
     done
 
-    # En esta máquina, por ruta exacta; la corrida del corte va última (con ella se va su registro.log).
+    # En esta máquina, por ruta exacta y solo lo de la lista blanca.
     candidatos_locales
     for d in "${CANDIDATOS_LOCALES[@]}"; do
         rc=0
@@ -3813,14 +3885,15 @@ post_corte_borrar() {
             if [[ -e "$d" ]]; then
                 abortar 5 "después del borrado, $d sigue existiendo."
             fi
-            echo "  - borrado: $d"
+            anotar "  - borrado: $d"
             borrados=$((borrados + 1))
         else
-            echo "  - se conserva: $d"
+            anotar "  - se conserva: $d"
             conservados=$((conservados + 1))
         fi
     done
-    pc_fin OK "$borrados borrados, $conservados conservados; el archivo del corte no se ofrece"
+    anotar "  - $borrados borrados, $conservados conservados; ni el archivo ni la corrida del corte se ofrecen"
+    pc_fin OK "$borrados borrados, $conservados conservados"
 }
 
 post_corte_referencia() {
