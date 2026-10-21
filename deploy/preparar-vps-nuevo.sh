@@ -534,8 +534,11 @@ declare -A PASOS_NOMBRE=(
 main() {
     local n
 
-    # El lock se toma al inicio (los dos orquestadores comparten ~/stockapp-backups-vps/.migracion.lock).
-    orq_lock
+    # El lock se toma al inicio (los dos orquestadores comparten ~/stockapp-backups-vps/.migracion.lock),
+    # salvo en --verificar: es de solo lectura, y migrar lo invoca como bloque teniendo ya el lock.
+    if [[ "$VERIFICAR" -eq 0 ]]; then
+        orq_lock
+    fi
 
     paso0_prevuelo
     for n in "${PASOS[@]}"; do

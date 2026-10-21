@@ -129,7 +129,7 @@ public class PrepararVpsNuevoTests
             File.WriteAllText(EnvNuevo, string.Join('\n', lineas) + "\n");
         }
 
-        public Resultado Correr(string[] args, IDictionary<string, string>? env = null)
+        public Resultado Correr(string[] args, IDictionary<string, string>? env = null, bool conLockTomado = false)
         {
             var exportes = new List<string> { $"export HOME={Sq(Home)}", $"export HS_DIR={Sq(_host.DirOperador)}" };
             var entorno = new Dictionary<string, string>(env ?? new Dictionary<string, string>());
@@ -142,8 +142,14 @@ public class PrepararVpsNuevoTests
             }
 
             var argumentos = string.Join(' ', args.Select(a => Sq(a.Replace("{ENV_VIEJO}", EnvViejo))));
+            // Lock tomado por "otro proceso" (el padre, como migrar): el hijo corre con el fd 9
+            // cerrado, igual que orq_bloque, así que su lock es otra descripción y choca.
+            var lock_ = conLockTomado
+                ? "mkdir -p \"$HOME/stockapp-backups-vps\"\nexec 9>>\"$HOME/stockapp-backups-vps/.migracion.lock\"\nflock -n 9\n"
+                : "";
             var (exit, stdout, stderr) = _host.Operador(
-                string.Join('\n', exportes) + $"\ncd {Sq(Raiz)}\n./deploy/preparar-vps-nuevo.sh {argumentos}");
+                string.Join('\n', exportes) + $"\n{lock_}cd {Sq(Raiz)}\n./deploy/preparar-vps-nuevo.sh {argumentos}" +
+                (conLockTomado ? " 9>&-" : ""));
             return new Resultado(exit, stdout, stderr);
         }
 
@@ -676,6 +682,35 @@ public class PrepararVpsNuevoTests
         Assert.Matches(@"\(\s*1/10\) Docker \.+ HECHO", r.Stdout);
         Assert.Matches(@"\(\s*2/10\) usuario y directorios \.+ PENDIENTE", r.Stdout);
         Assert.Equal("755", h.Ejecutar("sudo stat -c %a /var/lib/stockapp/.local/share").Salida.Trim());
+    }
+
+    // ---------- Lock ----------
+
+    [Fact]
+    public void Verificar_ConElLockTomadoPorElPadre_NoLoToma()
+    {
+        // migrar tiene el flock y llama a `preparar --verificar` como bloque (fd 9 cerrado).
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+
+        var r = arbol.Correr(ConBase("--verificar"), conLockTomado: true);
+
+        Assert.True(r.Exit == 5, r.Todo);   // host en blanco: pasos 1-2 PENDIENTE, no 3 por el lock
+        Assert.DoesNotContain("migración en curso", r.Stderr);
+        Assert.Matches(@"\(\s*1/10\) Docker \.+ PENDIENTE", r.Stdout);
+    }
+
+    [Fact]
+    public void ModoNormal_ConElLockTomado_Aborta3SinSsh()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+
+        var r = arbol.Correr(ConBase(), conLockTomado: true);
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.Contains("migración en curso", r.Stderr);
+        SinSsh(h);
     }
 
     // ---------- Los bloques falsos del árbol ----------
