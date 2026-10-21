@@ -7,6 +7,7 @@
 # Uso:
 #   deploy/migrar-vps.sh [--ensayo] [--env-viejo <archivo>] [--env-nuevo <archivo>]
 #   deploy/migrar-vps.sh --continuar <corrida> [--reintentar-restauracion]
+#   deploy/migrar-vps.sh --revertir [<corrida>] [--aun-con-escrituras]
 #
 #   (sin --ensayo)  El corte. Pre-vuelo de SOLO LECTURA (config, identidad de los hosts, estado del
 #                   viejo, preparación del nuevo, overrides, credencial) y, recién después, una
@@ -27,6 +28,22 @@
 #                   con resultado=FALLO-ABANDONADA y hay que empezar una nueva; una terminada (con
 #                   resultado=, salvo NO-GO) no se toca. En el corte, el viejo tiene que seguir
 #                   congelado: si alguien lo volvió a arrancar, se niega (3).
+#   --revertir      La vuelta atrás (R-A) en un comando: el VPS viejo vuelve a servir. Sin <corrida>, la
+#                   última de corte que registra el congelamiento; con ella, también una de ensayo (así se
+#                   cierra un ensayo abierto). Los .env, contenedores y raíces salen del estado de la corrida
+#                   y se exigen los mismos machine-id. En orden: sudo -n en los dos; la guardia de escrituras
+#                   (LogsAuditoria del nuevo contra logs_auditoria_post_verificacion: si creció hubo PCs
+#                   trabajando, ya no es R-A sino R-B, y sale 3 salvo --aun-con-escrituras, que muestra el
+#                   delta y sigue a la confirmación); la palabra REVERTIR; la API NUEVA detenida PRIMERO; en
+#                   el viejo, cada uno solo si hace falta según lo que se OBSERVA: unmask (si está masked), mv
+#                   del .congelado a su lugar (si existe y la unit no), daemon-reload y start. Si existen los
+#                   dos archivos de la unit no se pisa ninguno (8). Verifica el viejo active, atendiendo por
+#                   loopback y con el docker ps de antes del corte, y el nuevo detenido; escribe
+#                   resultado=REVERTIDO en la corrida revertida y en la propia (revertir-<ts>, con su log).
+#                   Es idempotente: re-correrlo da YA ESTABA en cada paso y no modifica nada. Códigos: 0
+#                   revertido, 2 uso, 3 precondición o escrituras reales (R-B), 4 sin confirmar, 6 falló un
+#                   paso de la vuelta (re-correr), 8 no pude consultar o la unit no se puede devolver sin
+#                   pisar, 9 otros servidores que los de la corrida o el docker ps del viejo cambió.
 #   --env-viejo     .env del operador para el VPS viejo. Default: deploy/.env.
 #                   Además de los VPS_*: VPS_ADMIN_USER (obligatorio; no cae a BOOTSTRAP_ADMIN_USER)
 #                   y VPS_ADMIN_PASSWORD. La contraseña sale del entorno, si no del archivo y, si
@@ -46,8 +63,8 @@
 # ⚠️  EL VPS VIEJO ES COMPARTIDO con otra aplicación. Sobre él, este script solo corre lecturas
 # acotadas POR NOMBRE a StockApp: systemctl is-active / is-enabled / show de stockapp-api,
 # docker ps --format, docker exec del contenedor de Postgres de StockApp, cat de /etc/machine-id,
-# test -e de la unit y el curl de login y de GET /backups por loopback; más los bloques
-# (volcado-final-vps.sh) y los cuatro comandos de vuelta atrás. Nada global de Docker, de systemd ni
+# test -e de la unit y el curl de login y de GET /backups por loopback (y, solo en --revertir, GET /);
+# más los bloques (volcado-final-vps.sh) y, solo en --revertir, los cuatro comandos de vuelta atrás. Nada global de Docker, de systemd ni
 # de firewall, y nada del proxy de la otra aplicación. Ningún dump ni archivo temporal pasa por el
 # /tmp del host.
 #
@@ -193,6 +210,7 @@ PASO_T0=0
 # las salidas. DETALLE_FALLO es lo que va entre paréntesis en la línea del paso que falló (el bloque
 # y su código); SALIDA_SUGERIDA elige qué salidas se ofrecen (ver resumen_de_fallo).
 CONGELADO=0
+SIN_AYUDA_DE_REVERTIR=0
 DETALLE_FALLO=""
 SALIDA_SUGERIDA="continuar"
 ESTADO_VIEJO_TXT=""
@@ -224,6 +242,9 @@ abortar() {
     fi
     if [[ "$CONGELADO" -eq 1 && "$codigo" -ne 5 ]]; then
         resumen_de_fallo "$codigo"
+    fi
+    if [[ "$MODO" == "revertir" && "$codigo" -ne 2 && "$codigo" -ne 4 && "$SIN_AYUDA_DE_REVERTIR" -eq 0 ]]; then
+        ayuda_de_revertir "$codigo"
     fi
     exit "$codigo"
 }
@@ -360,6 +381,11 @@ declare -A ARNES_DADO=()
 CONTINUAR=""
 REINTENTAR_RESTAURACION=0
 ENV_EXPLICITO=0
+REVERTIR=0
+REVERTIR_CORRIDA=""
+AUN_CON_ESCRITURAS=0
+# La corrida cuyo estado se relee (--continuar o --revertir).
+OBJETIVO=""
 
 valor_de() {
     if [[ $# -lt 2 || -z "$2" ]]; then
@@ -398,6 +424,20 @@ while [[ $# -gt 0 ]]; do
             ;;
         --reintentar-restauracion)
             REINTENTAR_RESTAURACION=1
+            shift
+            ;;
+        --revertir)
+            # La corrida es opcional: sin ella, la última de corte que registra el congelamiento.
+            REVERTIR=1
+            if [[ $# -ge 2 && "$2" != -* ]]; then
+                REVERTIR_CORRIDA="$2"
+                shift 2
+            else
+                shift
+            fi
+            ;;
+        --aun-con-escrituras)
+            AUN_CON_ESCRITURAS=1
             shift
             ;;
         --env-viejo)
@@ -457,6 +497,29 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# ruta_de_corrida_valida <ruta>: la ruta absoluta de una corrida de corte o de ensayo bajo las corridas
+# de este HOME, tal como la imprime migrar.
+ruta_de_corrida_valida() {
+    [[ -n "${HOME:-}" && "${1%/*}" == "$HOME/stockapp-backups-vps/corridas" &&
+        "${1##*/}" =~ ^(corte|ensayo)-[0-9]{8}T[0-9]{6}Z$ ]]
+}
+
+if [[ "$REVERTIR" -eq 1 ]]; then
+    # Como --continuar: los .env, los contenedores y las raíces salen del estado de la corrida.
+    if [[ "$ENV_EXPLICITO" -eq 1 || "$MODO" != "corte" || -n "$CONTINUAR" || "$REINTENTAR_RESTAURACION" -eq 1 ]]; then
+        echo "migrar: --revertir no acepta --env-viejo, --env-nuevo, --ensayo, --continuar ni --reintentar-restauracion: los servidores salen del estado de la corrida." >&2
+        exit 2
+    fi
+    REVERTIR_CORRIDA="${REVERTIR_CORRIDA%/}"
+    if [[ -n "$REVERTIR_CORRIDA" ]] && ! ruta_de_corrida_valida "$REVERTIR_CORRIDA"; then
+        echo "migrar: --revertir necesita la ruta de una corrida de corte o de ensayo, tal como la imprimió migrar (~/stockapp-backups-vps/corridas/<corte|ensayo>-<ts>): '$REVERTIR_CORRIDA'." >&2
+        exit 2
+    fi
+elif [[ "$AUN_CON_ESCRITURAS" -eq 1 ]]; then
+    echo "migrar: --aun-con-escrituras solo existe con --revertir." >&2
+    exit 2
+fi
+
 if [[ -n "$CONTINUAR" ]]; then
     # Los .env y el modo salen del estado de la corrida: otra cosa sería retomar contra otros servidores.
     if [[ "$ENV_EXPLICITO" -eq 1 || "$MODO" != "corte" ]]; then
@@ -465,8 +528,7 @@ if [[ -n "$CONTINUAR" ]]; then
     fi
     # Solo una corrida de corte o de ensayo, con su ruta absoluta bajo las corridas de este HOME.
     CONTINUAR="${CONTINUAR%/}"
-    if [[ -z "${HOME:-}" || "${CONTINUAR%/*}" != "$HOME/stockapp-backups-vps/corridas" ||
-        ! "${CONTINUAR##*/}" =~ ^(corte|ensayo)-[0-9]{8}T[0-9]{6}Z$ ]]; then
+    if ! ruta_de_corrida_valida "$CONTINUAR"; then
         echo "migrar: --continuar necesita la ruta de una corrida de corte o de ensayo, tal como la imprimió migrar (~/stockapp-backups-vps/corridas/<corte|ensayo>-<ts>): '$CONTINUAR'." >&2
         exit 2
     fi
@@ -2192,14 +2254,15 @@ corte_paso13() {
 # --continuar <corrida> (spec 6.5.4, A13)
 # ---------------------------------------------------------------------------------------
 
-# leer_clave_continuar <clave> -> VALOR_CLAVE; sale 0 si está, 1 si no; un estado ilegible es 8.
+# leer_clave_continuar <clave> -> VALOR_CLAVE, del estado de la corrida OBJETIVO (la de --continuar o
+# --revertir); sale 0 si está, 1 si no; un estado ilegible es 8.
 VALOR_CLAVE=""
 leer_clave_continuar() {
     local rc=0
-    VALOR_CLAVE="$(orq_estado_de "$CONTINUAR/estado" "$1" 2>/dev/null)" || rc=$?
+    VALOR_CLAVE="$(orq_estado_de "$OBJETIVO/estado" "$1" 2>/dev/null)" || rc=$?
     case "$rc" in
         0 | 1) return "$rc" ;;
-        *) abortar 8 "no pude leer el estado de $CONTINUAR." ;;
+        *) abortar 8 "no pude leer el estado de $OBJETIVO." ;;
     esac
 }
 
@@ -2323,9 +2386,9 @@ cargar_parametros_de_arnes() {
             raiz_remota_viejo) opcion=--raiz-remota-viejo variable=RAIZ_VIEJO defecto="" ;;
             raiz_remota_nuevo) opcion=--raiz-remota-nuevo variable=RAIZ_NUEVO defecto="" ;;
         esac
-        leer_clave_continuar "$clave" || abortar 3 "el estado de $CONTINUAR no dice $clave: no sé contra qué contenedor o raíz retomar, y no lo adivino."
+        leer_clave_continuar "$clave" || abortar 3 "el estado de $OBJETIVO no dice $clave: no sé contra qué contenedor o raíz operar, y no lo adivino."
         if [[ -n "${ARNES_DADO[$opcion]-}" && "${!variable}" != "$VALOR_CLAVE" ]]; then
-            abortar 2 "$opcion '${!variable}' no es el de la corrida ('$VALOR_CLAVE'): --continuar retoma con el contexto de su estado. No se tocó nada."
+            abortar 2 "$opcion '${!variable}' no es el de la corrida ('$VALOR_CLAVE'): se opera con el contexto de su estado. No se tocó nada."
         fi
         case "$clave" in
             contenedor_*)
@@ -2349,6 +2412,7 @@ cargar_parametros_de_arnes() {
 continuar() {
     local modo rc=0 n
     ORQ_CORRIDA=""
+    OBJETIVO="$CONTINUAR"
     if [[ ! -d "$CONTINUAR" || ! -f "$CONTINUAR/estado" ]]; then
         abortar 3 "$CONTINUAR no es una corrida con estado: no hay nada que retomar."
     fi
@@ -2359,6 +2423,21 @@ continuar() {
         abortar 3 "el estado de $CONTINUAR dice modo=$modo: --continuar retoma corridas de corte o de ensayo."
     fi
     MODO="$modo"
+    # R32 y R41: sin congelado_utc la corrida murió antes de congelar y no hay nada que retomar. Se cierra
+    # ANTES de exigir el contexto (env_*, contenedores, machine-id): una corrida que murió entre modo= y
+    # esas claves no tiene ese contexto, y abierta bloquearía todo corte nuevo (R24). No toca ningún servidor.
+    leer_clave_continuar congelado_utc || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        ORQ_CORRIDA="$CONTINUAR"
+        orq_log_iniciar
+        orq_lock
+        LOCK_TOMADO=1
+        if leer_clave_continuar resultado; then
+            abortar 3 "la corrida ya terminó (resultado=$VALOR_CLAVE): no hay nada que retomar. No se tocó nada."
+        fi
+        orq_estado_poner resultado FALLO-ABANDONADA
+        abortar 3 "la corrida no llegó a congelar el VPS viejo, que siguió sirviendo: no hay nada que retomar. Quedó cerrada con resultado=FALLO-ABANDONADA; empezá una corrida nueva."
+    fi
     leer_clave_continuar env_viejo || abortar 3 "el estado de $CONTINUAR no dice env_viejo."
     ENV_VIEJO="$VALOR_CLAVE"
     leer_clave_continuar env_nuevo || abortar 3 "el estado de $CONTINUAR no dice env_nuevo."
@@ -2387,12 +2466,6 @@ continuar() {
 
     if leer_clave_continuar resultado && [[ "$VALOR_CLAVE" != "NO-GO" ]]; then
         abortar 3 "la corrida ya terminó (resultado=$VALOR_CLAVE): no hay nada que retomar. No se tocó nada."
-    fi
-    leer_clave_continuar congelado_utc || rc=$?
-    if [[ "$rc" -ne 0 ]]; then
-        # R32: murió antes de congelar. No hay nada que retomar, y abierta bloquearía todo corte nuevo.
-        orq_estado_poner resultado FALLO-ABANDONADA
-        abortar 3 "la corrida no llegó a congelar el VPS viejo, que siguió sirviendo: no hay nada que retomar. Quedó cerrada con resultado=FALLO-ABANDONADA; empezá una corrida nueva."
     fi
     # R4: desde acá la corrida vuelve a estar abierta (también si era un NO-GO) hasta su nuevo resultado.
     orq_estado_quitar resultado
@@ -2437,7 +2510,424 @@ continuar() {
     corte_paso13
 }
 
+# ---------------------------------------------------------------------------------------
+# --revertir [<corrida>] (spec 6.5.6, R-A)
+# ---------------------------------------------------------------------------------------
+# Deshace el congelamiento del VPS viejo y lo vuelve a arrancar, con la API nueva detenida PRIMERO. Cada
+# sub-paso mira el estado OBSERVADO del viejo (enmascarada, dónde está la unit, is-active), no lo que dice
+# la corrida: así funciona desde cualquier punto en que haya muerto el volcado, y re-correrlo no hace nada.
+
+UNIT_VIEJO=""
+UNIT_CONGELADA_VIEJO=""
+HAY_UNIT=0
+HAY_CONGELADA=0
+DELTA_ESCRITURAS=""
+
+# ultima_corrida_de_corte -> OBJETIVO: la última corrida de corte cuyo estado registra el congelamiento.
+ultima_corrida_de_corte() {
+    local base="$HOME/stockapp-backups-vps/corridas" dir rc
+    OBJETIVO=""
+    if [[ -z "${HOME:-}" || ! -d "$base" ]]; then
+        return 1
+    fi
+    for dir in "$base"/corte-*/; do
+        dir="${dir%/}"
+        [[ -d "$dir" && -f "$dir/estado" && "${dir##*/}" =~ ^corte-[0-9]{8}T[0-9]{6}Z$ ]] || continue
+        rc=0
+        orq_estado_de "$dir/estado" congelado_utc >/dev/null 2>&1 || rc=$?
+        if [[ "$rc" -eq 0 ]]; then
+            OBJETIVO="$dir"
+        fi
+    done
+    [[ -n "$OBJETIVO" ]]
+}
+
+# ayuda_de_revertir <codigo>: lo que lee el operador cuando la vuelta atrás no terminó (producción caída).
+ayuda_de_revertir() {
+    {
+        echo
+        echo "== La vuelta atrás no terminó (exit $1) =="
+        if [[ -n "${ORQ_CORRIDA:-}" ]]; then
+            echo "Registro: $ORQ_CORRIDA/registro.log"
+        fi
+        echo "Es seguro re-correrla (cada paso mira el estado real y hace solo lo que falta):"
+        echo "    deploy/migrar-vps.sh --revertir${OBJETIVO:+ $OBJETIVO}"
+        echo "A mano: primero, en el VPS nuevo,"
+        echo "    sudo systemctl stop stockapp-api"
+        echo "y después, en el VPS viejo y en este orden (el unmask si is-enabled dice masked; el mv solo si"
+        echo "existe el .congelado y NO existe la unit; si existen los dos, no pises ninguno):"
+        comandos_de_vuelta_atras
+    } >&2
+}
+
+# poner_en_objetivo <clave> <valor>: escribe en el estado de la corrida revertida (la lib escribe en ORQ_CORRIDA).
+poner_en_objetivo() {
+    local propia="$ORQ_CORRIDA" rc=0
+    ORQ_CORRIDA="$OBJETIVO"
+    orq_estado_poner "$1" "$2" || rc=$?
+    ORQ_CORRIDA="$propia"
+    return "$rc"
+}
+
+# habilitacion_revertir -> HABILITACION: la palabra de is-enabled del viejo, o not-found si systemctl no
+# encuentra la unit (salida vacía con 1: la unit está en .congelado). Lo demás es "no pude consultar".
+habilitacion_revertir() {
+    orq_ssh VIEJO "systemctl is-enabled stockapp-api"
+    case "$ORQ_RC" in
+        0 | 1) ;;
+        *) consulta_ok "la habilitación de stockapp-api en el VPS viejo" ;;
+    esac
+    if [[ "$ORQ_RC" -eq 1 && -z "$ORQ_SALIDA" ]]; then
+        HABILITACION="not-found"
+    elif [[ "$ORQ_SALIDA" =~ ^[a-z-]+$ ]]; then
+        HABILITACION="$ORQ_SALIDA"
+    else
+        abortar 8 "no pude interpretar 'systemctl is-enabled stockapp-api' del VPS viejo: '${ORQ_SALIDA}'."
+    fi
+}
+
+# existe_en_viejo <ruta>: 0 si existe, 1 si no. Lo que no se puede consultar es 8, nunca "no existe".
+existe_en_viejo() {
+    orq_ssh VIEJO "test -e $1"
+    if [[ "$ORQ_RC" -eq 0 && -z "$ORQ_STDERR" ]]; then
+        return 0
+    fi
+    if [[ "$ORQ_RC" -eq 1 && -z "$ORQ_STDERR" ]]; then
+        return 1
+    fi
+    volcar_stderr
+    abortar 8 "no pude consultar si existe $1 en el VPS viejo (salió con $ORQ_RC)."
+}
+
+# archivos_de_la_unit -> HAY_UNIT y HAY_CONGELADA. Con la unit enmascarada, en su ruta está el symlink
+# del mask (test -e lo ve): por eso los dos archivos son un problema solo sin el mask.
+archivos_de_la_unit() {
+    HAY_UNIT=0
+    HAY_CONGELADA=0
+    if existe_en_viejo "$UNIT_VIEJO"; then
+        HAY_UNIT=1
+    fi
+    if existe_en_viejo "$UNIT_CONGELADA_VIEJO"; then
+        HAY_CONGELADA=1
+    fi
+}
+
+revertir_contexto() {
+    if [[ -z "$REVERTIR_CORRIDA" ]]; then
+        if ! ultima_corrida_de_corte; then
+            abortar 3 "no hay ninguna corrida de corte que registre el congelamiento (congelado_utc) en ~/stockapp-backups-vps/corridas: sin la corrida no puedo comprobar la identidad de los servidores. Pasala explícita (--revertir <corrida>) o usá los comandos a mano."
+        fi
+    else
+        OBJETIVO="$REVERTIR_CORRIDA"
+    fi
+    if [[ ! -d "$OBJETIVO" || ! -f "$OBJETIVO/estado" ]]; then
+        abortar 3 "$OBJETIVO no es una corrida con estado."
+    fi
+    leer_clave_continuar modo || abortar 3 "el estado de $OBJETIVO no dice el modo."
+    if [[ ( "$VALOR_CLAVE" != corte && "$VALOR_CLAVE" != ensayo ) || "${OBJETIVO##*/}" != "$VALOR_CLAVE-"* ]]; then
+        abortar 3 "el estado de $OBJETIVO dice modo=$VALOR_CLAVE: --revertir deshace corridas de corte o de ensayo."
+    fi
+    leer_clave_continuar env_viejo || abortar 3 "el estado de $OBJETIVO no dice env_viejo: esa corrida no llegó a guardar contra qué servidores corría (si no congeló nada, cerrala con --continuar)."
+    ENV_VIEJO="$VALOR_CLAVE"
+    leer_clave_continuar env_nuevo || abortar 3 "el estado de $OBJETIVO no dice env_nuevo."
+    ENV_NUEVO="$VALOR_CLAVE"
+    cargar_parametros_de_arnes
+    cargar_config
+    UNIT_VIEJO="${RAIZ_VIEJO}/etc/systemd/system/stockapp-api.service"
+    UNIT_CONGELADA_VIEJO="${UNIT_VIEJO}.congelado"
+    # Identidad: los mismos servidores que la corrida (un .env que cambió de servidor es un error).
+    verificar_identidad
+    leer_clave_continuar machine_id_viejo || abortar 3 "el estado de $OBJETIVO no dice machine_id_viejo: no puedo comprobar que el viejo sea el de la corrida."
+    if [[ "$VALOR_CLAVE" != "$MACHINE_ID_VIEJO" ]]; then
+        abortar 9 "el VPS viejo de $ENV_VIEJO (machine-id ${MACHINE_ID_VIEJO:0:8}) no es el de la corrida (${VALOR_CLAVE:0:8}). No se tocó nada."
+    fi
+    leer_clave_continuar machine_id_nuevo || abortar 3 "el estado de $OBJETIVO no dice machine_id_nuevo: no puedo comprobar que el nuevo sea el de la corrida."
+    if [[ "$VALOR_CLAVE" != "$MACHINE_ID_NUEVO" ]]; then
+        abortar 9 "el VPS nuevo de $ENV_NUEVO (machine-id ${MACHINE_ID_NUEVO:0:8}) no es el de la corrida (${VALOR_CLAVE:0:8}). No se tocó nada."
+    fi
+}
+
+# Paso 1: sudo -n en los dos y lo que se observa del viejo, todo de solo lectura. Los estados que no se
+# pueden deshacer sin pisar algo salen con 8 ANTES de tocar nada (tampoco se detiene el nuevo).
+revertir_prevuelo() {
+    local p nombre
+    abrir_paso 1 "pre-vuelo"
+    for p in VIEJO NUEVO; do
+        nombre="${p}_VPS_USER"
+        orq_ssh "$p" "sudo -n true"
+        if [[ "$ORQ_RC" -eq 255 ]]; then
+            consulta_ok "el acceso por ssh al VPS ${p,,}"
+        elif [[ "$ORQ_RC" -ne 0 ]]; then
+            volcar_stderr
+            abortar 3 "'sudo -n true' falló en el VPS ${p,,}: ${!nombre} necesita sudo sin contraseña. No se tocó nada."
+        fi
+    done
+    estado_api VIEJO
+    habilitacion_revertir
+    archivos_de_la_unit
+    ESTADO_VIEJO_TXT="stockapp-api dice '$ESTADO_API', su unit '$HABILITACION'"
+    if [[ "$HABILITACION" == "masked" ]]; then
+        if [[ "$HAY_CONGELADA" -eq 0 ]]; then
+            abortar 8 "stockapp-api está enmascarada en el VPS viejo pero no existe $UNIT_CONGELADA_VIEJO: no sé dónde quedó la unit y no la invento. No se tocó nada."
+        fi
+        ESTADO_VIEJO_TXT+=" y la unit está en .congelado"
+    elif [[ "$HAY_UNIT" -eq 1 && "$HAY_CONGELADA" -eq 1 ]]; then
+        abortar 8 "en el VPS viejo existen $UNIT_VIEJO Y $UNIT_CONGELADA_VIEJO: no se pisa ninguno. Mirá cuál es la buena (diff) y dejá una sola. No se tocó nada."
+    elif [[ "$HAY_UNIT" -eq 0 && "$HAY_CONGELADA" -eq 0 ]]; then
+        abortar 8 "en el VPS viejo no existe $UNIT_VIEJO ni $UNIT_CONGELADA_VIEJO: no hay unit que devolver. No se tocó nada."
+    elif [[ "$HAY_CONGELADA" -eq 1 ]]; then
+        ESTADO_VIEJO_TXT+=" y la unit está en .congelado"
+    else
+        ESTADO_VIEJO_TXT+=" y la unit está en su lugar"
+    fi
+    echo "  - viejo: $ESTADO_VIEJO_TXT"
+    cerrar_paso 1 OK
+}
+
+# Paso 2: la guardia de escrituras reales. Si LogsAuditoria del nuevo creció desde la verificación, hubo
+# PCs trabajando: ya no es R-A sino R-B, y lo escrito en el nuevo no vuelve al viejo.
+revertir_guardia() {
+    local referencia="" actual delta
+    abrir_paso 2 "escrituras en el VPS nuevo"
+    if leer_clave_continuar logs_auditoria_post_verificacion; then
+        referencia="$VALOR_CLAVE"
+    fi
+    psql_nuevo 'SELECT count(*) FROM "LogsAuditoria";'
+    if [[ -z "$referencia" ]]; then
+        # La corrida no llegó a verificar: sin referencia no hay guardia, solo se informa. Que no se
+        # pueda contar (la base vacía de una restauración fallida no tiene la tabla) no frena la vuelta.
+        if [[ "$ORQ_RC" -eq 0 && "$ORQ_SALIDA" =~ ^[0-9]+$ ]]; then
+            echo "  - la corrida no llegó a verificar: sin valor de referencia. LogsAuditoria del nuevo tiene $ORQ_SALIDA registros (solo informativo)."
+        else
+            echo "  - la corrida no llegó a verificar: sin valor de referencia, y no pude contar LogsAuditoria del nuevo (salió con $ORQ_RC; solo informativo)."
+        fi
+        cerrar_paso 2 OMITIDO "sin valor de referencia"
+        return 0
+    fi
+    if [[ ! "$referencia" =~ ^[0-9]+$ ]]; then
+        abortar 8 "logs_auditoria_post_verificacion='$referencia' del estado no es un número: no puedo interpretarlo."
+    fi
+    if [[ "$ORQ_RC" -ne 0 || ! "$ORQ_SALIDA" =~ ^[0-9]+$ ]]; then
+        if [[ "$AUN_CON_ESCRITURAS" -eq 1 ]]; then
+            DELTA_ESCRITURAS="no pude contar LogsAuditoria del nuevo (salió con $ORQ_RC): las escrituras posteriores a la verificación son DESCONOCIDAS"
+            echo "  - ATENCIÓN: $DELTA_ESCRITURAS; --aun-con-escrituras: sigue la confirmación."
+            cerrar_paso 2 OMITIDO "--aun-con-escrituras"
+            return 0
+        fi
+        volcar_stderr
+        abortar 8 "no pude contar LogsAuditoria en el VPS nuevo (salió con $ORQ_RC): no sé si hubo escrituras reales después de la verificación, y eso NO es 'cero'. Si sabés que sí y querés volver igual al viejo: --aun-con-escrituras."
+    fi
+    actual="$ORQ_SALIDA"
+    if [[ "$actual" -le "$referencia" ]]; then
+        echo "  - LogsAuditoria del nuevo: $actual (al verificar: $referencia): sin escrituras posteriores a la verificación."
+        cerrar_paso 2 OK
+        return 0
+    fi
+    delta=$((actual - referencia))
+    DELTA_ESCRITURAS="$delta registros nuevos en LogsAuditoria del VPS nuevo desde la verificación ($referencia -> $actual); lo escrito ahí NO vuelve al viejo"
+    if [[ "$AUN_CON_ESCRITURAS" -ne 1 ]]; then
+        SIN_AYUDA_DE_REVERTIR=1
+        abortar 3 "hubo escrituras reales en el VPS nuevo después de la verificación: $DELTA_ESCRITURAS. Ya no es R-A sino R-B: seguí la sección R-B de deploy/MIGRACION-VPS.md. Si igual hay que volver al viejo, --aun-con-escrituras muestra el delta y pide la palabra. No se tocó nada."
+    fi
+    echo "  - ATENCIÓN: $DELTA_ESCRITURAS; --aun-con-escrituras: sigue la confirmación."
+    cerrar_paso 2 OK "--aun-con-escrituras: $delta registros"
+}
+
+revertir_confirmacion() {
+    local texto aviso=""
+    if [[ -n "$DELTA_ESCRITURAS" ]]; then
+        aviso="ATENCIÓN: $DELTA_ESCRITURAS."
+    fi
+    texto="$(
+        cat <<EOF
+
+== Confirmación ==
+Vas a VOLVER AL VPS VIEJO (R-A) de la corrida ${OBJETIVO}.
+  nuevo: ${NUEVO_VPS_HOST} (machine-id ${MACHINE_ID_NUEVO:0:8}): primero se detiene stockapp-api.
+  viejo: ${VIEJO_VPS_HOST} (machine-id ${MACHINE_ID_VIEJO:0:8}): ${ESTADO_VIEJO_TXT}; se deshace el congelamiento y se arranca.
+${aviso}
+Para continuar escribí exactamente REVERTIR y Enter. Cualquier otra cosa cancela sin tocar nada:
+EOF
+    )"
+    abrir_paso 3 "confirmación"
+    orq_confirmar REVERTIR "$texto"
+    cerrar_paso 3 OK
+}
+
+# Paso 4: la API nueva, PRIMERO: con dos APIs vivas, lo escrito en la nueva se perdería.
+revertir_detener_nuevo() {
+    abrir_paso 4 "detener la API nueva"
+    estado_api NUEVO
+    if [[ "$ESTADO_API" == "inactive" || "$ESTADO_API" == "failed" ]]; then
+        cerrar_paso 4 "YA ESTABA" "stockapp-api dice $ESTADO_API"
+        return 0
+    fi
+    orq_ssh NUEVO "sudo -n systemctl stop stockapp-api"
+    falla_remota 6 "'systemctl stop stockapp-api' en el VPS nuevo"
+    estado_api NUEVO
+    # failed tampoco atiende (R36): ningún proceso de la API nueva escribe en la base.
+    if [[ "$ESTADO_API" != "inactive" && "$ESTADO_API" != "failed" ]]; then
+        abortar 6 "tras el stop, stockapp-api del VPS nuevo dice '$ESTADO_API': no se toca el viejo con dos APIs vivas. El viejo no se tocó."
+    fi
+    cerrar_paso 4 OK
+}
+
+# Pasos 5 a 8: los cuatro comandos de R-A, cada uno solo si hace falta.
+CAMBIO_EN_EL_VIEJO=0
+revertir_viejo() {
+    abrir_paso 5 "viejo: unmask"
+    habilitacion_revertir
+    if [[ "$HABILITACION" == "masked" ]]; then
+        orq_ssh VIEJO "sudo -n systemctl unmask stockapp-api"
+        falla_remota 6 "'systemctl unmask stockapp-api' en el VPS viejo"
+        CAMBIO_EN_EL_VIEJO=1
+        habilitacion_revertir
+        if [[ "$HABILITACION" == "masked" ]]; then
+            abortar 6 "tras el unmask, stockapp-api del VPS viejo sigue masked."
+        fi
+        cerrar_paso 5 OK
+    else
+        cerrar_paso 5 "YA ESTABA" "no está enmascarada"
+    fi
+
+    abrir_paso 6 "viejo: la unit a su lugar"
+    archivos_de_la_unit
+    if [[ "$HAY_UNIT" -eq 1 && "$HAY_CONGELADA" -eq 1 ]]; then
+        abortar 8 "en el VPS viejo existen $UNIT_VIEJO Y $UNIT_CONGELADA_VIEJO: no se pisa ninguno. Mirá cuál es la buena y dejá una sola."
+    elif [[ "$HAY_UNIT" -eq 0 && "$HAY_CONGELADA" -eq 1 ]]; then
+        orq_ssh VIEJO "sudo -n mv ${UNIT_CONGELADA_VIEJO} ${UNIT_VIEJO}"
+        falla_remota 6 "el mv de ${UNIT_CONGELADA_VIEJO} a ${UNIT_VIEJO} en el VPS viejo"
+        CAMBIO_EN_EL_VIEJO=1
+        archivos_de_la_unit
+        if [[ "$HAY_UNIT" -ne 1 || "$HAY_CONGELADA" -ne 0 ]]; then
+            abortar 6 "tras el mv, la unit del VPS viejo no quedó en $UNIT_VIEJO (o sigue el .congelado)."
+        fi
+        cerrar_paso 6 OK
+    elif [[ "$HAY_UNIT" -eq 1 ]]; then
+        cerrar_paso 6 "YA ESTABA" "la unit está en su lugar"
+    else
+        abortar 8 "en el VPS viejo no existe $UNIT_VIEJO ni $UNIT_CONGELADA_VIEJO: no hay unit que devolver."
+    fi
+
+    abrir_paso 7 "viejo: daemon-reload"
+    estado_api VIEJO
+    if [[ "$CAMBIO_EN_EL_VIEJO" -eq 0 && "$ESTADO_API" == "active" ]]; then
+        cerrar_paso 7 "YA ESTABA" "nada cambió y stockapp-api ya está active"
+    else
+        # Relee las units del disco (la que volvió a su lugar); no reinicia ningún otro servicio.
+        orq_ssh VIEJO "sudo -n systemctl daemon-reload"
+        falla_remota 6 "'systemctl daemon-reload' en el VPS viejo"
+        cerrar_paso 7 OK
+    fi
+
+    abrir_paso 8 "viejo: start"
+    estado_api VIEJO
+    if [[ "$ESTADO_API" == "active" ]]; then
+        cerrar_paso 8 "YA ESTABA" "stockapp-api ya está active"
+    else
+        orq_ssh VIEJO "sudo -n systemctl start stockapp-api"
+        falla_remota 6 "'systemctl start stockapp-api' en el VPS viejo"
+        cerrar_paso 8 OK
+    fi
+}
+
+# Paso 9: el viejo active Y atendiendo por loopback (espera acotada, reloj monotónico), no enmascarado,
+# con el mismo docker ps que antes del corte; el nuevo, detenido.
+revertir_verificar() {
+    local limite actual esperado lista="$OBJETIVO/contenedores-viejo.txt"
+    abrir_paso 9 "verificación"
+    limite=$(($(orq_reloj) + ARRANQUE_ESPERA))
+    while :; do
+        estado_api VIEJO
+        case "$ESTADO_API" in
+            active)
+                orq_ssh VIEJO "curl -fsS --max-time 10 -o /dev/null ${RESOLVE_VIEJO}${URL_VIEJO}/"
+                if [[ "$ORQ_RC" -eq 0 ]]; then
+                    break
+                fi
+                if [[ "$ORQ_RC" -eq 255 ]]; then
+                    consulta_ok "la API vieja por loopback"
+                fi
+                ;;
+            failed)
+                abortar 6 "stockapp-api del VPS viejo quedó en 'failed' después del start: no volvió a servir."
+                ;;
+        esac
+        if [[ "$(orq_reloj)" -ge "$limite" ]]; then
+            abortar 6 "stockapp-api del VPS viejo no respondió por loopback en ${ARRANQUE_ESPERA} s (is-active: $ESTADO_API)."
+        fi
+        sleep 2
+    done
+    echo "  - viejo: stockapp-api active y responde GET / por loopback"
+    habilitacion_revertir
+    if [[ "$HABILITACION" == "masked" ]]; then
+        abortar 6 "stockapp-api del VPS viejo atiende pero su unit sigue masked."
+    fi
+    if [[ -f "$lista" ]]; then
+        orq_ssh VIEJO "docker ps --format '{{.Names}}'"
+        consulta_ok "la lista de contenedores del VPS viejo"
+        actual="$(printf '%s\n' "$ORQ_SALIDA" | LC_ALL=C sort)"
+        esperado="$(cat "$lista")" || abortar 8 "no pude leer $lista."
+        if [[ -z "$ORQ_SALIDA" || "$actual" != "$esperado" ]]; then
+            abortar 9 "la lista de contenedores del VPS viejo cambió: antes '$(printf '%s' "$esperado" | tr '\n' ' ')', ahora '$(printf '%s' "$actual" | tr '\n' ' ')'. stockapp-api del viejo ya atiende; un humano tiene que mirar los contenedores."
+        fi
+        echo "  - viejo: los mismos contenedores que antes del corte"
+    else
+        echo "  - viejo: la corrida no guardó contenedores-viejo.txt (no llegó al paso 5): no se compara"
+    fi
+    estado_api NUEVO
+    if [[ "$ESTADO_API" != "inactive" && "$ESTADO_API" != "failed" ]]; then
+        abortar 6 "stockapp-api del VPS nuevo dice '$ESTADO_API': tiene que quedar detenida (dos APIs vivas)."
+    fi
+    echo "  - nuevo: stockapp-api detenida ($ESTADO_API)"
+    cerrar_paso 9 OK
+}
+
+revertir() {
+    MODO="revertir"
+    PASOS_TOTAL=9
+    # Fase A, de solo lectura: la corrida, sus .env, sus contenedores y raíces, y la identidad.
+    revertir_contexto
+
+    # Fase B: la corrida propia (revertir-<ts>), su log y el lock.
+    orq_dir_corrida revertir >/dev/null
+    orq_log_iniciar
+    orq_lock
+    LOCK_TOMADO=1
+    echo "migrar-vps: --revertir (R-A)"
+    echo "  corrida revertida: $OBJETIVO"
+    echo "  corrida: $ORQ_CORRIDA"
+    echo "  viejo: $VIEJO_VPS_HOST (machine-id ${MACHINE_ID_VIEJO:0:8})"
+    echo "  nuevo: $NUEVO_VPS_HOST (machine-id ${MACHINE_ID_NUEVO:0:8})"
+    orq_estado_poner modo revertir
+    orq_estado_poner inicio_utc "$(ahora_utc)"
+    orq_estado_poner corrida_revertida "$OBJETIVO"
+    orq_estado_poner env_viejo "$ENV_VIEJO"
+    orq_estado_poner env_nuevo "$ENV_NUEVO"
+    orq_estado_poner machine_id_viejo "$MACHINE_ID_VIEJO"
+    orq_estado_poner machine_id_nuevo "$MACHINE_ID_NUEVO"
+
+    revertir_prevuelo
+    revertir_guardia
+    revertir_confirmacion
+    revertir_detener_nuevo
+    revertir_viejo
+    revertir_verificar
+
+    poner_en_objetivo resultado REVERTIDO || abortar 8 "el viejo ya atiende, pero no pude escribir resultado=REVERTIDO en $OBJETIVO/estado."
+    orq_estado_poner resultado REVERTIDO
+    echo
+    echo "== Vuelta atrás terminada: el VPS viejo vuelve a servir =="
+    echo "  corrida revertida: $OBJETIVO (resultado=REVERTIDO)"
+    echo "  VPS nuevo: stockapp-api detenida; no la arranques a mano mientras el viejo sirve."
+    echo "  Para migrar otra vez: una corrida nueva (deploy/migrar-vps.sh --ensayo y después el corte)."
+    exit 0
+}
+
 main() {
+    if [[ "$REVERTIR" -eq 1 ]]; then
+        revertir
+    fi
     if [[ -n "$CONTINUAR" ]]; then
         continuar
     fi

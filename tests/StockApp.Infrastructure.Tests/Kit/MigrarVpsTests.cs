@@ -155,16 +155,23 @@ public class MigrarVpsTests : IDisposable
             echo "$PPID" > "$STUB_VOLCADO_PID"
             read -r _ < "$STUB_VOLCADO_FIFO" || :
         fi
+        # Como el real: stop, mv de la unit a .congelado, daemon-reload y mask. En .service queda el
+        # symlink a /dev/null del mask (test -e lo ve: /dev/null existe) y la unit en .congelado.
+        unit="${raiz}/etc/systemd/system/stockapp-api.service"
         if [[ "${STUB_VOLCADO_CONGELA:-1}" == 1 && ( "$ensayo" == 0 || "${STUB_VOLCADO_ENSAYO_ENMASCARA-}" == 1 ) ]]; then
             echo inactive > "$ESTADO/viejo/active"
             echo masked > "$ESTADO/viejo/enabled"
+            grep -qxF -- "$unit.congelado" "$ESTADO/viejo/existen" || echo "$unit.congelado" >> "$ESTADO/viejo/existen"
+            grep -qxF -- "$unit" "$ESTADO/viejo/existen" || echo "$unit" >> "$ESTADO/viejo/existen"
         fi
         # Murió entre el mv de la unit y el mask: la unit está en .congelado y systemctl ya no la
         # encuentra (is-enabled sin palabra, como el real con la unit inexistente).
         if [[ -n "${STUB_VOLCADO_MUEVE_SIN_MASK-}" ]]; then
             echo inactive > "$ESTADO/viejo/active"
             : > "$ESTADO/viejo/enabled"
-            echo "${raiz}/etc/systemd/system/stockapp-api.service.congelado" >> "$ESTADO/viejo/existen"
+            grep -vxF -- "$unit" "$ESTADO/viejo/existen" > "$ESTADO/viejo/existen.tmp" || :
+            mv "$ESTADO/viejo/existen.tmp" "$ESTADO/viejo/existen"
+            echo "$unit.congelado" >> "$ESTADO/viejo/existen"
         fi
         # El directorio remoto lleva el nombre de la corrida, que se conoce recién al correr.
         if [[ -n "${STUB_PLANTAR_DIR_REMOTO-}" ]]; then
@@ -284,7 +291,54 @@ public class MigrarVpsTests : IDisposable
                 if falla stop; then echo "Failed to stop stockapp-api.service: Access denied" >&2; exit 1; fi
                 if [[ ! -f "$E/no-se-detiene" ]]; then echo inactive > "$E/active"; fi
                 ;;
+            # La vuelta atrás (R-A) en el viejo. Como systemd 255: unmask quita solo el symlink del mask
+            # (avisa "Removed ..." en stderr y sale 0; sin mask no hace nada y sale 0); start de una unit
+            # enmascarada sale 1 y de una sin archivo sale 5; is-enabled lee el disco. Lo que NO se
+            # reproduce: si systemd necesita el daemon-reload tras devolver la unit (desde la v246
+            # reintenta cargar una unit not-found si cambiaron sus directorios, sin verificar acá): el
+            # start solo avisa, como el real con NeedDaemonReload=yes. Los tests del daemon-reload
+            # miran el orden del rastro, no este comportamiento.
+            "sudo -n systemctl unmask stockapp-api")
+                [[ "$lado" == viejo ]] || { echo "stub ssh: unmask no previsto en el $lado" >&2; exit 99; }
+                if falla unmask; then echo "Failed to unmask unit: Access denied" >&2; exit 1; fi
+                if [[ "$(cat "$E/enabled")" == masked ]]; then
+                    unit="$(cat "$E/fragment")"
+                    grep -vxF -- "$unit" "$E/existen" > "$E/existen.tmp" || :
+                    mv "$E/existen.tmp" "$E/existen"
+                    if [[ -f "$E/unmask-no-hace-nada" ]]; then echo masked > "$E/enabled"; else : > "$E/enabled"; fi
+                    echo "Removed \"$unit\"." >&2
+                fi
+                ;;
+            "sudo -n mv "*)
+                [[ "$lado" == viejo ]] || { echo "stub ssh: mv no previsto en el $lado" >&2; exit 99; }
+                read -r _ _ _ origen destino resto <<< "$cmd"
+                if [[ -n "$resto" ]] || falla mv; then echo "mv: cannot move: Permission denied" >&2; exit 1; fi
+                if ! grep -qxF -- "$origen" "$E/existen"; then
+                    echo "mv: cannot stat '$origen': No such file or directory" >&2; exit 1
+                fi
+                grep -vxF -e "$origen" -e "$destino" "$E/existen" > "$E/existen.tmp" || :
+                mv "$E/existen.tmp" "$E/existen"
+                echo "$destino" >> "$E/existen"
+                if [[ "$destino" == "$(cat "$E/fragment")" ]]; then echo enabled > "$E/enabled"; fi
+                : > "$E/recarga-pendiente"
+                ;;
+            "sudo -n systemctl daemon-reload")
+                [[ "$lado" == viejo ]] || { echo "stub ssh: daemon-reload no previsto en el $lado" >&2; exit 99; }
+                if falla daemon-reload; then echo "Failed to reload daemon: Access denied" >&2; exit 1; fi
+                rm -f "$E/recarga-pendiente"
+                ;;
             "sudo -n systemctl start stockapp-api")
+                if [[ "$lado" == viejo ]]; then
+                    if [[ "$(cat "$E/enabled")" == masked ]]; then
+                        echo "Failed to start stockapp-api.service: Unit stockapp-api.service is masked." >&2; exit 1
+                    fi
+                    if ! grep -qxF -- "$(cat "$E/fragment")" "$E/existen"; then
+                        echo "Failed to start stockapp-api.service: Unit stockapp-api.service not found." >&2; exit 5
+                    fi
+                    if [[ -f "$E/recarga-pendiente" ]]; then
+                        echo "Warning: The unit file, source configuration file or drop-ins of stockapp-api.service changed on disk. Run 'systemctl daemon-reload' to reload units." >&2
+                    fi
+                fi
                 if falla start; then
                     echo "Job for stockapp-api.service failed because the control process exited with error code." >&2
                     echo failed > "$E/active"
@@ -355,8 +409,11 @@ public class MigrarVpsTests : IDisposable
                 esac
                 ;;
             "curl -fsS "*)
-                # GET / de la API nueva por loopback, desde el propio servidor nuevo.
-                if [[ "$lado" != nuevo ]]; then echo "stub ssh: curl no previsto en el $lado: $cmd" >&2; exit 99; fi
+                # GET / por loopback, desde el propio servidor: la API nueva (arranque) o la vieja
+                # (verificación de --revertir); en el viejo solo si stockapp-api está active.
+                if [[ "$lado" == viejo && ( "$cmd" != *"/" || "$(cat "$E/active")" != active ) ]]; then
+                    echo "curl: (7) Failed to connect to 127.0.0.1 port 8443" >&2; exit 7
+                fi
                 if [[ "$(cat "$E/http-raiz")" == ok ]]; then echo '<html></html>'; else
                     echo 'curl: (7) Failed to connect to 127.0.0.1 port 8443' >&2; exit 7
                 fi
@@ -510,7 +567,10 @@ public class MigrarVpsTests : IDisposable
         PonerViejo("machine-id", MachineViejo + "\n");
         PonerViejo("active", "active\n");
         PonerViejo("fragment", "/etc/systemd/system/stockapp-api.service\n");
-        PonerViejo("existen", "");
+        // La unit como la deja install.sh: un archivo regular en /etc/systemd/system (test -e la ve).
+        PonerViejo("existen", "/etc/systemd/system/stockapp-api.service\n");
+        PonerViejo("al-arrancar", "active\n");
+        PonerViejo("http-raiz", "ok\n");
         PonerViejo("contenedores", "stockapp-pg\npinar-db\n");
         PonerViejo("dbsize", "104857600\n");
         PonerViejo("df-volumen-kb", "10485760\n");
@@ -2823,5 +2883,524 @@ public class MigrarVpsTests : IDisposable
         Assert.DoesNotContain("deploy/migrar-vps.sh --continuar", otra.Salida);
         Assert.Empty(LineasDeBloque(otra.Rastro, "volcado"));
         Assert.Empty(Escrituras(otra.Rastro));
+    }
+
+    [Fact]
+    public void Continuar_CorridaQueNoCongeloNiGuardoElContexto_SeCierraIgual()
+    {
+        // R41: murió entre modo= y las claves de contexto (env_*, contenedores, machine-id). Sin
+        // congelado_utc no hay nada que retomar: se cierra antes de exigir un contexto que no está.
+        var corrida = PlantarCorrida("corte-20260101T090000Z", "modo=corte\ninicio_utc=2026-01-01T09:00:00Z\n");
+
+        var r = CorrerContinuar(corrida);
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.Contains("corrida nueva", r.Salida);
+        Assert.Equal("resultado=FALLO-ABANDONADA", File.ReadAllLines(Path.Combine(corrida, "estado")).Last());
+        Assert.Equal("", r.Rastro);
+    }
+
+    // =====================================================================================
+    // --revertir (spec 6.5.6, R-A; R11, R22, R33, R42)
+    // =====================================================================================
+
+    private const int PasosRevertir = 9;
+    private const string Unit = "/etc/systemd/system/stockapp-api.service";
+
+    private Resultado CorrerRevertir(string? corrida = null, string[]? extra = null, string stdin = "REVERTIR\n",
+        IDictionary<string, string>? env = null) =>
+        Correr(new[] { "--revertir" }.Concat(corrida is null ? [] : [corrida]).Concat(extra ?? []).ToArray(),
+            stdin: stdin, env: env, conArgumentosBase: false);
+
+    /// <summary>Un corte con GO: el viejo congelado (detenido, unit en .congelado, enmascarada) y la API nueva arriba.</summary>
+    private string CorteConGo()
+    {
+        var r = CorrerCorte();
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        Assert.Equal("masked", File.ReadAllText(Host("viejo", "enabled")).Trim());
+        Assert.Equal("active", File.ReadAllText(Host("nuevo", "active")).Trim());
+        File.Delete(Rastro);
+        return UnaCorrida("corte");
+    }
+
+    private string[] ExistenEnElViejo() =>
+        File.ReadAllLines(Host("viejo", "existen")).Where(l => l.Length > 0).OrderBy(l => l, StringComparer.Ordinal).ToArray();
+
+    /// <summary>La línea del paso <paramref name="n"/> de --revertir en la salida.</summary>
+    private static string LineaDePasoRevertir(string salida, int n) =>
+        salida.Split('\n').LastOrDefault(l => Regex.IsMatch(l, $@"\(\s*{n}/{PasosRevertir}\) ")) ?? $"(no hay línea del paso {n})";
+
+    // La vuelta atrás: los cuatro comandos de R-A, solo en --revertir (R22, R33), con la raíz remota exacta.
+    private Regex[] VueltaAtrasViejo =>
+    [
+        new(@"^sudo -n systemctl (unmask|start) stockapp-api$"),
+        new(@"^sudo -n systemctl daemon-reload$"),
+        new("^sudo -n mv " + Regex.Escape(_raizViejo + UnitCongelada) + " " + Regex.Escape(_raizViejo + Unit) + "$"),
+    ];
+
+    // Lecturas que solo hace --revertir en el viejo: si la unit volvió a su lugar y si la API atiende.
+    private Regex[] LecturasRevertirViejo =>
+    [
+        new("^test -e " + Regex.Escape(_raizViejo + Unit) + "$"),
+        new(@"^curl -fsS --max-time 10 -o /dev/null (--resolve \S+ )?https?://\S+/$"),
+    ];
+
+    private bool EsComandoDeRevertirAlViejo(string cmd) =>
+        LecturasViejo.Any(r => r.IsMatch(cmd)) || LecturasRevertirViejo.Any(r => r.IsMatch(cmd)) ||
+        VueltaAtrasViejo.Any(r => r.IsMatch(cmd));
+
+    /// <summary>Lo que --revertir modifica (en los dos hosts): todo lo que no es lectura.</summary>
+    private IEnumerable<string> EscriturasDeRevertir(string rastro) =>
+        ComandosRemotos(rastro)
+            .Where(c => !EsLectura(c.Lado, c.Cmd) && !(c.Lado == "viejo" && LecturasRevertirViejo.Any(r => r.IsMatch(c.Cmd))))
+            .Select(c => $"{c.Lado}: {c.Cmd}");
+
+    private void AfirmarViejoServidoComoAntes()
+    {
+        Assert.Equal("active", File.ReadAllText(Host("viejo", "active")).Trim());
+        Assert.Equal("enabled", File.ReadAllText(Host("viejo", "enabled")).Trim());
+        Assert.Equal(new[] { Unit }, ExistenEnElViejo());
+        Assert.False(File.Exists(Host("viejo", "recarga-pendiente")), "quedó un daemon-reload pendiente en el viejo");
+    }
+
+    [Fact]
+    public void Revertir_StopDelNuevoAntesDeTodoEnElViejo()
+    {
+        var corte = CorteConGo();
+
+        var r = CorrerRevertir();
+
+        Assert.True(r.Exit == 0, r.Todo);
+        // La API nueva se detiene ANTES de cualquier comando que modifique el viejo: con dos APIs vivas,
+        // lo escrito en la nueva se perdería.
+        var stop = Linea(r.Rastro, l => l == StopNuevo);
+        var primeraDelViejo = Linea(r.Rastro, l => l.StartsWith("viejo\t") && VueltaAtrasViejo.Any(x => x.IsMatch(l["viejo\t".Length..])));
+        Assert.True(stop >= 0 && primeraDelViejo > stop, r.Todo);
+        // R-A en su orden: unmask, mv, daemon-reload, start.
+        var unmask = Linea(r.Rastro, l => l == "viejo\tsudo -n systemctl unmask stockapp-api");
+        var mv = Linea(r.Rastro, l => l.StartsWith("viejo\tsudo -n mv "));
+        var recarga = Linea(r.Rastro, l => l == "viejo\tsudo -n systemctl daemon-reload");
+        var start = Linea(r.Rastro, l => l == "viejo\tsudo -n systemctl start stockapp-api");
+        Assert.True(stop < unmask && unmask < mv && mv < recarga && recarga < start, r.Todo);
+        Assert.Equal("inactive", File.ReadAllText(Host("nuevo", "active")).Trim());
+        AfirmarViejoServidoComoAntes();
+        // La verificación: el viejo atiende por loopback.
+        Assert.Contains(ComandosRemotos(r.Rastro), c => c.Lado == "viejo" && c.Cmd.StartsWith("curl -fsS --max-time 10 -o /dev/null "));
+        // Las dos corridas registran el resultado: la revertida y la propia, con su log.
+        Assert.Equal("resultado=REVERTIDO", File.ReadAllLines(Path.Combine(corte, "estado")).Last());
+        var propia = UnaCorrida("revertir");
+        Assert.Equal("resultado=REVERTIDO", File.ReadAllLines(Path.Combine(propia, "estado")).Last());
+        Assert.Equal(corte, ClaveDeEstado(propia, "corrida_revertida"));
+        Assert.Contains("REVERTIDO", File.ReadAllText(Path.Combine(propia, "registro.log")));
+        // Ningún secreto en la salida ni en el log.
+        Assert.DoesNotContain(Contrasena, r.Salida);
+        Assert.DoesNotContain(Contrasena, File.ReadAllText(Path.Combine(propia, "registro.log")));
+    }
+
+    [Fact]
+    public void Revertir_TodoComandoAlViejoEnListaBlanca()
+    {
+        CorteConGo();
+
+        var r = CorrerRevertir();
+
+        Assert.True(r.Exit == 0, r.Todo);
+        var viejo = ComandosRemotos(r.Rastro).Where(c => c.Lado == "viejo").Select(c => c.Cmd).ToList();
+        Assert.NotEmpty(viejo);
+        foreach (var cmd in viejo)
+            Assert.True(EsComandoDeRevertirAlViejo(cmd), $"comando al VPS viejo fuera de la lista blanca de --revertir: {cmd}");
+        // Fuera de los cuatro de R-A, nada que modifique ni que sea global (el VPS viejo es compartido).
+        Assert.DoesNotContain(viejo, c => !VueltaAtrasViejo.Any(x => x.IsMatch(c)) && Regex.IsMatch(c,
+            @"\b(restart|stop|start|mask|unmask|daemon-reload|reload|enable|disable|kill|rm|mv|cp|chmod|chown|tar|find|mkdir|tee|prune|compose|journalctl|sha256sum|scp)\b|>"));
+        Assert.DoesNotContain("scp\t", r.Rastro);
+        Assert.Empty(LineasDeBloque(r.Rastro, "volcado"));
+        Assert.Empty(LineasDeBloque(r.Rastro, "restaurar"));
+    }
+
+    [Fact]
+    public void Revertir_ReCorrido_TodoYaEstaba()
+    {
+        var corte = CorteConGo();
+        var primera = CorrerRevertir();
+        Assert.True(primera.Exit == 0, primera.Todo);
+        var existen = ExistenEnElViejo();
+        // Las dos corridas caerían en el mismo segundo y orq_dir_corrida no reutiliza un nombre (sale 3
+        // sin tocar nada): la primera pasa a un <ts> anterior, como si hubiera pasado el tiempo.
+        Directory.Move(UnaCorrida("revertir"), Path.Combine(CorridasDir, "revertir-20000101T000000Z"));
+        File.Delete(Rastro);
+
+        var r = CorrerRevertir(corte);
+
+        Assert.True(r.Exit == 0, r.Todo);
+        foreach (var n in new[] { 4, 5, 6, 7, 8 })
+            Assert.Contains("YA ESTABA", LineaDePasoRevertir(r.Stdout, n));
+        Assert.Contains("OK", LineaDePasoRevertir(r.Stdout, 9));
+        // Ninguna modificación en ningún host.
+        Assert.Empty(EscriturasDeRevertir(r.Rastro));
+        Assert.Equal(existen, ExistenEnElViejo());
+        AfirmarViejoServidoComoAntes();
+        Assert.Equal("resultado=REVERTIDO", File.ReadAllLines(Path.Combine(corte, "estado")).Last());
+    }
+
+    public static TheoryData<string> EstadosDelCongelamiento => new()
+    {
+        "solo-detenida",          // el volcado murió entre el stop y el mv
+        "movida-sin-recargar",    // murió entre el mv y el daemon-reload
+        "movida-sin-enmascarar",  // murió entre el daemon-reload y el mask
+        "enmascarada-sin-recargar",
+        "todo-congelado",
+        "revertida-a-medias",     // alguien corrió a mano el unmask y el mv, pero no el daemon-reload ni el start
+    };
+
+    private void PonerEstadoDelViejo(string estado)
+    {
+        var congelado = Unit + ".congelado";
+        File.Delete(Host("viejo", "recarga-pendiente"));
+        PonerViejo("active", "inactive\n");
+        switch (estado)
+        {
+            case "solo-detenida":
+                PonerViejo("enabled", "enabled\n");
+                PonerViejo("existen", Unit + "\n");
+                break;
+            case "movida-sin-recargar":
+                PonerViejo("enabled", "\n");
+                PonerViejo("existen", congelado + "\n");
+                PonerViejo("recarga-pendiente", "");
+                break;
+            case "movida-sin-enmascarar":
+                PonerViejo("enabled", "\n");
+                PonerViejo("existen", congelado + "\n");
+                break;
+            case "enmascarada-sin-recargar":
+                PonerViejo("enabled", "masked\n");
+                PonerViejo("existen", Unit + "\n" + congelado + "\n");
+                PonerViejo("recarga-pendiente", "");
+                break;
+            case "todo-congelado":
+                PonerViejo("enabled", "masked\n");
+                PonerViejo("existen", Unit + "\n" + congelado + "\n");
+                break;
+            case "revertida-a-medias":
+                PonerViejo("enabled", "enabled\n");
+                PonerViejo("existen", Unit + "\n");
+                PonerViejo("recarga-pendiente", "");
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(estado));
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(EstadosDelCongelamiento))]
+    public void Revertir_DesdeCadaEstadoDelCongelamiento_DejaElViejoSirviendo(string estado)
+    {
+        // Un corte que falló después de congelar (paso 9): la corrida queda abierta y el nuevo detenido.
+        var primera = CorrerCorte(env: Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "9")));
+        Assert.True(primera.Exit == 6, primera.Todo);
+        var corte = UnaCorrida("corte");
+        PonerEstadoDelViejo(estado);
+        File.Delete(Rastro);
+
+        var r = CorrerRevertir();
+
+        Assert.True(r.Exit == 0, r.Todo);
+        AfirmarViejoServidoComoAntes();
+        Assert.Equal("inactive", File.ReadAllText(Host("nuevo", "active")).Trim());
+        Assert.Equal("resultado=REVERTIDO", File.ReadAllLines(Path.Combine(corte, "estado")).Last());
+        // Cada sub-paso hace solo lo que falta, según el estado OBSERVADO del viejo.
+        var enmascarada = estado is "enmascarada-sin-recargar" or "todo-congelado";
+        var movida = estado is "movida-sin-recargar" or "movida-sin-enmascarar" || enmascarada;
+        Assert.Equal(enmascarada, r.Rastro.Contains("viejo\tsudo -n systemctl unmask stockapp-api"));
+        Assert.Equal(movida, r.Rastro.Contains("viejo\tsudo -n mv "));
+        Assert.Contains("viejo\tsudo -n systemctl daemon-reload", r.Rastro);
+        Assert.Contains(enmascarada ? "OK" : "YA ESTABA", LineaDePasoRevertir(r.Stdout, 5));
+        Assert.Contains(movida ? "OK" : "YA ESTABA", LineaDePasoRevertir(r.Stdout, 6));
+        // El daemon-reload va después de devolver la unit y antes del start.
+        Assert.True(Linea(r.Rastro, l => l == "viejo\tsudo -n systemctl daemon-reload") <
+                    Linea(r.Rastro, l => l == "viejo\tsudo -n systemctl start stockapp-api"), r.Todo);
+        foreach (var cmd in ComandosRemotos(r.Rastro).Where(c => c.Lado == "viejo").Select(c => c.Cmd))
+            Assert.True(EsComandoDeRevertirAlViejo(cmd), $"fuera de la lista blanca: {cmd}");
+    }
+
+    [Fact]
+    public void Revertir_CorridaQueMurioEnElVolcado_Funciona()
+    {
+        // El volcado detuvo la API y murió antes de mover la unit: detenida pero no enmascarada.
+        var primera = CorrerCorte(env: Entorno(("STUB_VOLCADO_EXIT", "8")));
+        Assert.True(primera.Exit == 6, primera.Todo);
+        var corte = UnaCorrida("corte");
+        PonerEstadoDelViejo("solo-detenida");
+        File.Delete(Rastro);
+
+        var r = CorrerRevertir();
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.DoesNotContain("unmask", r.Rastro);
+        Assert.DoesNotContain("viejo\tsudo -n mv ", r.Rastro);
+        Assert.Contains("viejo\tsudo -n systemctl start stockapp-api", r.Rastro);
+        AfirmarViejoServidoComoAntes();
+        Assert.Equal("resultado=REVERTIDO", File.ReadAllLines(Path.Combine(corte, "estado")).Last());
+    }
+
+    [Fact]
+    public void Revertir_ViejoNuncaCongelado_SoloDetieneElNuevo()
+    {
+        // El corte falló en el paso 4 (antes de congelar): el viejo sigue sirviendo y la corrida se
+        // cerró con FALLO-5. --revertir con la corrida explícita igual detiene el nuevo y no toca el viejo.
+        var primera = CorrerCorte(env: Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "4")));
+        Assert.True(primera.Exit == 5, primera.Todo);
+        var corte = UnaCorrida("corte");
+        PonerNuevo("active", "active\n");
+        File.Delete(Rastro);
+
+        var r = CorrerRevertir(corte);
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Contains(StopNuevo, r.Rastro);
+        Assert.Empty(EscriturasDeRevertir(r.Rastro).Where(e => e.StartsWith("viejo:")));
+        foreach (var n in new[] { 5, 6, 7, 8 })
+            Assert.Contains("YA ESTABA", LineaDePasoRevertir(r.Stdout, n));
+        AfirmarViejoServidoComoAntes();
+        Assert.Equal("inactive", File.ReadAllText(Host("nuevo", "active")).Trim());
+    }
+
+    [Fact]
+    public void Revertir_LosDosArchivosDeUnit_Sale8SinPisar()
+    {
+        var corte = CorteConGo();
+        // Alguien devolvió una copia de la unit a mano y dejó la .congelado: no se pisa ninguna.
+        PonerViejo("enabled", "enabled\n");
+        PonerViejo("existen", Unit + "\n" + Unit + ".congelado\n");
+        var existen = ExistenEnElViejo();
+
+        var r = CorrerRevertir();
+
+        Assert.True(r.Exit == 8, r.Todo);
+        Assert.Empty(EscriturasDeRevertir(r.Rastro));
+        Assert.Equal(existen, ExistenEnElViejo());
+        Assert.Equal("active", File.ReadAllText(Host("nuevo", "active")).Trim());
+        Assert.Equal("GO", ClaveDeEstado(corte, "resultado"));
+        // Lo que puede hacer un humano: los comandos a mano.
+        Assert.Contains("sudo systemctl daemon-reload", r.Salida);
+    }
+
+    [Fact]
+    public void Revertir_LogsAuditoriaMayor_Sale3()
+    {
+        var corte = CorteConGo();
+        Assert.Equal("42", ClaveDeEstado(corte, "logs_auditoria_post_verificacion"));
+        PonerNuevo("logs-auditoria", "50\n");
+
+        var r = CorrerRevertir();
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.Contains("R-B", r.Salida);
+        Assert.Contains("--aun-con-escrituras", r.Salida);
+        Assert.Empty(EscriturasDeRevertir(r.Rastro));
+        Assert.Equal("active", File.ReadAllText(Host("nuevo", "active")).Trim());
+        Assert.Equal("masked", File.ReadAllText(Host("viejo", "enabled")).Trim());
+        Assert.Equal("GO", ClaveDeEstado(corte, "resultado"));
+    }
+
+    [Fact]
+    public void Revertir_AunConEscrituras_MuestraDeltaYPideLaPalabra()
+    {
+        CorteConGo();
+        PonerNuevo("logs-auditoria", "50\n");
+
+        var mal = CorrerRevertir(extra: ["--aun-con-escrituras"], stdin: "SI\n");
+
+        Assert.True(mal.Exit == 4, mal.Todo);
+        Assert.Contains("8 registros", mal.Salida);
+        Assert.Empty(EscriturasDeRevertir(mal.Rastro));
+
+        // Mismo segundo: orq_dir_corrida no reutiliza el nombre (ver Revertir_ReCorrido_TodoYaEstaba).
+        Directory.Move(UnaCorrida("revertir"), Path.Combine(CorridasDir, "revertir-20000101T000000Z"));
+        File.Delete(Rastro);
+        var r = CorrerRevertir(extra: ["--aun-con-escrituras"]);
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Contains("8 registros", r.Salida);
+        AfirmarViejoServidoComoAntes();
+    }
+
+    [Fact]
+    public void Revertir_LogsAuditoriaQueNoSePuedeContar_ConReferencia_Sale8SinTocarNada()
+    {
+        CorteConGo();
+        PonerNuevo("logs-auditoria", "no-soy-un-numero\n");
+
+        var r = CorrerRevertir();
+
+        Assert.True(r.Exit == 8, r.Todo);
+        Assert.Empty(EscriturasDeRevertir(r.Rastro));
+    }
+
+    [Fact]
+    public void Revertir_CorridaSinReferenciaDeEscrituras_InformaElConteoYSigue()
+    {
+        // Falló antes de la verificación: no hay logs_auditoria_post_verificacion.
+        var primera = CorrerCorte(env: Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "9")));
+        Assert.True(primera.Exit == 6, primera.Todo);
+        Assert.Null(ClaveDeEstado(UnaCorrida("corte"), "logs_auditoria_post_verificacion"));
+        // Con la base vacía la tabla ni existe: no saber contar no frena la vuelta atrás.
+        PonerNuevo("logs-auditoria", "");
+        File.Delete(Rastro);
+
+        var r = CorrerRevertir();
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Contains("sin valor de referencia", r.Salida);
+        AfirmarViejoServidoComoAntes();
+    }
+
+    [Fact]
+    public void Revertir_PalabraDistinta_Sale4()
+    {
+        var corte = CorteConGo();
+
+        var r = CorrerRevertir(stdin: "revertir\n");
+
+        Assert.True(r.Exit == 4, r.Todo);
+        Assert.Empty(EscriturasDeRevertir(r.Rastro));
+        Assert.Equal("GO", ClaveDeEstado(corte, "resultado"));
+        Assert.Equal("FALLO-4", ClaveDeEstado(UnaCorrida("revertir"), "resultado"));
+    }
+
+    [Fact]
+    public void Revertir_ElViejoNoQuedaActivo_Sale6SinCerrarLaCorrida()
+    {
+        var primera = CorrerCorte(env: Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "9")));
+        Assert.True(primera.Exit == 6, primera.Todo);
+        var corte = UnaCorrida("corte");
+        PonerViejo("al-arrancar", "failed\n");
+        File.Delete(Rastro);
+
+        var r = CorrerRevertir();
+
+        Assert.True(r.Exit == 6, r.Todo);
+        Assert.Contains("--revertir", r.Salida);
+        Assert.Contains("sudo systemctl start stockapp-api", r.Salida);
+        Assert.Null(ClaveDeEstado(corte, "resultado"));
+        Assert.Equal("FALLO-6", ClaveDeEstado(UnaCorrida("revertir"), "resultado"));
+    }
+
+    [Fact]
+    public void Revertir_ElNuevoNoSeDetiene_Sale6SinTocarElViejo()
+    {
+        CorteConGo();
+        PonerNuevo("no-se-detiene", "");
+
+        var r = CorrerRevertir();
+
+        Assert.True(r.Exit == 6, r.Todo);
+        Assert.Empty(EscriturasDeRevertir(r.Rastro).Where(e => e.StartsWith("viejo:")));
+        Assert.Equal("masked", File.ReadAllText(Host("viejo", "enabled")).Trim());
+    }
+
+    [Fact]
+    public void Revertir_MachineIdDistintoDelDeLaCorrida_Sale9SinTocarNada()
+    {
+        CorteConGo();
+        PonerViejo("machine-id", "cccccccc33333333cccccccc33333333\n");
+
+        var r = CorrerRevertir();
+
+        Assert.True(r.Exit == 9, r.Todo);
+        Assert.Empty(EscriturasDeRevertir(r.Rastro));
+    }
+
+    [Fact]
+    public void Revertir_SinSudoEnElNuevo_Sale3SinTocarNada()
+    {
+        CorteConGo();
+        PonerNuevo("sin-sudo", "");
+
+        var r = CorrerRevertir();
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.Empty(EscriturasDeRevertir(r.Rastro));
+    }
+
+    [Fact]
+    public void Revertir_SinCorridaDeCorte_Sale3()
+    {
+        var r = CorrerRevertir();
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.Contains("sudo systemctl unmask stockapp-api", r.Salida);
+        Assert.Equal("", r.Rastro);
+    }
+
+    [Fact]
+    public void Revertir_EnsayoExplicito_LoCierra_YSinArgumentoNoLoToma()
+    {
+        // R42: un ensayo abierto bloquea ensayar otra vez (R40); --revertir <ensayo> lo cierra.
+        var ensayo = Correr(["--ensayo"], stdin: "", env: Entorno(("STOCKAPP_ENSAYO_FALLAR_EN", "9")));
+        Assert.True(ensayo.Exit == 6, ensayo.Todo);
+        var corrida = UnaCorrida("ensayo");
+        Assert.Null(ClaveDeEstado(corrida, "resultado"));
+        File.Delete(Rastro);
+
+        var sinArgumento = CorrerRevertir();
+        Assert.True(sinArgumento.Exit == 3, sinArgumento.Todo);
+        Assert.Equal("", sinArgumento.Rastro);
+
+        var r = CorrerRevertir(corrida);
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Equal("resultado=REVERTIDO", File.ReadAllLines(Path.Combine(corrida, "estado")).Last());
+        AfirmarViejoServidoComoAntes();
+        Assert.Equal("inactive", File.ReadAllText(Host("nuevo", "active")).Trim());
+    }
+
+    [Fact]
+    public void Revertir_ConLosParametrosDelArnes_UsaLaRaizYElContenedorDeLaCorrida()
+    {
+        PonerViejo("existen", "/hosts/viejo" + Unit + "\n");
+        var corte = CorteDelArnesQueFallaEn9();
+        _raizViejo = "/hosts/viejo";
+        File.Delete(Rastro);
+
+        var r = CorrerRevertir(corte);
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Contains($"viejo\tsudo -n mv /hosts/viejo{Unit}.congelado /hosts/viejo{Unit}", r.Rastro);
+        Assert.Contains(ComandosRemotos(r.Rastro), c => c.Lado == "nuevo" && c.Cmd.Contains("docker exec -i stockapp-ensayo-destino psql"));
+        Assert.DoesNotContain("stockapp-pg", r.Rastro);
+        foreach (var cmd in ComandosRemotos(r.Rastro).Where(c => c.Lado == "viejo").Select(c => c.Cmd))
+            Assert.True(EsComandoDeRevertirAlViejo(cmd), $"fuera de la lista blanca: {cmd}");
+        Assert.Equal(new[] { "/hosts/viejo" + Unit }, ExistenEnElViejo());
+    }
+
+    [Theory]
+    [InlineData("--env-viejo", "x")]
+    [InlineData("--ensayo", null)]
+    [InlineData("--continuar", "x")]
+    public void Revertir_ConOpcionesQueSalenDelEstado_Rechaza2(string opcion, string? valor)
+    {
+        var r = CorrerRevertir(extra: valor is null ? [opcion] : [opcion, valor]);
+
+        Assert.True(r.Exit == 2, r.Todo);
+        Assert.Equal("", r.Rastro);
+    }
+
+    [Fact]
+    public void Revertir_CorridaFueraDeLasCorridas_Rechaza2()
+    {
+        var r = CorrerRevertir("/tmp/corte-20260101T090000Z");
+
+        Assert.True(r.Exit == 2, r.Todo);
+        Assert.Equal("", r.Rastro);
+    }
+
+    [Fact]
+    public void AunConEscrituras_SinRevertir_Rechaza2()
+    {
+        var r = Correr(["--aun-con-escrituras"], stdin: "");
+
+        Assert.True(r.Exit == 2, r.Todo);
+        Assert.Equal("", r.Rastro);
     }
 }
