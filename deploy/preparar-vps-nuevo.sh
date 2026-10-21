@@ -637,8 +637,25 @@ paso3_aplicar() {
         return 0
     fi
 
-    # 3. La reversa, ANTES del enable. Una reversa que quedó armada de una corrida anterior se
-    #    conserva (systemd-run falla si el nombre existe): igual se la desarma después del re-chequeo.
+    # 3. La reversa, ANTES del enable.
+    #    Con el firewall ACTIVO, una reversa que quedó armada de una corrida anterior se conserva
+    #    (systemd-run falla si el nombre existe) y se desarma después del re-chequeo.
+    #    Con el firewall INACTIVO no se la puede reusar: no se sabe cuánto le queda y si vence entre
+    #    acá y el enable, el firewall se habilitaría sin reversa. Con el firewall inactivo nadie
+    #    queda afuera, así que parar la vieja es seguro: se para, se confirma que ya no existe y
+    #    se arma una nueva de plazo completo.
+    if [[ "$FW_ACTIVO" -eq 0 && "$FW_ARMADA" -eq 1 ]]; then
+        orq_ssh NUEVO "sudo -n systemctl stop ${FW_REVERSA}.timer"
+        rc="$ORQ_RC"
+        if [[ "$rc" -ne 0 ]]; then
+            volcar_error
+        fi
+        fw_reversa_armada || return $?
+        if [[ "$FW_ARMADA" -ne 0 ]]; then
+            PASO_DETALLE="no pude parar la reversa vieja del firewall (systemctl stop salió con $rc): no se habilita el firewall sin una reversa de plazo conocido."
+            return 1
+        fi
+    fi
     if [[ "$FW_ARMADA" -eq 0 ]]; then
         orq_ssh NUEVO "sudo -n systemd-run --unit=${FW_REVERSA} --on-active=${FW_REVERSA_SEGUNDOS} /usr/sbin/ufw disable"
         if [[ "$ORQ_RC" -ne 0 ]]; then

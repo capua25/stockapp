@@ -914,6 +914,50 @@ public class PrepararVpsNuevoTests
     }
 
     [Fact]
+    public void Firewall_InactivoConReversaVieja_ParaLaViejaYArmaUnaNuevaAntesDelEnable()
+    {
+        // Una corrida anterior murió en el enable: el firewall volvió a inactivo y la reversa
+        // quedó armada con un plazo desconocido. Reusarla puede dejar el enable sin red.
+        using var h = CrearHost();
+        Assert.Equal(0, h.Ejecutar($"sudo systemd-run --unit={Reversa} --on-active=120 /usr/sbin/ufw disable").ExitCode);
+        Assert.True(TimerArmado(h));
+        Assert.DoesNotContain("Status: active", h.EstadoUfw());
+
+        var r = Correr(h, ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        var l = LineasSsh(h);
+        var texto = string.Join('\n', l);
+        var iAllowSsh = Indice(l, 0, x => x.Contains($"ufw allow {h.PuertoSsh}/tcp"));
+        var iStopViejo = Indice(l, iAllowSsh + 1, x => x.Contains($"systemctl stop {Reversa}.timer"));
+        var iNueva = Indice(l, iStopViejo + 1, x => x.Contains($"systemd-run --unit={Reversa}"));
+        var iEnable = Indice(l, iNueva + 1, x => x.Contains("ufw --force enable"));
+        Assert.True(iStopViejo > iAllowSsh && iNueva > iStopViejo && iEnable > iNueva,
+            "esperado: stop de la vieja < systemd-run nuevo < enable:\n" + texto);
+        // La vieja se confirmó desaparecida antes de armar la nueva.
+        Assert.Contains(l[(iStopViejo + 1)..iNueva], x => x.Contains("show -p LoadState"));
+        // Y la nueva se desarmó después del re-chequeo.
+        Assert.Contains(l[(iEnable + 1)..], x => x.Contains($"systemctl stop {Reversa}.timer"));
+        Assert.False(TimerArmado(h));
+        Assert.Contains("Status: active", h.EstadoUfw());
+    }
+
+    [Fact]
+    public void Firewall_InactivoConReversaVieja_SiNoSePuedeParar_NoHabilita()
+    {
+        using var h = CrearHost();
+        Assert.Equal(0, h.Ejecutar($"sudo systemd-run --unit={Reversa} --on-active=120 /usr/sbin/ufw disable").ExitCode);
+        Envolver(h, "/usr/local/sbin/systemctl", $"\"stop {Reversa}.timer\"");
+
+        var r = Correr(h, ConBase());
+
+        Assert.NotEqual(0, r.Exit);
+        Assert.DoesNotContain("ufw --force enable", string.Join('\n', LineasSsh(h)) + h.RastroHost());
+        Assert.DoesNotContain("Status: active", h.EstadoUfw());
+        Assert.DoesNotMatch(@"\(\s*4/10\)", r.Stdout);
+    }
+
+    [Fact]
     public void Firewall_ElStopNoDesarmaLaReversa_Sale6()
     {
         using var h = CrearHost();
