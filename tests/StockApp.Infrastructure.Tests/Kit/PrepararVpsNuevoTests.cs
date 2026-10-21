@@ -1195,6 +1195,25 @@ public class PrepararVpsNuevoTests
     }
 
     [Fact]
+    public void Tls_CertVigenteConOtroRenewHook_ReconfiguraYQuedaHecho_SinReEmitir()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        Assert.Equal(0, arbol.Correr(ConBase()).Exit);
+        Assert.Equal(0, h.Ejecutar(
+            $"sudo sed -i 's|^renew_hook = .*|renew_hook = /usr/local/sbin/otro-hook.sh|' /etc/letsencrypt/renewal/{Dominio}.conf").ExitCode);
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*4/10\) certificado TLS \.+ OK", r.Stdout);
+        Assert.Contains($"certbot reconfigure --cert-name {Dominio} --deploy-hook {HookInstalado}", h.RastroHost());
+        Assert.Equal(1, Cuantas(h.RastroHost(), "certbot certonly"));
+        Assert.Contains($"renew_hook = {HookInstalado}", h.Leer($"/etc/letsencrypt/renewal/{Dominio}.conf"));
+        Assert.Matches(@"\(\s*4/10\) certificado TLS \.+ HECHO", arbol.Correr(ConBase("--verificar")).Stdout);
+    }
+
+    [Fact]
     public void Tls_PemConModoDistinto_SeCorrigeCorriendoElHook_SinReEmitir()
     {
         using var h = CrearHost();

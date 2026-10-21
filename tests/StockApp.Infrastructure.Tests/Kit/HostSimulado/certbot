@@ -6,6 +6,7 @@
 #   certbot certonly --standalone -n --agree-tos --register-unsafely-without-email
 #                    -d DOMINIO --deploy-hook HOOK
 #   certbot renew [--force-renewal] --cert-name DOMINIO
+#   certbot reconfigure --cert-name DOMINIO --deploy-hook HOOK
 #   - cuenta ACME: la primera emisión de un host registra una cuenta nueva. Con -n y sin
 #     `--email`/`-m` ni `--register-unsafely-without-email` el real NO puede preguntar el
 #     correo: sale 1 con `MissingCommandlineFlag` ("Missing command line flag or config entry
@@ -33,6 +34,9 @@
 #     renewal; no action taken.` (exit 0), sin hook;
 #   - `renew --force-renewal --cert-name D`: nueva versión (cert2.pem...), repunta los symlinks y
 #     vuelve a correr el hook de renewal/D.conf; sin renewal conf: exit 1.
+#   - `reconfigure` (existe desde certbot 2.3): reescribe el `renew_hook` del renewal/D.conf del
+#     lineage (el real además hace antes un dry-run de renovación contra staging; acá no) y NO
+#     corre el hook; sin --cert-name o sin renewal conf del lineage: exit 1;
 # NO simula: el contenido de la cuenta ACME (solo si existe o no), la validación de DNS, múltiples dominios, --dry-run (no corre hooks, como el
 # real: acá sale 0 sin tocar nada), certificados de otras aplicaciones, ni los hooks de
 # /etc/letsencrypt/renewal-hooks.
@@ -65,7 +69,7 @@ sin_correo=0
 correo=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        certonly|renew) orden="$1"; shift ;;
+        certonly|renew|reconfigure) orden="$1"; shift ;;
         --standalone|-n|--non-interactive|--quiet|--no-eff-email) shift ;;
         --agree-tos) agree=1; shift ;;
         --register-unsafely-without-email) sin_correo=1; shift ;;
@@ -168,6 +172,21 @@ case "$orden" in
         echo "Successfully received certificate."
         echo "Certificate is saved at: ${LE}/live/${dominio}/fullchain.pem"
         correr_hook "$dominio" "$hook"
+        ;;
+    reconfigure)
+        conf="${LE}/renewal/${cert_name}.conf"
+        if [[ -z "$cert_name" || ! -f "$conf" ]]; then
+            echo "Error: no renewal configuration file for ${cert_name:-<sin --cert-name>}" >&2
+            exit 1
+        fi
+        if [[ -n "$hook" ]]; then
+            if grep -q '^renew_hook = ' "$conf"; then
+                sed -i "s|^renew_hook = .*|renew_hook = ${hook}|" "$conf"
+            else
+                echo "renew_hook = ${hook}" >> "$conf"
+            fi
+        fi
+        echo "Successfully updated configuration for certificate ${cert_name}."
         ;;
     renew)
         if [[ -z "$cert_name" ]]; then

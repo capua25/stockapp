@@ -389,6 +389,28 @@ public class HostSimuladoTests
     }
 
     [Fact]
+    public void Certbot_Reconfigure_ReescribeElRenewHookSinCorrerloYFallaSiNoHayLineage()
+    {
+        using var h = HostSimulado.Crear();
+        PrepararParaCertbot(h);
+        h.Ejecutar(Emitir);
+        var antes = h.RastroHost().Split('\n').Count(l => l.StartsWith("systemctl restart"));
+
+        var (exit, salida) = h.Ejecutar(
+            $"sudo certbot reconfigure --cert-name {Dominio} --deploy-hook /usr/local/sbin/otro-hook.sh");
+
+        Assert.True(exit == 0, salida);
+        var conf = h.Leer($"/etc/letsencrypt/renewal/{Dominio}.conf");
+        Assert.Contains("renew_hook = /usr/local/sbin/otro-hook.sh", conf);
+        Assert.DoesNotContain($"renew_hook = {Hook}", conf);
+        Assert.Equal(antes, h.RastroHost().Split('\n').Count(l => l.StartsWith("systemctl restart")));
+
+        var (exitNo, salidaNo) = h.Ejecutar("sudo certbot reconfigure --cert-name no.existe.invalid --deploy-hook /x");
+        Assert.Equal(1, exitNo);
+        Assert.Contains("no renewal configuration file", salidaNo);
+    }
+
+    [Fact]
     public void Certbot_AntesDeInstalar_NoExiste_YComoNoRootPideRoot()
     {
         using var h = HostSimulado.Crear();

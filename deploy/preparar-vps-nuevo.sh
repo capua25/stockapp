@@ -721,12 +721,12 @@ paso3_aplicar() {
 # Donde vive el hook en el servidor: es el `renew_hook` que certbot guarda en el .conf del dominio.
 TLS_HOOK="/usr/local/sbin/stockapp-tls-deploy-hook.sh"
 TLS_HOOK_LOCAL="$REPO_ROOT/deploy/tls/stockapp-tls-deploy-hook.sh"
-# Resultado de paso4_hecho: hecho | sin-cert | sin-pem.
+# Resultado de paso4_hecho: hecho | sin-cert | sin-hook | sin-pem.
 P4_ESTADO=""
 
 # Corre como root con el dominio como argumento y viaja por stdin de ssh.
-#   sin-cert  falta live/<dominio>, el certificado vence en menos de 30 días o el renew_hook
-#             del .conf no es el hook
+#   sin-cert  falta live/<dominio> o el certificado vence en menos de 30 días
+#   sin-hook  el certificado está vigente pero el renew_hook del .conf no es el hook
 #   sin-pem   el certificado está bien pero los PEM de /var/lib/stockapp/tls no son
 #             stockapp:stockapp 0600
 PASO4_LEER='
@@ -739,10 +739,11 @@ cert=1
 if [ "$cert" = 1 ]; then
     openssl x509 -checkend 2592000 -noout -in "$le/live/$d/fullchain.pem" >/dev/null 2>&1 || cert=0
 fi
-if [ "$cert" = 1 ]; then
-    [ "$(sed -n "s/^renew_hook = //p" "$le/renewal/$d.conf" 2>/dev/null | head -n 1)" = "$hook" ] || cert=0
-fi
 if [ "$cert" = 0 ]; then echo sin-cert; exit 0; fi
+if [ "$(sed -n "s/^renew_hook = //p" "$le/renewal/$d.conf" 2>/dev/null | head -n 1)" != "$hook" ]; then
+    echo sin-hook
+    exit 0
+fi
 pem=1
 for f in fullchain.pem privkey.pem; do
     [ "$(stat -c "%U:%G %a" -- "/var/lib/stockapp/tls/$f" 2>/dev/null)" = "stockapp:stockapp 600" ] || pem=0
@@ -758,7 +759,7 @@ paso4_hecho() {
     fi
     case "$ORQ_SALIDA" in
         hecho) P4_ESTADO="$ORQ_SALIDA"; return 0 ;;
-        sin-cert|sin-pem) P4_ESTADO="$ORQ_SALIDA"; return 1 ;;
+        sin-cert|sin-hook|sin-pem) P4_ESTADO="$ORQ_SALIDA"; return 1 ;;
         *)
             PASO_DETALLE="respuesta ilegible del servidor."
             return 8
@@ -835,8 +836,33 @@ paso4_aplicar() {
             1) ;;
             *) return 8 ;;
         esac
-        if [[ "$P4_ESTADO" == "sin-cert" ]]; then
+        if [[ "$P4_ESTADO" != "sin-pem" ]]; then
             PASO_DETALLE="certbot salió con ${certbot_rc} y no quedó un certificado vigente con el hook registrado."
+            return 1
+        fi
+    fi
+
+    if [[ "$P4_ESTADO" == "sin-hook" ]]; then
+        # Certificado vigente con otro renew_hook: `certonly` no toca el .conf de un certificado
+        # vigente, así que el hook se re-registra con `reconfigure` (certbot >= 2.3).
+        orq_ssh NUEVO "sudo -n certbot reconfigure --cert-name ${NUEVO_API_HOSTNAME} --deploy-hook ${TLS_HOOK}"
+        if [[ "$ORQ_RC" -eq 255 ]]; then
+            volcar_error
+            return 8
+        fi
+        certbot_rc="$ORQ_RC"
+        if [[ "$certbot_rc" -ne 0 ]]; then
+            volcar_error
+        fi
+        rc=0
+        paso4_hecho || rc=$?
+        case "$rc" in
+            0) return 0 ;;
+            1) ;;
+            *) return 8 ;;
+        esac
+        if [[ "$P4_ESTADO" != "sin-pem" ]]; then
+            PASO_DETALLE="certbot reconfigure salió con ${certbot_rc} y el renew_hook del certificado no quedó registrado."
             return 1
         fi
     fi
