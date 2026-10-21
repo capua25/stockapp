@@ -171,27 +171,16 @@ DETALLE_FALLO=""
 SALIDA_SUGERIDA="continuar"
 ESTADO_VIEJO_TXT=""
 
-# sincronizar_reloj: $SECONDS sale del reloj de pared, que puede saltar hacia atrás (NTP, o el reloj
-# de WSL al volver de una pausa): las duraciones darían negativas y un ORQ_CONGELADO_SEG negativo hace
-# que orq_fin_paso lo rechace, lo que abortaría un corte YA congelado. Asignar SECONDS fija su base,
-# así que justo antes de cada lectura (la de este script y las de la lib) se lo iguala al reloj
-# monotónico.
-sincronizar_reloj() {
-    SECONDS="$(reloj_segundos)"
-}
-
 abrir_paso() {
-    sincronizar_reloj
     orq_paso "$1" "$PASOS_TOTAL" "$2"
     PASO_ABIERTO=1
-    PASO_T0="$SECONDS"
+    PASO_T0="$(orq_reloj)"
 }
 
 # cerrar_paso <n> <OK|YA ESTABA|OMITIDO> [detalle] [marca]: línea del paso y su clave en el estado.
 cerrar_paso() {
     local n="$1" resultado="$2" detalle="${3-}" marca="${4:-ok}" duracion
-    sincronizar_reloj
-    duracion=$((SECONDS - PASO_T0))
+    duracion=$(($(orq_reloj) - PASO_T0))
     PASO_ABIERTO=0
     orq_fin_paso "$resultado" "$detalle"
     orq_estado_poner "paso_$n" "$marca $(date -u +%Y-%m-%dT%H:%M:%SZ) $duracion"
@@ -205,7 +194,6 @@ abortar() {
     echo "migrar: $*" >&2
     if [[ "$PASO_ABIERTO" -eq 1 ]]; then
         PASO_ABIERTO=0
-        sincronizar_reloj
         orq_fin_paso FALLÓ "${DETALLE_FALLO:-exit $codigo}"
     fi
     if [[ "$CONGELADO" -eq 1 && "$codigo" -ne 5 ]]; then
@@ -1036,6 +1024,7 @@ PASO_NOMBRES=(
     "resumen"
 )
 ARRANQUE_ESPERA=120
+FECHA_TOLERANCIA=300
 BACKUP_ESPERA=60
 
 DIR_STOCKAPP_NUEVO=""
@@ -1051,17 +1040,6 @@ paso() {
     abrir_paso "$1" "${PASO_NOMBRES[$1]}"
     DETALLE_FALLO=""
     SALIDA_SUGERIDA="continuar"
-}
-
-# reloj_segundos: segundos de un reloj MONOTÓNICO (el uptime de Linux; no salta si alguien cambia la
-# hora). Sin /proc/uptime cae en $SECONDS del propio bash. Mismo criterio que preparar-vps-nuevo.sh.
-reloj_segundos() {
-    local up
-    if [[ -r /proc/uptime ]] && read -r up _ < /proc/uptime; then
-        printf '%s' "${up%%.*}"
-    else
-        printf '%s' "$SECONDS"
-    fi
 }
 
 # falla_remota <codigo> <qué>: tras orq_ssh. El 255 de ssh es "no pude consultar" (8); cualquier otro
@@ -1249,8 +1227,7 @@ corte_paso6() {
     # Acá empieza el reloj de indisponibilidad, ANTES de llamar al bloque: su paso 2 detiene la API
     # vieja en los primeros segundos.
     orq_estado_poner congelado_utc "$(ahora_utc)"
-    sincronizar_reloj
-    ORQ_CONGELADO_SEG="$SECONDS"
+    ORQ_CONGELADO_SEG="$(orq_reloj)"
     CONGELADO=1
 
     orq_bloque deploy/volcado-final-vps.sh "$ENV_VIEJO" --salida "$salida" "${args[@]}"
@@ -1340,8 +1317,15 @@ corte_paso7() {
         ! a="$(date -u -d "$fecha_m" +%s 2>/dev/null)" || ! b="$(date -u -d "$inicio" +%s 2>/dev/null)"; then
         abortar 6 "no pude interpretar fecha_utc=$fecha_m del manifiesto (o inicio_utc=$inicio)."
     fi
+    # fecha_utc e inicio_utc salen del MISMO reloj, el de esta máquina (volcado-final-vps.sh hace
+    # date -u acá), y el reloj de pared puede saltar hacia atrás (el de WSL salta 11-14 s bajo carga):
+    # se toleran FECHA_TOLERANCIA segundos antes del inicio, con un aviso (R35). Un volcado viejo no
+    # puede llegar acá igual: --salida es un directorio nuevo y vacío de esta corrida.
+    if [[ "$a" -lt $((b - FECHA_TOLERANCIA)) ]]; then
+        abortar 6 "fecha_utc=$fecha_m del manifiesto es anterior al inicio de esta corrida ($inicio) en más de ${FECHA_TOLERANCIA} s: no es el volcado de esta corrida (A11)."
+    fi
     if [[ "$a" -lt "$b" ]]; then
-        abortar 6 "fecha_utc=$fecha_m del manifiesto es anterior al inicio de esta corrida ($inicio): no es el volcado de esta corrida (A11)."
+        echo "  AVISO: fecha_utc=$fecha_m del manifiesto es $((b - a)) s anterior al inicio de esta corrida ($inicio): dentro de la tolerancia de ${FECHA_TOLERANCIA} s (el reloj de esta máquina saltó para atrás). Se acepta: el --salida es nuevo y vacío, y el <ts>, dump= y sha256 coinciden."
     fi
     if [[ ! "$migr_m" =~ ^[0-9]{14}_[A-Za-z0-9_]+$ ]]; then
         abortar 6 "ultima_migracion=$migr_m del manifiesto no tiene la forma de una migración."
@@ -1470,7 +1454,7 @@ corte_paso11() {
         abortar 7 "'systemctl start stockapp-api' falló en el VPS nuevo (salió con $ORQ_RC)."
     fi
     # Espera acotada con reloj monotónico: active Y GET / por loopback.
-    limite=$(($(reloj_segundos) + ARRANQUE_ESPERA))
+    limite=$(($(orq_reloj) + ARRANQUE_ESPERA))
     while :; do
         estado_api NUEVO
         case "$ESTADO_API" in
@@ -1488,7 +1472,7 @@ corte_paso11() {
                 abortar 7 "la API nueva quedó en 'failed' después del start."
                 ;;
         esac
-        if [[ "$(reloj_segundos)" -ge "$limite" ]]; then
+        if [[ "$(orq_reloj)" -ge "$limite" ]]; then
             journal_nuevo
             abortar 7 "la API nueva no respondió en ${ARRANQUE_ESPERA} s (is-active: $ESTADO_API)."
         fi
@@ -1710,7 +1694,7 @@ verificar_v8() {
     fi
     # La corrida nueva es la de id mayor que el máximo de antes del POST (no se compara la hora de
     # esta máquina con la del servidor). Espera acotada con reloj monotónico.
-    limite=$(($(reloj_segundos) + BACKUP_ESPERA))
+    limite=$(($(orq_reloj) + BACKUP_ESPERA))
     while :; do
         curl_operador_con "$listado" -K - "${URL_NUEVO}/backups"
         if [[ "$CURL_RC" -ne 0 ]]; then
@@ -1738,7 +1722,7 @@ verificar_v8() {
         if [[ "$exitosas" -eq 1 ]]; then
             break
         fi
-        if [[ "$(reloj_segundos)" -ge "$limite" ]]; then
+        if [[ "$(orq_reloj)" -ge "$limite" ]]; then
             listado=""
             v_falla V8 "POST /backups no terminó en una corrida Exitosa en ${BACKUP_ESPERA} s"
             return 0
@@ -1806,7 +1790,6 @@ corte_paso12() {
         cerrar_paso 12 OK
     else
         PASO_ABIERTO=0
-        sincronizar_reloj
         orq_fin_paso FALLÓ "$V_FALLIDAS"
     fi
 }
@@ -1902,8 +1885,7 @@ main() {
     prevuelo
     cerrar_paso 1 OK
 
-    sincronizar_reloj
-    PASO_T0="$SECONDS"
+    PASO_T0="$(orq_reloj)"
     if [[ "$MODO" == "corte" ]]; then
         orq_paso 2 "$PASOS_TOTAL" "confirmación"
         confirmacion

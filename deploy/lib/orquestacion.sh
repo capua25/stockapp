@@ -27,8 +27,11 @@
 #  - ORQ_ENSAYO vale 0 al cargar esta lib (se ignora lo que traiga el entorno). Solo el
 #    orquestador lo pone en 1, y solo después de que orq_hosts_de_ensayo dio 0 sobre TODOS
 #    los hosts. Con ORQ_ENSAYO=1 orq_confirmar lee de stdin y NUNCA de /dev/tty.
-#  - ORQ_CONGELADO_SEG, si está definido, es el valor de $SECONDS en el instante del
+#  - ORQ_CONGELADO_SEG, si está definido, es el valor de orq_reloj en el instante del
 #    congelamiento; cada línea de paso agrega cuánto lleva el viejo sin API.
+#  - El tiempo (duraciones, reloj de indisponibilidad, esperas acotadas) sale SIEMPRE de
+#    orq_reloj, nunca de $SECONDS: $SECONDS es reloj de pared y un salto hacia atrás (NTP, el
+#    reloj de WSL bajo carga) lo deja negativo.
 #
 # Códigos de salida de las funciones que abortan (los orquestadores los heredan):
 #   2  uso / argumentos      3  precondición (config, HOME, lock, sin terminal)
@@ -72,6 +75,17 @@ _orq_tmp_limpiar() {
     return 0
 }
 trap '_orq_tmp_limpiar' EXIT
+
+# orq_reloj -> segundos enteros de un reloj MONOTÓNICO (el uptime de Linux: no salta si alguien
+# cambia la hora). Sin /proc/uptime cae en $SECONDS del propio bash.
+orq_reloj() {
+    local up
+    if [[ -r /proc/uptime ]] && read -r up _ < /proc/uptime; then
+        printf '%s' "${up%%.*}"
+    else
+        printf '%s' "$SECONDS"
+    fi
+}
 
 _ORQ_PASO_N=""
 _ORQ_PASO_TOTAL=""
@@ -434,13 +448,13 @@ orq_paso() {
     _ORQ_PASO_N="$1"
     _ORQ_PASO_TOTAL="$2"
     _ORQ_PASO_NOMBRE="$3"
-    _ORQ_PASO_T0="$SECONDS"
+    _ORQ_PASO_T0="$(orq_reloj)"
 }
 
 # orq_fin_paso <OK|YA ESTABA|OMITIDO|FALLÓ> [detalle]
 # [14:02:11] ( 4/12) volcado del VPS viejo ........................ OK      41 s
 orq_fin_paso() {
-    local resultado="${1:-}" detalle="${2-}" duracion puntos relleno hora linea reloj
+    local resultado="${1:-}" detalle="${2-}" duracion puntos relleno hora linea reloj ahora
     case "$resultado" in
         OK|"YA ESTABA"|OMITIDO|FALLÓ) ;;
         *)
@@ -457,7 +471,8 @@ orq_fin_paso() {
         return 2
     fi
 
-    duracion=$((SECONDS - _ORQ_PASO_T0))
+    ahora="$(orq_reloj)"
+    duracion=$((ahora - _ORQ_PASO_T0))
     puntos=$((45 - ${#_ORQ_PASO_NOMBRE}))
     if [[ "$puntos" -lt 3 ]]; then
         puntos=3
@@ -472,7 +487,7 @@ orq_fin_paso() {
         linea+="  ($detalle)"
     fi
     if [[ -n "${ORQ_CONGELADO_SEG-}" ]]; then
-        reloj=$((SECONDS - ORQ_CONGELADO_SEG))
+        reloj=$((ahora - ORQ_CONGELADO_SEG))
         linea+="  viejo sin API hace $((reloj / 60)) min $((reloj % 60)) s"
     fi
     printf '%s\n' "$linea"

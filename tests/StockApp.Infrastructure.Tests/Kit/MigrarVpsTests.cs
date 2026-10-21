@@ -169,11 +169,13 @@ public class MigrarVpsTests : IDisposable
         ts="$(date -u +%Y%m%dT%H%M%SZ)"
         printf 'PGDMP-falso-%s\n' "$ts" > "$salida/volcado-$ts.dump"
         sha="$(sha256sum "$salida/volcado-$ts.dump" | cut -d' ' -f1)"
-        # El reloj de pared de WSL salta para atrás bajo carga (observado: 11 a 14 s en plena suite): el
-        # volcado real se hace siempre después del inicio de la corrida, así que el falso no fecha antes.
+        # Como el real (volcado-final-vps.sh, date -u en la máquina del operador). Con
+        # STUB_VOLCADO_FECHA_DESDE_INICIO=<s> la fecha es inicio_utc de la corrida + <s> (para los bordes).
         fecha="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-        inicio="$(sed -n 's/^inicio_utc=//p' "${salida%/*}/estado" 2>/dev/null)"
-        if [[ -n "$inicio" && "$fecha" < "$inicio" ]]; then fecha="$inicio"; fi
+        if [[ -n "${STUB_VOLCADO_FECHA_DESDE_INICIO-}" ]]; then
+            inicio="$(sed -n 's/^inicio_utc=//p' "${salida%/*}/estado")"
+            fecha="$(date -u -d "@$(( $(date -u -d "$inicio" +%s) + STUB_VOLCADO_FECHA_DESDE_INICIO ))" +%Y-%m-%dT%H:%M:%SZ)"
+        fi
         {
             echo "# manifiesto-migracion v1"
             echo "fecha_utc=${STUB_VOLCADO_FECHA:-$fecha}"
@@ -1756,6 +1758,53 @@ public class MigrarVpsTests : IDisposable
 
         AfirmarA11(r);
         Assert.Contains("fecha_utc", r.Salida);
+    }
+
+    /// <summary>
+    /// R35: fecha_utc e inicio_utc salen del MISMO reloj (el del operador) y el de WSL salta para atrás
+    /// bajo carga: se tolera hasta 300 s antes del inicio, con un AVISO en el log. La identidad del
+    /// volcado ya la dan el --salida nuevo y vacío, el &lt;ts&gt;, dump= y el sha.
+    /// </summary>
+    [Fact]
+    public void Corte_FechaUtc299sAntesDelInicio_PasaConAviso()
+    {
+        var r = CorrerCorte(env: Entorno(("STUB_VOLCADO_FECHA_DESDE_INICIO", "-299")));
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        var log = File.ReadAllText(Path.Combine(UnaCorrida("corte"), "registro.log"));
+        Assert.Matches(@"AVISO: fecha_utc=\S+ del manifiesto es 299 s anterior al inicio", log);
+    }
+
+    [Fact]
+    public void Corte_FechaUtc301sAntesDelInicio_Sale6SinRestaurar()
+    {
+        var r = CorrerCorte(env: Entorno(("STUB_VOLCADO_FECHA_DESDE_INICIO", "-301")));
+
+        AfirmarA11(r);
+        Assert.Contains("fecha_utc", r.Salida);
+    }
+
+    [Fact]
+    public void Corte_FechaUtcPosteriorAlInicio_SinAviso()
+    {
+        var r = CorrerCorte();
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        Assert.DoesNotContain("AVISO: fecha_utc", File.ReadAllText(Path.Combine(UnaCorrida("corte"), "registro.log")));
+    }
+
+    /// <summary>
+    /// $SECONDS negativo (un salto del reloj de pared) en todo el corte: el reloj de indisponibilidad y
+    /// las duraciones salen de orq_reloj, y el corte llega a GO en vez de abortar con el viejo congelado.
+    /// </summary>
+    [Fact]
+    public void Corte_SecondsNegativo_IgualLlegaAGo()
+    {
+        var r = CorrerCorte(env: Entorno(("SECONDS", "-100000")));
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        Assert.DoesNotContain("no es un número de segundos", r.Salida);
+        Assert.DoesNotMatch(@"\s-\d+ s", r.Stdout);
     }
 
     [Fact]

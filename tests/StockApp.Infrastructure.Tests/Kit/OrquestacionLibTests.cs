@@ -761,11 +761,15 @@ public class OrquestacionLibTests : IDisposable
 
     private static string SinHora(string linea) => Regex.Replace(linea, @"^\[\d\d:\d\d:\d\d\] ", "");
 
+    // Reloj falso para fijar duraciones: orq_paso y orq_fin_paso leen el tiempo SOLO de orq_reloj, así
+    // que redefinirla después de cargar la lib es la costura del test (T es "ahora", en segundos).
+    private const string RelojFalso = "T=0\norq_reloj() { printf '%s' \"$T\"; }\n";
+
     [Fact]
     public void Paso_LineaConNumeroResultadoYDuracion()
     {
-        var r = Correr("SECONDS=0\norq_paso 4 12 'volcado del VPS viejo'\nSECONDS=41\norq_fin_paso OK\n" +
-            "SECONDS=0\norq_paso 5 12 'transferencia al VPS nuevo'\nSECONDS=3\norq_fin_paso OK");
+        var r = Correr(RelojFalso + "T=0\norq_paso 4 12 'volcado del VPS viejo'\nT=41\norq_fin_paso OK\n" +
+            "T=0\norq_paso 5 12 'transferencia al VPS nuevo'\nT=3\norq_fin_paso OK");
 
         Assert.True(r.ExitCode == 0, Diag(r));
         var lineas = r.Stdout.Split('\n');
@@ -777,9 +781,9 @@ public class OrquestacionLibTests : IDisposable
     [Fact]
     public void Paso_FalloConDetalle_YResultadosConEspacio()
     {
-        var r = Correr("SECONDS=0\norq_paso 6 12 'restauración (--recrear-base)'\nSECONDS=12\n" +
+        var r = Correr(RelojFalso + "T=0\norq_paso 6 12 'restauración (--recrear-base)'\nT=12\n" +
             "orq_fin_paso FALLÓ 'restaurar-backup.sh: 6'\n" +
-            "SECONDS=0\norq_paso 7 12 'docker'\norq_fin_paso 'YA ESTABA'\n" +
+            "T=0\norq_paso 7 12 'docker'\norq_fin_paso 'YA ESTABA'\n" +
             "orq_paso 8 12 'cert'\norq_fin_paso OMITIDO 'sin --probar-renovacion'");
 
         Assert.True(r.ExitCode == 0, Diag(r));
@@ -801,11 +805,51 @@ public class OrquestacionLibTests : IDisposable
     [Fact]
     public void Paso_ConCongelado_AgregaElReloj()
     {
-        var r = Correr("SECONDS=0\nORQ_CONGELADO_SEG=0\norq_paso 6 12 'restauración'\nSECONDS=192\n" +
+        var r = Correr(RelojFalso + "T=0\nORQ_CONGELADO_SEG=0\norq_paso 6 12 'restauración'\nT=192\n" +
             "orq_fin_paso OK");
 
         Assert.True(r.ExitCode == 0, Diag(r));
         Assert.EndsWith("OK     192 s  viejo sin API hace 3 min 12 s", r.Stdout);
+    }
+
+    /// <summary>
+    /// $SECONDS sale del reloj de pared: un salto hacia atrás (NTP, el reloj de WSL bajo carga) lo
+    /// deja negativo, y asignarlo es exactamente ese efecto. La duración sale de orq_reloj (monotónico)
+    /// y nunca da negativa.
+    /// </summary>
+    [Fact]
+    public void Paso_SecondsQueSaltaParaAtras_LaDuracionNoEsNegativa()
+    {
+        var r = Correr("orq_paso 4 12 x\nSECONDS=-40\norq_fin_paso OK");
+
+        Assert.True(r.ExitCode == 0, Diag(r));
+        Assert.Matches(@"OK\s+\d+ s$", r.Stdout);
+    }
+
+    /// <summary>
+    /// El caso que abortaba un corte con el viejo YA congelado: SECONDS negativo desde el entorno (y
+    /// otro salto entre paso y fin). Con el reloj monotónico, ORQ_CONGELADO_SEG es un número válido y
+    /// orq_fin_paso sale con 0.
+    /// </summary>
+    [Fact]
+    public void Paso_ConCongelado_SecondsNegativo_NoRechaza()
+    {
+        var r = CorrerSinTerminal(
+            "ORQ_CONGELADO_SEG=\"$(orq_reloj)\"\norq_paso 6 13 x\nSECONDS=-1000\nrc=0; orq_fin_paso OK || rc=$?\necho \"rc=$rc\"",
+            prefijo: "SECONDS=-1000 ");
+
+        Assert.True(r.ExitCode == 0, Diag(r));
+        Assert.Contains("viejo sin API hace 0 min", r.Stdout);
+        Assert.EndsWith("rc=0", r.Stdout);
+    }
+
+    [Fact]
+    public void Reloj_NoDependeDeSeconds_YNuncaEsNegativo()
+    {
+        var r = Correr("SECONDS=-1000\norq_reloj\necho\nSECONDS=-9999999\norq_reloj");
+
+        Assert.True(r.ExitCode == 0, Diag(r));
+        Assert.Matches(@"^\d+\n\d+$", r.Stdout);
     }
 
     [Fact]

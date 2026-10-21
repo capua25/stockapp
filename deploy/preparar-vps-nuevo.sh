@@ -1171,17 +1171,6 @@ P6_SANO=0
 P6_ESTADO_TXT=""
 P6_BASE_NO_VACIA=0
 
-# reloj_segundos: segundos de un reloj MONOTÓNICO (el uptime de Linux; no salta si alguien cambia la
-# hora). Sin /proc/uptime cae en $SECONDS del propio bash.
-reloj_segundos() {
-    local up
-    if [[ -r /proc/uptime ]] && read -r up _ < /proc/uptime; then
-        printf '%s' "${up%%.*}"
-    else
-        printf '%s' "$SECONDS"
-    fi
-}
-
 # Como root (sudo): docker no depende de que la sesión ya tenga el grupo docker.
 PASO6_SALUD="$(cat <<'EOS'
 set -u
@@ -1374,13 +1363,13 @@ paso6_aplicar() {
     fi
 
     # Espera acotada, con reloj monotónico, a que el healthcheck lo dé por sano.
-    limite=$(($(reloj_segundos) + PG_ESPERA))
+    limite=$(($(orq_reloj) + PG_ESPERA))
     while :; do
         paso6_salud || return $?
         if [[ "$P6_SANO" -eq 1 ]]; then
             break
         fi
-        if [[ "$(reloj_segundos)" -ge "$limite" ]]; then
+        if [[ "$(orq_reloj)" -ge "$limite" ]]; then
             PASO_DETALLE="stockapp-pg no llegó a healthy en ${PG_ESPERA} s (estado: ${P6_ESTADO_TXT})."
             return 1
         fi
