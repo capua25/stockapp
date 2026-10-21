@@ -3,8 +3,16 @@
 # certbot -- certbot FALSO del host simulado (no hay Let's Encrypt contra el cual emitir).
 # =======================================================================================
 # Reproduce certbot 2.9.0 (Ubuntu 24.04, paquete `certbot`) en lo que importa a preparar:
-#   certbot certonly --standalone -n --agree-tos -d DOMINIO --deploy-hook HOOK
+#   certbot certonly --standalone -n --agree-tos --register-unsafely-without-email
+#                    -d DOMINIO --deploy-hook HOOK
 #   certbot renew [--force-renewal] --cert-name DOMINIO
+#   - cuenta ACME: la primera emisión de un host registra una cuenta nueva. Con -n y sin
+#     `--email`/`-m` ni `--register-unsafely-without-email` el real NO puede preguntar el
+#     correo: sale 1 con `MissingCommandlineFlag` ("Missing command line flag or config entry
+#     for this setting: Enter email address ...") y no escribe nada; sin `--agree-tos` también
+#     se niega. Con una cuenta ya registrada (la primera emisión la dejó) no pide correo
+#     (`--no-eff-email` es un flag válido, se acepta). El comportamiento (exit 1, sin escribir
+#     nada) es el del certbot 2.9.0; el TEXTO exacto del mensaje está citado de memoria;
 #   - antes de `apt-get install certbot` el comando no existe (lo enlaza apt-get);
 #   - como no-root: `Either run as root, or set --config-dir, --work-dir, and --logs-dir to
 #     writeable paths.` (exit 1);
@@ -25,9 +33,7 @@
 #     renewal; no action taken.` (exit 0), sin hook;
 #   - `renew --force-renewal --cert-name D`: nueva versión (cert2.pem...), repunta los symlinks y
 #     vuelve a correr el hook de renewal/D.conf; sin renewal conf: exit 1.
-# NO simula: cuentas ACME y el correo (el real, con -n y sin --email ni
-# --register-unsafely-without-email, probablemente se niega: NO verificado, así que el
-# shim lo acepta), la validación de DNS, múltiples dominios, --dry-run (no corre hooks, como el
+# NO simula: el contenido de la cuenta ACME (solo si existe o no), la validación de DNS, múltiples dominios, --dry-run (no corre hooks, como el
 # real: acá sale 0 sin tocar nada), certificados de otras aplicaciones, ni los hooks de
 # /etc/letsencrypt/renewal-hooks.
 # =======================================================================================
@@ -54,17 +60,22 @@ hook=""
 cert_name=""
 forzar=0
 dry=0
+agree=0
+sin_correo=0
+correo=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         certonly|renew) orden="$1"; shift ;;
-        --standalone|-n|--non-interactive|--agree-tos|--quiet) shift ;;
+        --standalone|-n|--non-interactive|--quiet|--no-eff-email) shift ;;
+        --agree-tos) agree=1; shift ;;
+        --register-unsafely-without-email) sin_correo=1; shift ;;
         --force-renewal) forzar=1; shift ;;
         --dry-run) dry=1; shift ;;
         -d|--domain|--domains) dominio="${2:-}"; shift 2 ;;
         --deploy-hook) hook="${2:-}"; shift 2 ;;
         --cert-name) cert_name="${2:-}"; shift 2 ;;
         --version) echo "certbot 2.9.0"; exit 0 ;;
-        -m|--email) shift 2 ;;
+        -m|--email) correo="${2:-}"; shift 2 ;;
         *) echo "certbot: error: unrecognized arguments: $1" >&2; exit 2 ;;
     esac
 done
@@ -107,6 +118,21 @@ case "$orden" in
             exit 1
         fi
         if (( dry )); then echo "The dry run was successful."; exit 0; fi
+        # Cuenta ACME: se determina (y se registra) antes de buscar el certificado o validar.
+        if [[ ! -e "${HS_ESTADO}/certbot-cuenta" ]]; then
+            if (( agree == 0 )); then
+                echo "Missing command line flag or config entry for this setting:" >&2
+                echo "Please read the Terms of Service ... (use --agree-tos)" >&2
+                exit 1
+            fi
+            if [[ -z "$correo" ]] && (( sin_correo == 0 )); then
+                echo "Missing command line flag or config entry for this setting:" >&2
+                echo "Enter email address or hit Enter to skip. (use --email or --register-unsafely-without-email)" >&2
+                exit 1
+            fi
+            echo "Account registered." >&2
+            echo registrada > "${HS_ESTADO}/certbot-cuenta"
+        fi
         if [[ -e "${LE}/live/${dominio}/fullchain.pem" ]] && vigente "${LE}/live/${dominio}/fullchain.pem" && (( forzar == 0 )); then
             echo "Certificate not yet due for renewal; no action taken."
             exit 0

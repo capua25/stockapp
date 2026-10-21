@@ -45,7 +45,8 @@ public class HostSimuladoTests
         Ok(h, $"sudo chmod 0755 {Hook}");
     }
 
-    private static string Emitir => $"sudo certbot certonly --standalone -n --agree-tos -d {Dominio} --deploy-hook {Hook}";
+    private static string Emitir =>
+        $"sudo certbot certonly --standalone -n --agree-tos --register-unsafely-without-email -d {Dominio} --deploy-hook {Hook}";
 
     // ---------- Ciclo de vida ----------
 
@@ -340,6 +341,54 @@ public class HostSimuladoTests
     }
 
     [Fact]
+    public void Certbot_PrimeraEmisionSinCorreoNiRegisterUnsafely_SeNiegaYNoEscribeNada()
+    {
+        using var h = HostSimulado.Crear();
+        PrepararParaCertbot(h);
+
+        var (exit, salida) = h.Ejecutar(
+            $"sudo certbot certonly --standalone -n --agree-tos -d {Dominio} --deploy-hook {Hook}");
+
+        // Cuenta ACME nueva + -n: el real no puede preguntar el correo.
+        Assert.Equal(1, exit);
+        Assert.Contains("Missing command line flag", salida);
+        Assert.NotEqual(0, h.Ejecutar($"sudo test -e /etc/letsencrypt/live/{Dominio}").ExitCode);
+        Assert.NotEqual(0, h.Ejecutar($"sudo test -e /etc/letsencrypt/renewal/{Dominio}.conf").ExitCode);
+        Assert.DoesNotContain("systemctl", h.RastroHost());
+    }
+
+    [Fact]
+    public void Certbot_PrimeraEmisionSinAgreeTos_SeNiega()
+    {
+        using var h = HostSimulado.Crear();
+        PrepararParaCertbot(h);
+
+        var (exit, salida) = h.Ejecutar(
+            $"sudo certbot certonly --standalone -n --register-unsafely-without-email -d {Dominio}");
+
+        Assert.Equal(1, exit);
+        Assert.Contains("Missing command line flag", salida);
+    }
+
+    [Fact]
+    public void Certbot_ConCorreoOConNoEffEmail_Emite_YConCuentaYaRegistradaNoPideCorreo()
+    {
+        using var h = HostSimulado.Crear();
+        PrepararParaCertbot(h);
+
+        var (exit, salida) = h.Ejecutar(
+            $"sudo certbot certonly --standalone -n --agree-tos -m ops@example.invalid --no-eff-email -d {Dominio} --deploy-hook {Hook}");
+        Assert.Contains("Successfully received certificate", salida);
+        Assert.NotEqual(0, exit); // el hook falla: no hay unit
+        Ok(h, $"sudo test -e /etc/letsencrypt/live/{Dominio}/fullchain.pem");
+
+        // La cuenta quedó registrada: una emisión forzada de otro dominio ya no pide correo.
+        var (_, segunda) = h.Ejecutar(
+            "sudo certbot certonly --standalone -n --agree-tos -d otro.test.invalid --deploy-hook " + Hook);
+        Assert.Contains("Successfully received certificate", segunda);
+    }
+
+    [Fact]
     public void Certbot_AntesDeInstalar_NoExiste_YComoNoRootPideRoot()
     {
         using var h = HostSimulado.Crear();
@@ -348,7 +397,7 @@ public class HostSimuladoTests
         Assert.Contains("command not found", sinInstalar.Salida);
 
         h.Ejecutar("sudo apt-get install -y certbot");
-        var comoUsuario = h.Ejecutar($"certbot certonly --standalone -n --agree-tos -d {Dominio}");
+        var comoUsuario = h.Ejecutar($"certbot certonly --standalone -n --agree-tos --register-unsafely-without-email -d {Dominio}");
         Assert.Equal(1, comoUsuario.ExitCode);
         Assert.Contains("Either run as root", comoUsuario.Salida);
     }
