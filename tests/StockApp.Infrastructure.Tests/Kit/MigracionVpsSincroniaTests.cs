@@ -30,8 +30,15 @@ public class MigracionVpsSincroniaTests
         "deploy/ensayo/shims/sudo",
         "deploy/ensayo/shims/systemctl",
         "deploy/lib/orquestacion.sh",
+        Migrar,
         HookTls,
     ];
+
+    /// <summary>
+    /// El orquestador del corte: opera el VPS viejo (compartido con otra aplicación), así que
+    /// entra en <see cref="ScriptsNuevos"/> con TODOS los tokens prohibidos, comentarios incluidos.
+    /// </summary>
+    private const string Migrar = "deploy/migrar-vps.sh";
 
     /// <summary>
     /// El hook de certbot documenta en su encabezado cómo se registra (`certbot certonly ...
@@ -183,6 +190,76 @@ public class MigracionVpsSincroniaTests
         Ausente("nginx");
         Ausente("certbot");
         Ausente("rm -rf \"$");
+    }
+
+    // ---------- Tablas de códigos de los bloques, copiadas en el encabezado del orquestador ----------
+
+    /// <summary>
+    /// La tabla de códigos de un archivo: desde `# Códigos de salida (estables):` hasta la primera
+    /// línea `#` vacía o que empiece con `# =` (sin incluirla). Es la misma regla para el bloque y
+    /// para la copia, así que una diferencia entre las dos es una diferencia real.
+    /// </summary>
+    private static List<string> TablaDeCodigos(IEnumerable<string> lineas)
+    {
+        var tabla = new List<string>();
+        var dentro = false;
+        foreach (var l in lineas)
+        {
+            if (!dentro)
+            {
+                if (l == "# Códigos de salida (estables):")
+                {
+                    dentro = true;
+                    tabla.Add(l);
+                }
+
+                continue;
+            }
+
+            if (l == "#" || l.StartsWith("# =")) break;
+            tabla.Add(l);
+        }
+
+        return tabla;
+    }
+
+    private static List<string> CopiaEnElOrquestador(string orquestador, string bloque)
+    {
+        var lineas = orquestador.Split('\n').Select(l => l.TrimEnd('\r')).ToList();
+        var ini = lineas.IndexOf($"# >>> CODIGOS {bloque}");
+        var fin = lineas.IndexOf($"# <<< CODIGOS {bloque}");
+        Assert.True(ini >= 0 && fin > ini, $"{Migrar} no tiene el par `# >>> CODIGOS {bloque}` / `# <<< CODIGOS {bloque}`.");
+        return lineas.GetRange(ini + 1, fin - ini - 1);
+    }
+
+    /// <summary>
+    /// La tabla de códigos de volcado-final-vps.sh y de restaurar-backup.sh está copiada, sin
+    /// cambios, en el encabezado de migrar-vps.sh: el orquestador imprime "bloque X salió con N"
+    /// junto con la fila de esa tabla, y si el bloque cambia un código sin que cambie la copia, el
+    /// operador leería una fila falsa.
+    /// </summary>
+    [Theory]
+    [InlineData("deploy/volcado-final-vps.sh")]
+    [InlineData("deploy/restaurar-backup.sh")]
+    public void Orquestadores_TablasDeCodigosIgualesALasDeLosBloques(string bloque)
+    {
+        var delBloque = TablaDeCodigos(Texto(bloque).Split('\n').Select(l => l.TrimEnd('\r')));
+        Assert.True(delBloque.Count > 3, $"no encontré la tabla de códigos de {bloque}.");
+
+        var copia = CopiaEnElOrquestador(Texto(Migrar), bloque);
+
+        Assert.Equal(delBloque, copia);
+    }
+
+    /// <summary>La propia tabla de migrar (spec 6.3.2) tiene una fila por cada código que el script usa.</summary>
+    [Fact]
+    public void Migrar_TablaDeCodigosPropia_TieneLosNueveCodigosDeLaSpec()
+    {
+        var lineas = Texto(Migrar).Split('\n').Select(l => l.TrimEnd('\r')).ToList();
+        var propia = TablaDeCodigos(lineas);
+        foreach (var codigo in new[] { "0", "2", "3", "4", "5", "6", "7", "8", "9" })
+            Assert.Contains(propia, l => Regex.IsMatch(l, $@"^#   {codigo}  \S"));
+        Assert.DoesNotContain(propia, l => Regex.IsMatch(l, @"^#   [1]  "));
     }
 
     // ---------- Los 7 catálogos con Nombre único: tres copias, un solo conjunto ----------
