@@ -10,7 +10,8 @@
 #   (sin --ensayo)  El corte. Pre-vuelo de SOLO LECTURA (config, identidad de los hosts, estado del
 #                   viejo, preparación del nuevo, overrides, credencial) y, recién después, una
 #                   confirmación escrita: hay que teclear exactamente CONGELAR en una terminal.
-#   --ensayo        La misma secuencia sin la confirmación: no congela el viejo.
+#   --ensayo        La misma secuencia sin la confirmación: no congela el viejo. (En esta versión
+#                   termina después del pre-vuelo, sin tocar nada.)
 #   --env-viejo     .env del operador para el VPS viejo. Default: deploy/.env.
 #                   Además de los VPS_*: VPS_ADMIN_USER (obligatorio; no cae a BOOTSTRAP_ADMIN_USER)
 #                   y VPS_ADMIN_PASSWORD. La contraseña sale del entorno, si no del archivo y, si
@@ -50,6 +51,29 @@
 #   - Una corrida sin terminar (con estado y sin resultado=) impide empezar otra de corte.
 #   - Hasta la confirmación no se modifica nada. Un fallo del pre-vuelo cierra la corrida con
 #     resultado=FALLO-<n>, salvo que ya hubiera congelado el viejo.
+#
+# Secuencia del corte (pasos 3 a 13; cada uno deja paso_<n>=ok <utc> <segundos> en el estado):
+#    3  detiene la API NUEVA (primero: con dos APIs vivas, lo escrito en la nueva se perdería) y
+#       exige que is-active ya no diga active.
+#    4  en el nuevo, borra uno por uno, por patrón y sin bajar de nivel, los backup_*.dump y *.tmp
+#       que dejó el ensayo, y aparta en migracion/legado-<ts>/ lo suelto de un ensayo manual.
+#    5  guarda la lista de contenedores del viejo (contenedores-viejo.txt) y cómo está habilitada
+#       la unit.
+#    6  registra congelado_utc y recién después llama a volcado-final-vps.sh con un --salida nuevo:
+#       desde ahí corre el reloj de indisponibilidad. Si el bloque falla y el viejo sigue sirviendo
+#       como antes (is-active active, la misma habilitación), sale con 5; si no, con 6 (9 si es
+#       alcance). Si el bloque dice OK, el viejo TIENE que estar inactive y masked.
+#    7  A11: en el --salida hay exactamente un volcado y un manifiesto con el mismo <ts>, y el
+#       manifiesto dice dump=<ese nombre>, el sha256 del archivo local y una fecha_utc no anterior
+#       al inicio de la corrida. Desde acá ningún paso nombra otro volcado.
+#    8  directorio remoto NUEVO (mkdir sin -p), scp, chmod y sha256sum remoto igual al del estado.
+#    9  restaurar-backup.sh --recrear-base por ssh. Con un código distinto de 0 NO se arranca la API.
+#   10  extrae el historial de backups y le da dueño stockapp.
+#   11  arranca la API nueva y espera (120 s, reloj monotónico) active y GET / por loopback.
+#   12  V1-V8 y V10; anota LogsAuditoria para --revertir.
+#   13  resumen: GO (0) o NO-GO (7), fin_rollback = congelado + 14 días y el comando de vuelta atrás.
+# Después del congelamiento, todo fallo deja la corrida abierta (sin resultado=) y dice cómo seguir
+# (--continuar <corrida>) o volver atrás (--revertir).
 #
 # Códigos de salida (estables):
 #   0  GO técnico: todas las V automáticas OK. Quedan V9 y la decisión de Martin
@@ -93,6 +117,13 @@
 # =======================================================================================
 set -euo pipefail
 
+# Secretos (R34): una variable que el shell del operador ya exportaba conserva el atributo export
+# al asignarla (también si se la declara `local` dentro de una función), y el secreto llegaría al
+# entorno de ssh, de curl y de los bloques. Se borran ANTES de cargar la lib y de asignarlas: así
+# nacen sin exportar. Son todas las que llegan a contener la contraseña, el cuerpo del login o un
+# token (también la salida de ssh y de curl, donde viaja la respuesta del login).
+unset PW TOKEN cuerpo listado entrada CURL_CUERPO ORQ_SALIDA ORQ_STDERR
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 # shellcheck source=lib/orquestacion.sh
 source "$REPO_ROOT/deploy/lib/orquestacion.sh"
@@ -103,7 +134,9 @@ PASOS_TOTAL=13
 # trap lo reemplazaría y dejaría en /tmp el stderr de ssh. Este lo ENCADENA. Además cierra una corrida
 # que falló antes de tocar el viejo: sin un resultado=, una corrida con estado cuenta como "sin
 # terminar" y bloquearía todos los cortes siguientes. Con congelado_utc la decisión (--continuar o
-# --revertir) es de un humano y la corrida se deja abierta.
+# --revertir) es de un humano y la corrida se deja abierta, salvo con 5: el 5 dice "antes de
+# congelar" (el volcado falló antes del stop y el viejo sigue sirviendo, lo que se confirmó con
+# is-active), así que no hay nada que retomar aunque congelado_utc ya esté escrito (R31).
 _migrar_salir() {
     local rc=$? resultado_rc=0 congelado_rc=0 archivo
     if [[ "$rc" -ne 0 && -n "${ORQ_CORRIDA:-}" ]]; then
@@ -111,7 +144,7 @@ _migrar_salir() {
         if [[ -f "$archivo" ]]; then
             orq_estado_de "$archivo" resultado >/dev/null 2>&1 || resultado_rc=$?
             orq_estado_de "$archivo" congelado_utc >/dev/null 2>&1 || congelado_rc=$?
-            if [[ "$resultado_rc" -eq 1 && "$congelado_rc" -eq 1 ]]; then
+            if [[ "$resultado_rc" -eq 1 && ( "$congelado_rc" -eq 1 || "$rc" -eq 5 ) ]]; then
                 orq_estado_poner resultado "FALLO-$rc" >/dev/null 2>&1 || :
             fi
         fi
@@ -130,8 +163,25 @@ uso() {
 
 PASO_ABIERTO=0
 PASO_T0=0
+# Después del congelamiento (paso 6) todo fallo deja el viejo congelado: abortar imprime el estado y
+# las salidas. DETALLE_FALLO es lo que va entre paréntesis en la línea del paso que falló (el bloque
+# y su código); SALIDA_SUGERIDA elige qué salidas se ofrecen (ver resumen_de_fallo).
+CONGELADO=0
+DETALLE_FALLO=""
+SALIDA_SUGERIDA="continuar"
+ESTADO_VIEJO_TXT=""
+
+# sincronizar_reloj: $SECONDS sale del reloj de pared, que puede saltar hacia atrás (NTP, o el reloj
+# de WSL al volver de una pausa): las duraciones darían negativas y un ORQ_CONGELADO_SEG negativo hace
+# que orq_fin_paso lo rechace, lo que abortaría un corte YA congelado. Asignar SECONDS fija su base,
+# así que justo antes de cada lectura (la de este script y las de la lib) se lo iguala al reloj
+# monotónico.
+sincronizar_reloj() {
+    SECONDS="$(reloj_segundos)"
+}
 
 abrir_paso() {
+    sincronizar_reloj
     orq_paso "$1" "$PASOS_TOTAL" "$2"
     PASO_ABIERTO=1
     PASO_T0="$SECONDS"
@@ -140,22 +190,68 @@ abrir_paso() {
 # cerrar_paso <n> <OK|YA ESTABA|OMITIDO> [detalle] [marca]: línea del paso y su clave en el estado.
 cerrar_paso() {
     local n="$1" resultado="$2" detalle="${3-}" marca="${4:-ok}" duracion
+    sincronizar_reloj
     duracion=$((SECONDS - PASO_T0))
     PASO_ABIERTO=0
     orq_fin_paso "$resultado" "$detalle"
     orq_estado_poner "paso_$n" "$marca $(date -u +%Y-%m-%dT%H:%M:%SZ) $duracion"
 }
 
-# abortar <codigo> <mensaje>: cierra el paso abierto como FALLÓ y sale.
+# abortar <codigo> <mensaje>: cierra el paso abierto como FALLÓ y sale. Con el viejo ya congelado
+# (y salvo el 5, que es "antes de congelar"), antes de salir dice en qué estado quedó y cómo seguir.
 abortar() {
     local codigo="$1"
     shift
     echo "migrar: $*" >&2
     if [[ "$PASO_ABIERTO" -eq 1 ]]; then
         PASO_ABIERTO=0
-        orq_fin_paso FALLÓ "exit $codigo"
+        sincronizar_reloj
+        orq_fin_paso FALLÓ "${DETALLE_FALLO:-exit $codigo}"
+    fi
+    if [[ "$CONGELADO" -eq 1 && "$codigo" -ne 5 ]]; then
+        resumen_de_fallo "$codigo"
     fi
     exit "$codigo"
+}
+
+# resumen_de_fallo <codigo>: el viejo quedó congelado y la corrida queda abierta (sin resultado=).
+# Las salidas según SALIDA_SUGERIDA:
+#   continuar                 --continuar <corrida> o --revertir
+#   reintentar-restauracion   la base quedó restaurada pero no verifica: lo decide un humano
+#   investigar                no se pudo consultar o el código no se puede clasificar
+#   revisar                   alcance (9): NO se ofrece --continuar hasta que un humano mire
+resumen_de_fallo() {
+    local codigo="$1"
+    {
+        echo
+        echo "== El corte no terminó (exit $codigo) =="
+        echo "Corrida: $ORQ_CORRIDA (queda abierta: sin resultado)"
+        if [[ -n "$ESTADO_VIEJO_TXT" ]]; then
+            echo "VPS viejo: $ESTADO_VIEJO_TXT"
+        else
+            echo "VPS viejo: quedó congelado: stockapp-api detenida (y enmascarada, si el volcado llegó hasta ahí). Nadie escribe en la base vieja."
+        fi
+        echo "VPS nuevo: la API nueva está detenida; no la arranques a mano."
+        case "$SALIDA_SUGERIDA" in
+            reintentar-restauracion)
+                echo "Sin retomar automático: la base del nuevo QUEDÓ restaurada pero no verifica. Investigá y después elegí:"
+                echo "    deploy/migrar-vps.sh --continuar $ORQ_CORRIDA --reintentar-restauracion   (vuelve a --recrear-base, con otro dump de seguridad)"
+                ;;
+            investigar)
+                echo "Investigá la causa (arriba) y después elegí:"
+                echo "    deploy/migrar-vps.sh --continuar $ORQ_CORRIDA"
+                ;;
+            revisar)
+                echo "Es un problema de alcance: un humano tiene que mirar antes de seguir. No se ofrece retomar."
+                ;;
+            *)
+                echo "Para seguir:"
+                echo "    deploy/migrar-vps.sh --continuar $ORQ_CORRIDA"
+                ;;
+        esac
+        echo "Para volver atrás (el viejo vuelve a servir):"
+        echo "    deploy/migrar-vps.sh --revertir $ORQ_CORRIDA"
+    } >&2
 }
 
 # volcar_stderr: lo que dijo ssh o el comando remoto, con sangría. Solo el stderr, nunca la salida:
@@ -398,6 +494,18 @@ cargar_config() {
         URL_VIEJO="http://127.0.0.1:${VIEJO_API_PORT}"
         RESOLVE_VIEJO=""
     fi
+
+    # La API nueva: la URL pública (V3 a V8, desde esta máquina y validando el certificado) y la de
+    # loopback desde el propio servidor nuevo (el arranque del paso 11), con el mismo criterio.
+    URL_NUEVO="${NUEVO_API_SCHEME}://${NUEVO_API_HOSTNAME}:${NUEVO_API_PORT}"
+    if [[ "$NUEVO_API_SCHEME" == "https" ]]; then
+        URL_NUEVO_LOCAL="$URL_NUEVO"
+        RESOLVE_NUEVO="--resolve ${NUEVO_API_HOSTNAME}:${NUEVO_API_PORT}:127.0.0.1 "
+    else
+        URL_NUEVO_LOCAL="http://127.0.0.1:${NUEVO_API_PORT}"
+        RESOLVE_NUEVO=""
+    fi
+    DIR_STOCKAPP_NUEVO="${RAIZ_NUEVO}/var/lib/stockapp/.local/share/StockApp"
 }
 
 exigir_terminal() {
@@ -535,7 +643,21 @@ CURL_ERR=""
 # curl_operador <url>: GET desde esta máquina validando el certificado de verdad (nunca se lo desactiva). Deja
 # CURL_RC, CURL_CUERPO y CURL_ERR; nunca sale. El stderr va a la corrida (700).
 curl_operador() {
-    local err
+    _curl_operador 0 "" "$1"
+}
+
+# curl_operador_con <entrada> <opciones>... <url>: lo mismo, con <entrada> por el stdin de curl (el
+# cuerpo del login con --data @-, o la configuración con el token con -K -): un secreto nunca va en
+# el argv. La URL va siempre última.
+curl_operador_con() {
+    local entrada="$1"
+    shift
+    _curl_operador 1 "$entrada" "$@"
+}
+
+_curl_operador() {
+    local tiene_entrada="$1" entrada="$2" err
+    shift 2
     CURL_RC=0
     CURL_CUERPO=""
     CURL_ERR=""
@@ -544,7 +666,11 @@ curl_operador() {
         CURL_ERR="no pude crear el temporal para el stderr de curl"
         return 0
     fi
-    CURL_CUERPO="$(curl -fsS --connect-timeout 10 --max-time 30 "$1" 9>&- 2>"$err" </dev/null)" || CURL_RC=$?
+    if [[ "$tiene_entrada" == 1 ]]; then
+        CURL_CUERPO="$(curl -fsS --connect-timeout 10 --max-time 30 "$@" 9>&- 2>"$err" < <(printf '%s' "$entrada"))" || CURL_RC=$?
+    else
+        CURL_CUERPO="$(curl -fsS --connect-timeout 10 --max-time 30 "$@" 9>&- 2>"$err" </dev/null)" || CURL_RC=$?
+    fi
     CURL_ERR="$(cat "$err" 2>/dev/null)" || CURL_ERR=""
     rm -f -- "$err"
 }
@@ -890,6 +1016,859 @@ EOF
 }
 
 # ---------------------------------------------------------------------------------------
+# Secuencia del corte (spec 6.5.4): pasos 3 a 13
+# ---------------------------------------------------------------------------------------
+
+PASO_NOMBRES=(
+    ""
+    "pre-vuelo"
+    "confirmación"
+    "detener la API nueva"
+    "limpiar restos del ensayo"
+    "lista de contenedores del VPS viejo"
+    "congelar y volcar el VPS viejo"
+    "identificar el volcado de esta corrida"
+    "transferencia al VPS nuevo"
+    "restauración (--recrear-base)"
+    "historial de backups"
+    "arrancar la API nueva"
+    "verificación (V1-V8, V10)"
+    "resumen"
+)
+ARRANQUE_ESPERA=120
+BACKUP_ESPERA=60
+
+DIR_STOCKAPP_NUEVO=""
+D_REL=""
+VOLCADO=""
+MANIFIESTO=""
+SHA_VOLCADO=""
+ULTIMA_MIGRACION=""
+HABILITACION_VIEJO=""
+RESTAURAR_RC=""
+
+paso() {
+    abrir_paso "$1" "${PASO_NOMBRES[$1]}"
+    DETALLE_FALLO=""
+    SALIDA_SUGERIDA="continuar"
+}
+
+# reloj_segundos: segundos de un reloj MONOTÓNICO (el uptime de Linux; no salta si alguien cambia la
+# hora). Sin /proc/uptime cae en $SECONDS del propio bash. Mismo criterio que preparar-vps-nuevo.sh.
+reloj_segundos() {
+    local up
+    if [[ -r /proc/uptime ]] && read -r up _ < /proc/uptime; then
+        printf '%s' "${up%%.*}"
+    else
+        printf '%s' "$SECONDS"
+    fi
+}
+
+# falla_remota <codigo> <qué>: tras orq_ssh. El 255 de ssh es "no pude consultar" (8); cualquier otro
+# código distinto de cero sale con <codigo>.
+falla_remota() {
+    local codigo="$1"
+    shift
+    if [[ "$ORQ_RC" -eq 255 ]]; then
+        volcar_stderr
+        abortar 8 "no pude ejecutar $* (ssh salió con 255). Esto NO es 'vacío' ni 'cero'."
+    fi
+    if [[ "$ORQ_RC" -ne 0 ]]; then
+        volcar_stderr
+        abortar "$codigo" "$* falló (salió con $ORQ_RC)."
+    fi
+}
+
+# rr <archivo>: la ruta, entre comillas, de <archivo> en el directorio remoto de esta corrida. $HOME
+# se expande en el servidor: el directorio es el de la migración del usuario de deploy.
+rr() {
+    printf '"$HOME/%s/%s"' "$D_REL" "$1"
+}
+
+# fila_de_codigo <bloque> <n>: la fila de <n> en la tabla del bloque copiada en este encabezado.
+fila_de_codigo() {
+    local fila
+    fila="$(awk -v ini="# >>> CODIGOS $1" -v fin="# <<< CODIGOS $1" -v n="$2" '
+        $0 == ini { dentro = 1; next }
+        $0 == fin { dentro = 0 }
+        dentro && index($0, "#   " n "  ") == 1 { fila = 1; print; next }
+        dentro && fila && index($0, "#      ") == 1 { print; next }
+        { fila = 0 }' "${BASH_SOURCE[0]}")" || fila=""
+    if [[ -n "$fila" ]]; then
+        printf '%s\n' "$fila" | sed 's/^#/   /'
+    else
+        echo "    (código fuera de la tabla del bloque: no se adivina qué significa)"
+    fi
+}
+
+# informar_bloque <bloque> <n>: "bloque <nombre> salió con <n>" y su fila de la tabla (spec 6.2).
+informar_bloque() {
+    echo "  bloque ${1##*/} salió con $2"
+    if [[ "$2" -ne 0 ]]; then
+        fila_de_codigo "$1" "$2"
+    fi
+}
+
+# estado_api <PREFIJO> -> ESTADO_API (la palabra de is-active). rc 0 y 3 son respuestas; lo demás,
+# y una palabra que no es de systemd, es "no pude consultar".
+ESTADO_API=""
+estado_api() {
+    orq_ssh "$1" "systemctl is-active stockapp-api"
+    case "$ORQ_RC" in
+        0 | 3) ;;
+        *) consulta_ok "el estado de stockapp-api ($1)" ;;
+    esac
+    case "$ORQ_SALIDA" in
+        active | inactive | failed | activating | deactivating | reloading) ESTADO_API="$ORQ_SALIDA" ;;
+        *) abortar 8 "no pude interpretar 'systemctl is-active stockapp-api' ($1): '${ORQ_SALIDA}'." ;;
+    esac
+}
+
+# habilitacion_viejo -> HABILITACION (la palabra de is-enabled del viejo; 0 y 1 son respuestas).
+HABILITACION=""
+habilitacion_viejo() {
+    orq_ssh VIEJO "systemctl is-enabled stockapp-api"
+    case "$ORQ_RC" in
+        0 | 1) ;;
+        *) consulta_ok "la habilitación de stockapp-api en el VPS viejo" ;;
+    esac
+    if [[ ! "$ORQ_SALIDA" =~ ^[a-z-]+$ ]]; then
+        abortar 8 "no pude interpretar 'systemctl is-enabled stockapp-api' del VPS viejo: '${ORQ_SALIDA}'."
+    fi
+    HABILITACION="$ORQ_SALIDA"
+}
+
+journal_nuevo() {
+    orq_ssh NUEVO "sudo -n journalctl -u stockapp-api -n 30 --no-pager"
+    if [[ "$ORQ_RC" -eq 0 && -n "$ORQ_SALIDA" ]]; then
+        echo "  últimas líneas del journal de stockapp-api en el VPS nuevo:"
+        printf '%s\n' "$ORQ_SALIDA" | sed 's/^/    | /'
+    else
+        echo "  (no pude leer el journal de stockapp-api en el VPS nuevo: salió con $ORQ_RC)"
+    fi
+}
+
+corte_paso3() {
+    paso 3
+    orq_ssh NUEVO "sudo -n systemctl stop stockapp-api"
+    falla_remota 5 "'systemctl stop stockapp-api' en el VPS nuevo"
+    estado_api NUEVO
+    # failed también es "no corre": ningún proceso de la API nueva puede escribir en la base.
+    if [[ "$ESTADO_API" != "inactive" && "$ESTADO_API" != "failed" ]]; then
+        abortar 5 "tras el stop, stockapp-api del VPS nuevo dice '$ESTADO_API' (se esperaba inactive). El viejo no se tocó."
+    fi
+    cerrar_paso 3 OK
+}
+
+corte_paso4() {
+    local hubo=0 dir="${DIR_STOCKAPP_NUEVO}/backups" lista ts legado
+    paso 4
+    # Los backup_*.dump y *.tmp del ensayo: ReconciliarDumpHuerfanosAsync los tomaría como propios.
+    # Uno por uno, por patrón y sin bajar de nivel; nunca un borrado recursivo.
+    orq_ssh NUEVO "sudo -n test -d ${dir}"
+    if [[ "$ORQ_RC" -eq 0 && -z "$ORQ_STDERR" ]]; then
+        orq_ssh NUEVO "sudo -n find ${dir} -maxdepth 1 -type f \\( -name 'backup_*.dump' -o -name '*.tmp' \\) -print -delete"
+        falla_remota 5 "el borrado de los backups del ensayo en el VPS nuevo"
+        if [[ -n "$ORQ_SALIDA" ]]; then
+            hubo=1
+            printf '%s\n' "$ORQ_SALIDA" | sed 's/^/  - borrado: /'
+        fi
+    elif [[ "$ORQ_RC" -eq 1 && -z "$ORQ_STDERR" ]]; then
+        echo "  - ${dir} no existe todavía: no hay backups del ensayo que borrar"
+    else
+        consulta_ok "si existe ${dir} en el VPS nuevo"
+        abortar 8 "no pude consultar si existe ${dir} en el VPS nuevo."
+    fi
+
+    # Lo que un ensayo manual anterior pudo dejar suelto en la raíz de migracion/ se aparta (nunca se
+    # borra). Las corridas del orquestador viven cada una en su directorio y no se mueven.
+    lista='find "$HOME/stockapp-deploy/migracion" -maxdepth 1 -type f \( -name '\''volcado-*'\'' -o -name '\''backups-historial.tar'\'' \) -print'
+    orq_ssh NUEVO "$lista"
+    consulta_ok "los restos sueltos de ~/stockapp-deploy/migracion en el VPS nuevo"
+    if [[ -n "$ORQ_SALIDA" ]]; then
+        hubo=1
+        ts="$(date -u +%Y%m%dT%H%M%SZ)"
+        legado="\"\$HOME/stockapp-deploy/migracion/legado-${ts}\""
+        orq_ssh NUEVO "mkdir -m 700 ${legado} && ${lista% -print} -exec mv -n -t ${legado} -- {} +"
+        falla_remota 5 "apartar los restos sueltos en ~/stockapp-deploy/migracion/legado-${ts}"
+        orq_ssh NUEVO "$lista"
+        consulta_ok "los restos sueltos de ~/stockapp-deploy/migracion en el VPS nuevo"
+        if [[ -n "$ORQ_SALIDA" ]]; then
+            abortar 5 "después de apartarlos siguen sueltos en ~/stockapp-deploy/migracion: $(printf '%s' "$ORQ_SALIDA" | tr '\n' ' ')"
+        fi
+        echo "  - restos sueltos apartados en ~/stockapp-deploy/migracion/legado-${ts}"
+    fi
+
+    if [[ "$hubo" -eq 1 ]]; then
+        cerrar_paso 4 OK
+    else
+        cerrar_paso 4 "YA ESTABA"
+    fi
+}
+
+corte_paso5() {
+    local archivo="$ORQ_CORRIDA/contenedores-viejo.txt"
+    paso 5
+    orq_ssh VIEJO "docker ps --format '{{.Names}}'"
+    consulta_ok "la lista de contenedores del VPS viejo"
+    if [[ -z "$ORQ_SALIDA" ]]; then
+        abortar 8 "la lista de contenedores del VPS viejo vino vacía: no puedo interpretarla."
+    fi
+    ( umask 077; printf '%s\n' "$ORQ_SALIDA" | LC_ALL=C sort > "$archivo" ) || abortar 8 "no pude escribir $archivo."
+    # Cómo estaba habilitada la unit ANTES de congelar: un volcado que falla se clasifica como "antes
+    # del stop" solo si el viejo sigue exactamente así (nota 1 de spec 6.5.4).
+    habilitacion_viejo
+    HABILITACION_VIEJO="$HABILITACION"
+    orq_estado_poner habilitacion_viejo_inicial "$HABILITACION_VIEJO"
+    cerrar_paso 5 OK
+}
+
+# viejo_intacto: 0 si el viejo sigue sirviendo como antes del bloque (active y con la habilitación
+# del paso 5, sin enmascarar). Lo que no se puede consultar sale con 8: no se adivina.
+viejo_intacto() {
+    estado_api VIEJO
+    habilitacion_viejo
+    ESTADO_VIEJO_TXT="stockapp-api dice '$ESTADO_API' y su unit '$HABILITACION'."
+    [[ "$ESTADO_API" == "active" && "$HABILITACION" == "$HABILITACION_VIEJO" && "$HABILITACION" != "masked" ]]
+}
+
+corte_paso6() {
+    local salida="$ORQ_CORRIDA/volcado" args=() rc
+    paso 6
+    # Un --salida recién creado y vacío: lo que quede ahí es de esta corrida (A11, paso 7).
+    if ! mkdir -m 700 -- "$salida" 2>/dev/null; then
+        abortar 8 "no pude crear $salida vacío (¿ya existe?): el volcado de esta corrida tiene que caer en un directorio nuevo."
+    fi
+    if [[ "$CONTENEDOR_VIEJO" != "stockapp-pg" ]]; then
+        args+=(--contenedor "$CONTENEDOR_VIEJO")
+    fi
+    if [[ -n "$RAIZ_VIEJO" ]]; then
+        args+=(--raiz-remota "$RAIZ_VIEJO")
+    fi
+
+    # Acá empieza el reloj de indisponibilidad, ANTES de llamar al bloque: su paso 2 detiene la API
+    # vieja en los primeros segundos.
+    orq_estado_poner congelado_utc "$(ahora_utc)"
+    sincronizar_reloj
+    ORQ_CONGELADO_SEG="$SECONDS"
+    CONGELADO=1
+
+    orq_bloque deploy/volcado-final-vps.sh "$ENV_VIEJO" --salida "$salida" "${args[@]}"
+    rc="$ORQ_RC_BLOQUE"
+    informar_bloque deploy/volcado-final-vps.sh "$rc"
+    DETALLE_FALLO="volcado-final-vps.sh: $rc"
+    if [[ "$rc" -ne 0 ]]; then
+        orq_estado_poner volcado_salio "$rc"
+    fi
+    case "$rc" in
+        0) ;;
+        9)
+            SALIDA_SUGERIDA="revisar"
+            ESTADO_VIEJO_TXT="detenido (y enmascarado, si el bloque llegó hasta ahí). La lista de contenedores del viejo cambió durante el volcado."
+            abortar 9 "volcado-final-vps.sh salió con 9 (alcance): la lista de contenedores del VPS viejo cambió. Un humano tiene que mirar antes de seguir."
+            ;;
+        4)
+            abortar 6 "volcado-final-vps.sh salió con 4 (traída inválida), después del stop. --continuar vuelve a correr el volcado en una carpeta nueva (con la unit ya enmascarada no se mueve nada más)."
+            ;;
+        *)
+            # 3, 8 o 2: si el bloque no llegó a detener nada, el viejo sigue sirviendo (exit 5). Se
+            # confirma mirando el viejo, no el código.
+            if viejo_intacto; then
+                echo "  - el VPS viejo sigue sirviendo: $ESTADO_VIEJO_TXT"
+                abortar 5 "volcado-final-vps.sh salió con $rc antes del stop: el VPS viejo sigue intacto y sirviendo. Re-correr arranca una corrida nueva."
+            fi
+            abortar 6 "volcado-final-vps.sh salió con $rc después del stop. --continuar vuelve a correr el volcado en una carpeta nueva (con la unit ya enmascarada no se mueve nada más)."
+            ;;
+    esac
+
+    # El bloque dijo OK: el viejo TIENE que haber quedado congelado. Si sigue sirviendo, restaurar
+    # este volcado perdería toda escritura posterior al dump.
+    estado_api VIEJO
+    habilitacion_viejo
+    ESTADO_VIEJO_TXT="stockapp-api dice '$ESTADO_API' y su unit '$HABILITACION'."
+    if [[ "$ESTADO_API" != "inactive" || "$HABILITACION" != "masked" ]]; then
+        DETALLE_FALLO="el viejo no quedó congelado"
+        abortar 6 "volcado-final-vps.sh salió con 0, pero el VPS viejo no quedó congelado ($ESTADO_VIEJO_TXT; se esperaba inactive y masked). No se transfiere ni se restaura nada."
+    fi
+    ESTADO_VIEJO_TXT=""
+    cerrar_paso 6 OK
+}
+
+corte_paso7() {
+    local dir="$ORQ_CORRIDA/volcado" dumps=() manifiestos=() ts_dump ts_man linea inicio
+    local dump_m="" sha_m="" fecha_m="" migr_m="" n_dump=0 n_sha=0 n_fecha=0 n_migr=0 sha_local a b
+    paso 7
+    shopt -s nullglob
+    dumps=("$dir"/volcado-*.dump)
+    manifiestos=("$dir"/volcado-*.manifiesto)
+    shopt -u nullglob
+    if [[ "${#dumps[@]}" -ne 1 || "${#manifiestos[@]}" -ne 1 ]]; then
+        abortar 6 "en $dir tiene que haber exactamente un volcado-*.dump y un volcado-*.manifiesto (hay ${#dumps[@]} y ${#manifiestos[@]}): no se adivina cuál es el de esta corrida (A11)."
+    fi
+    VOLCADO="${dumps[0]##*/}"
+    MANIFIESTO="${manifiestos[0]##*/}"
+    if [[ "$VOLCADO" =~ ^volcado-([0-9]{8}T[0-9]{6}Z)\.dump$ ]]; then ts_dump="${BASH_REMATCH[1]}"; else ts_dump=""; fi
+    if [[ "$MANIFIESTO" =~ ^volcado-([0-9]{8}T[0-9]{6}Z)\.manifiesto$ ]]; then ts_man="${BASH_REMATCH[1]}"; else ts_man=""; fi
+    if [[ -z "$ts_dump" || "$ts_dump" != "$ts_man" ]]; then
+        abortar 6 "el volcado ($VOLCADO) y el manifiesto ($MANIFIESTO) no tienen el mismo <ts> (A11)."
+    fi
+
+    while IFS= read -r linea || [[ -n "$linea" ]]; do
+        [[ "$linea" == "[conteos]" ]] && break
+        case "$linea" in
+            dump=*) dump_m="${linea#dump=}"; n_dump=$((n_dump + 1)) ;;
+            sha256=*) sha_m="${linea#sha256=}"; n_sha=$((n_sha + 1)) ;;
+            fecha_utc=*) fecha_m="${linea#fecha_utc=}"; n_fecha=$((n_fecha + 1)) ;;
+            ultima_migracion=*) migr_m="${linea#ultima_migracion=}"; n_migr=$((n_migr + 1)) ;;
+        esac
+    done < "${manifiestos[0]}" || abortar 6 "no pude leer el manifiesto ${manifiestos[0]}."
+    if [[ "$n_dump" -ne 1 || "$n_sha" -ne 1 || "$n_fecha" -ne 1 || "$n_migr" -ne 1 ]]; then
+        abortar 6 "el manifiesto $MANIFIESTO tiene que traer exactamente una vez dump=, sha256=, fecha_utc= y ultima_migracion=."
+    fi
+    if [[ "$dump_m" != "$VOLCADO" ]]; then
+        abortar 6 "el manifiesto dice dump=$dump_m, pero el volcado de esta corrida es $VOLCADO (A11)."
+    fi
+    if ! sha_local="$(sha256sum -- "${dumps[0]}")"; then
+        abortar 6 "no pude calcular el sha256 de ${dumps[0]}."
+    fi
+    sha_local="${sha_local%% *}"
+    if [[ ! "$sha_m" =~ ^[0-9a-f]{64}$ || "$sha_m" != "$sha_local" ]]; then
+        abortar 6 "el sha256 del dump local ($sha_local) no es el del manifiesto (sha256=$sha_m) (A11)."
+    fi
+    inicio="$(orq_estado_leer inicio_utc)" || abortar 8 "no pude leer inicio_utc del estado de la corrida."
+    if [[ ! "$fecha_m" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] ||
+        ! a="$(date -u -d "$fecha_m" +%s 2>/dev/null)" || ! b="$(date -u -d "$inicio" +%s 2>/dev/null)"; then
+        abortar 6 "no pude interpretar fecha_utc=$fecha_m del manifiesto (o inicio_utc=$inicio)."
+    fi
+    if [[ "$a" -lt "$b" ]]; then
+        abortar 6 "fecha_utc=$fecha_m del manifiesto es anterior al inicio de esta corrida ($inicio): no es el volcado de esta corrida (A11)."
+    fi
+    if [[ ! "$migr_m" =~ ^[0-9]{14}_[A-Za-z0-9_]+$ ]]; then
+        abortar 6 "ultima_migracion=$migr_m del manifiesto no tiene la forma de una migración."
+    fi
+    if [[ ! -f "$dir/backups-historial.tar" ]]; then
+        abortar 6 "falta $dir/backups-historial.tar: el volcado no trajo el historial de backups."
+    fi
+    SHA_VOLCADO="$sha_local"
+    ULTIMA_MIGRACION="$migr_m"
+    orq_estado_poner volcado "$VOLCADO"
+    orq_estado_poner sha256 "$SHA_VOLCADO"
+    echo "  - $VOLCADO (sha256 ${SHA_VOLCADO:0:12}…, fecha_utc $fecha_m, última migración $ULTIMA_MIGRACION)"
+    cerrar_paso 7 OK
+}
+
+# scp_al_nuevo <dir-relativo-al-HOME-remoto> <archivo>...
+scp_al_nuevo() {
+    local destino="$1" err rc=0 salida_err
+    shift
+    if ! orq_tmp_dir || ! err="$(mktemp "$ORQ_TMP_DIR/scp-stderr.XXXXXX")"; then
+        abortar 8 "no pude crear el temporal para el stderr de scp."
+    fi
+    scp -P "$NUEVO_VPS_SSH_PORT" -o BatchMode=yes -- "$@" "${NUEVO_VPS_USER}@${NUEVO_VPS_HOST}:${destino}/" \
+        9>&- 2>"$err" </dev/null || rc=$?
+    salida_err="$(cat "$err" 2>/dev/null)" || salida_err=""
+    rm -f -- "$err"
+    if [[ "$rc" -ne 0 ]]; then
+        [[ -z "$salida_err" ]] || printf '%s\n' "$salida_err" | sed 's/^/    | /' >&2
+        abortar 6 "la copia por scp al VPS nuevo falló (salió con $rc)."
+    fi
+}
+
+corte_paso8() {
+    local nombre="${ORQ_CORRIDA##*/}" dir="$ORQ_CORRIDA/volcado" sha_remoto
+    paso 8
+    D_REL="stockapp-deploy/migracion/$nombre"
+    # Un directorio remoto NUEVO (mkdir sin -p): si ya existe, no se reutiliza ni se mezcla.
+    orq_ssh NUEVO "mkdir -m 700 \"\$HOME/$D_REL\""
+    falla_remota 6 "crear el directorio remoto ~/$D_REL (tiene que ser nuevo)"
+    orq_estado_poner dir_remoto "~/$D_REL"
+    scp_al_nuevo "$D_REL" "$dir/$VOLCADO" "$dir/$MANIFIESTO" "$dir/backups-historial.tar" "$REPO_ROOT/deploy/restaurar-backup.sh"
+    orq_ssh NUEVO "chmod 600 $(rr "$VOLCADO") $(rr "$MANIFIESTO") $(rr backups-historial.tar) && chmod 755 $(rr restaurar-backup.sh)"
+    falla_remota 6 "el chmod de los archivos transferidos"
+    orq_ssh NUEVO "sha256sum $(rr "$VOLCADO")"
+    falla_remota 6 "el sha256sum remoto del volcado"
+    sha_remoto="${ORQ_SALIDA%% *}"
+    if [[ "$sha_remoto" != "$SHA_VOLCADO" ]]; then
+        abortar 6 "el sha256 del volcado en el VPS nuevo (${sha_remoto:-ilegible}) no es el de esta corrida ($SHA_VOLCADO)."
+    fi
+    cerrar_paso 8 OK
+}
+
+# opcion_contenedor_nuevo: " --contenedor <n>" solo si no es el default (nunca se nombra stockapp-pg).
+opcion_contenedor_nuevo() {
+    if [[ "$CONTENEDOR_NUEVO" != "stockapp-pg" ]]; then
+        printf ' --contenedor %s' "$CONTENEDOR_NUEVO"
+    fi
+}
+
+mostrar_salida_remota() {
+    if [[ -n "$ORQ_SALIDA" ]]; then
+        printf '%s\n' "$ORQ_SALIDA" | sed 's/^/    │ /'
+    fi
+    if [[ -n "$ORQ_STDERR" ]]; then
+        printf '%s\n' "$ORQ_STDERR" | sed 's/^/    │ /'
+    fi
+}
+
+corte_paso9() {
+    local cmd rc
+    paso 9
+    # La base del nuevo siempre tiene algo (como mínimo, lo que sembró el primer deploy): --recrear-base
+    # va siempre, con su dump de seguridad (A2).
+    cmd="$(rr restaurar-backup.sh) $(rr "$VOLCADO")$(opcion_contenedor_nuevo) --manifiesto $(rr "$MANIFIESTO")"
+    cmd+=" --recrear-base ${NUEVO_POSTGRES_DB} --dir-seguridad $(rr seguridad)"
+    orq_ssh NUEVO "$cmd"
+    rc="$ORQ_RC"
+    mostrar_salida_remota
+    if [[ "$rc" -eq 255 ]]; then
+        SALIDA_SUGERIDA="investigar"
+        abortar 8 "no pude ejecutar restaurar-backup.sh en el VPS nuevo (ssh salió con 255): no se sabe en qué quedó la base."
+    fi
+    informar_bloque deploy/restaurar-backup.sh "$rc"
+    DETALLE_FALLO="restaurar-backup.sh: $rc"
+    orq_estado_poner restaurar_salio "$rc"
+    # En ningún caso se arranca la API: el conteo se compara ANTES del arranque.
+    case "$rc" in
+        0) RESTAURAR_RC=0 ;;
+        5) abortar 6 "restaurar-backup.sh salió con 5: pg_restore falló y la base del nuevo quedó VACÍA. --continuar reintenta la restauración tal cual." ;;
+        3 | 4) abortar 6 "restaurar-backup.sh salió con $rc (precondición o dump inválido): --continuar repite desde la transferencia (paso 8), a un directorio remoto nuevo." ;;
+        6 | 7)
+            SALIDA_SUGERIDA="reintentar-restauracion"
+            abortar 6 "restaurar-backup.sh salió con $rc: la base del nuevo QUEDÓ restaurada pero no verifica. No se arranca la API."
+            ;;
+        *)
+            SALIDA_SUGERIDA="investigar"
+            abortar 8 "restaurar-backup.sh salió con $rc: no se pudo consultar, falló el dump de seguridad o los argumentos están mal armados. No se arranca la API."
+            ;;
+    esac
+    cerrar_paso 9 OK
+}
+
+corte_paso10() {
+    paso 10
+    orq_ssh NUEVO "sudo -n tar -C ${DIR_STOCKAPP_NUEVO} -xpf $(rr backups-historial.tar)"
+    falla_remota 6 "la extracción del historial de backups en el VPS nuevo"
+    if [[ -n "$RAIZ_NUEVO" ]]; then
+        # En el arnés no existe el usuario stockapp (el sudo simulado corre como el operador).
+        echo "  - chown -R stockapp:stockapp del historial: OMITIDO (arnés)"
+    else
+        orq_ssh NUEVO "sudo -n chown -R stockapp:stockapp ${DIR_STOCKAPP_NUEVO}/backups"
+        falla_remota 6 "el chown del historial de backups en el VPS nuevo"
+    fi
+    cerrar_paso 10 OK
+}
+
+corte_paso11() {
+    local limite
+    paso 11
+    orq_ssh NUEVO "sudo -n systemctl start stockapp-api"
+    if [[ "$ORQ_RC" -eq 255 ]]; then
+        falla_remota 7 "'systemctl start stockapp-api' en el VPS nuevo"
+    elif [[ "$ORQ_RC" -ne 0 ]]; then
+        volcar_stderr
+        journal_nuevo
+        abortar 7 "'systemctl start stockapp-api' falló en el VPS nuevo (salió con $ORQ_RC)."
+    fi
+    # Espera acotada con reloj monotónico: active Y GET / por loopback.
+    limite=$(($(reloj_segundos) + ARRANQUE_ESPERA))
+    while :; do
+        estado_api NUEVO
+        case "$ESTADO_API" in
+            active)
+                orq_ssh NUEVO "curl -fsS --max-time 10 -o /dev/null ${RESOLVE_NUEVO}${URL_NUEVO_LOCAL}/"
+                if [[ "$ORQ_RC" -eq 0 ]]; then
+                    break
+                fi
+                if [[ "$ORQ_RC" -eq 255 ]]; then
+                    consulta_ok "la API nueva por loopback"
+                fi
+                ;;
+            failed)
+                journal_nuevo
+                abortar 7 "la API nueva quedó en 'failed' después del start."
+                ;;
+        esac
+        if [[ "$(reloj_segundos)" -ge "$limite" ]]; then
+            journal_nuevo
+            abortar 7 "la API nueva no respondió en ${ARRANQUE_ESPERA} s (is-active: $ESTADO_API)."
+        fi
+        sleep 2
+    done
+    orq_estado_poner api_nueva_activa_utc "$(ahora_utc)"
+    cerrar_paso 11 OK
+}
+
+# ---------------------------------------------------------------------------------------
+# Verificación automática (spec 6.5.5)
+# ---------------------------------------------------------------------------------------
+
+declare -A V_ESTADO=()
+declare -A V_DETALLE=()
+V_ORDEN=(V1 V2 V3 V4 V5 V6 V7 V8 V10)
+declare -A V_NOMBRE=(
+    [V1]="restauración (restaurar-backup.sh salió con 0)"
+    [V2]="API nueva active y migraciones al día"
+    [V3]="GET / desde esta máquina, validando el TLS"
+    [V4]="/licencia/estado con activada:true"
+    [V5]="login real desde esta máquina"
+    [V6]="conteos después del arranque"
+    [V7]="feed con la versión y el .nupkg completo"
+    [V8]="backups: historial, descarga y uno nuevo"
+    [V10]="VPS viejo enmascarado, inactivo y sin cambios"
+)
+
+v_ok() {
+    V_ESTADO[$1]="OK"
+    V_DETALLE[$1]="${2-}"
+}
+
+v_falla() {
+    V_ESTADO[$1]="FALLÓ"
+    V_DETALLE[$1]="${2-}"
+}
+
+# primera_linea <texto>: para los detalles de un fallo de curl (nunca el cuerpo de una respuesta).
+primera_linea() {
+    printf '%s' "${1%%$'\n'*}"
+}
+
+# psql_nuevo <sql> -> ORQ_RC / ORQ_SALIDA, con la SQL por stdin.
+psql_nuevo() {
+    orq_ssh NUEVO "sudo -n docker exec -i ${CONTENEDOR_NUEVO} psql -U ${NUEVO_POSTGRES_USER} -d ${NUEVO_POSTGRES_DB} -tA -v ON_ERROR_STOP=1" "$1"
+}
+
+verificar_v1() {
+    if [[ "$RESTAURAR_RC" == "0" ]]; then
+        v_ok V1
+    else
+        v_falla V1 "restaurar-backup.sh salió con ${RESTAURAR_RC:-?}"
+    fi
+}
+
+verificar_v2() {
+    local real desde errores rc=0
+    orq_ssh NUEVO "systemctl is-active stockapp-api"
+    if [[ "$ORQ_SALIDA" != "active" || "$ORQ_RC" -ne 0 ]]; then
+        v_falla V2 "is-active dice '${ORQ_SALIDA:-no pude consultar}'"
+        return 0
+    fi
+    psql_nuevo 'SELECT max("MigrationId") FROM "__EFMigrationsHistory";'
+    real="$ORQ_SALIDA"
+    if [[ "$ORQ_RC" -ne 0 || ! "$real" =~ ^[0-9]{14}_[A-Za-z0-9_]+$ ]]; then
+        v_falla V2 "no pude leer la última migración aplicada (salió con $ORQ_RC)"
+        return 0
+    fi
+    if ! printf '%s\n%s\n' "$ULTIMA_MIGRACION" "$real" | LC_ALL=C sort -C; then
+        v_falla V2 "la última migración aplicada ($real) es anterior a la del manifiesto ($ULTIMA_MIGRACION)"
+        return 0
+    fi
+    # Las líneas con error en el journal se INFORMAN y no bloquean: el patrón tiene falsos positivos.
+    desde="$(orq_estado_leer api_nueva_activa_utc)" || desde=""
+    desde="${desde/T/ }"
+    desde="${desde%Z} UTC"
+    orq_ssh NUEVO "sudo -n journalctl -u stockapp-api --since '${desde}' --no-pager -o cat"
+    if [[ "$ORQ_RC" -eq 0 ]]; then
+        errores="$(printf '%s\n' "$ORQ_SALIDA" | grep -ciE 'error|fail|crit|exception')" || rc=$?
+        if [[ "$rc" -gt 1 ]]; then
+            errores="?"
+        fi
+        v_ok V2 "migración $real; $errores línea(s) con error en el journal desde el arranque (se informa, no bloquea)"
+    else
+        v_ok V2 "migración $real; no pude leer el journal (salió con $ORQ_RC; se informa, no bloquea)"
+    fi
+}
+
+verificar_v3() {
+    curl_operador "${URL_NUEVO}/"
+    if [[ "$CURL_RC" -eq 0 ]]; then
+        v_ok V3
+    else
+        v_falla V3 "curl salió con $CURL_RC: $(primera_linea "$CURL_ERR")"
+    fi
+}
+
+verificar_v4() {
+    local activada rc=0
+    curl_operador "${URL_NUEVO}/licencia/estado"
+    if [[ "$CURL_RC" -ne 0 ]]; then
+        v_falla V4 "curl salió con $CURL_RC: $(primera_linea "$CURL_ERR")"
+        return 0
+    fi
+    activada="$(printf '%s' "$CURL_CUERPO" | jq -r '.activada')" || rc=$?
+    if [[ "$rc" -eq 0 && "$activada" == "true" ]]; then
+        v_ok V4
+    else
+        v_falla V4 "activada: ${activada:-ilegible}"
+    fi
+}
+
+verificar_v5() {
+    local cuerpo rc=0
+    TOKEN=""
+    cuerpo="$(PW="$PW" jq -nc --arg u "$VIEJO_VPS_ADMIN_USER" '{nombreUsuario: $u, contrasena: env.PW}')" || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        v_falla V5 "no pude armar el cuerpo del login"
+        return 0
+    fi
+    curl_operador_con "$cuerpo" -X POST -H 'Content-Type: application/json' --data @- "${URL_NUEVO}/auth/login"
+    cuerpo=""
+    if [[ "$CURL_RC" -ne 0 ]]; then
+        CURL_CUERPO=""
+        v_falla V5 "login de '$VIEJO_VPS_ADMIN_USER': curl salió con $CURL_RC: $(primera_linea "$CURL_ERR")"
+        return 0
+    fi
+    rc=0
+    TOKEN="$(printf '%s' "$CURL_CUERPO" | jq -r '.token // empty')" || rc=$?
+    CURL_CUERPO=""
+    if [[ "$rc" -ne 0 || -z "$TOKEN" ]]; then
+        TOKEN=""
+        v_falla V5 "la respuesta del login no trae un token legible"
+        return 0
+    fi
+    v_ok V5 "login de '$VIEJO_VPS_ADMIN_USER'"
+}
+
+verificar_v6() {
+    orq_ssh NUEVO "$(rr restaurar-backup.sh) --verificar-post-arranque --manifiesto $(rr "$MANIFIESTO")$(opcion_contenedor_nuevo)"
+    mostrar_salida_remota
+    if [[ "$ORQ_RC" -eq 0 ]]; then
+        v_ok V6
+    else
+        v_falla V6 "restaurar-backup.sh --verificar-post-arranque salió con $ORQ_RC"
+    fi
+}
+
+verificar_v7() {
+    local version="$VERSION_NUEVO" activo nombre tamano rc=0 estado largo
+    curl_operador "${URL_NUEVO}/updates/releases.win.json"
+    if [[ "$CURL_RC" -ne 0 ]]; then
+        v_falla V7 "el feed: curl salió con $CURL_RC: $(primera_linea "$CURL_ERR")"
+        return 0
+    fi
+    if [[ "$version" == "desconocida" ]]; then
+        version="$(printf '%s' "$CURL_CUERPO" | jq -r '.Assets[] | select(.Type == "Full") | .Version' | sort -V | tail -n 1)" || rc=$?
+    fi
+    activo="$(printf '%s' "$CURL_CUERPO" | jq -r --arg v "$version" '[.Assets[] | select(.Type == "Full" and .Version == $v)] | if length == 1 then "\(.[0].FileName)\t\(.[0].Size)" else empty end')" || rc=$?
+    IFS=$'\t' read -r nombre tamano <<< "$activo" || :
+    if [[ "$rc" -ne 0 || ! "${nombre:-}" =~ ^[A-Za-z0-9._+-]+\.nupkg$ || ! "${tamano:-}" =~ ^[0-9]+$ ]]; then
+        v_falla V7 "el feed no tiene exactamente un paquete Full de la versión $version"
+        return 0
+    fi
+    curl_operador_con "" -I "${URL_NUEVO}/updates/${nombre}"
+    if [[ "$CURL_RC" -ne 0 ]]; then
+        v_falla V7 "HEAD de $nombre: curl salió con $CURL_RC: $(primera_linea "$CURL_ERR")"
+        return 0
+    fi
+    estado="$(printf '%s\n' "$CURL_CUERPO" | tr -d '\r' | sed -n '1s/^HTTP\/[0-9.]* \([0-9]*\).*/\1/p')"
+    largo="$(printf '%s\n' "$CURL_CUERPO" | tr -d '\r' | sed -n 's/^[Cc][Oo][Nn][Tt][Ee][Nn][Tt]-[Ll][Ee][Nn][Gg][Tt][Hh]: *\([0-9]*\)$/\1/p' | tail -n 1)"
+    if [[ "$estado" != "200" || "$largo" != "$tamano" ]]; then
+        v_falla V7 "$nombre: HTTP ${estado:-?} con Content-Length ${largo:-?} (el feed dice Size $tamano)"
+        return 0
+    fi
+    v_ok V7 "versión $version, $nombre de $tamano bytes"
+}
+
+verificar_v8() {
+    local listado rc=0 cantidad vieja maximo limite nuevas exitosas otras nuevo_resultado
+    if [[ -z "$TOKEN" ]]; then
+        v_falla V8 "sin token (falló el login de V5)"
+        return 0
+    fi
+    # El token viaja solo por el stdin de curl -K -, nunca en el comando.
+    listado="$(printf 'header = "Authorization: Bearer %s"' "$TOKEN")"
+    TOKEN=""
+    curl_operador_con "$listado" -K - "${URL_NUEVO}/backups"
+    if [[ "$CURL_RC" -ne 0 ]]; then
+        listado=""
+        v_falla V8 "GET /backups: curl salió con $CURL_RC: $(primera_linea "$CURL_ERR")"
+        return 0
+    fi
+    cantidad="$(printf '%s' "$CURL_CUERPO" | jq -e 'if type == "array" then length else error("no es una lista") end')" || rc=$?
+    if [[ "$rc" -ne 0 || ! "$cantidad" =~ ^[0-9]+$ || "$cantidad" -eq 0 ]]; then
+        listado=""
+        v_falla V8 "GET /backups no lista corridas del historial"
+        return 0
+    fi
+    vieja="$(printf '%s' "$CURL_CUERPO" | jq -r '[.[] | select(.resultado == "Exitosa")] | sort_by(.finalizadaEn) | .[0].id // empty')" || vieja=""
+    maximo="$(printf '%s' "$CURL_CUERPO" | jq -r '[.[].id] | max')" || maximo=""
+    if [[ ! "$vieja" =~ ^[0-9]+$ || ! "$maximo" =~ ^[0-9]+$ ]]; then
+        listado=""
+        v_falla V8 "GET /backups no trae una corrida Exitosa del historial"
+        return 0
+    fi
+    curl_operador_con "$listado" -K - -o /dev/null "${URL_NUEVO}/backups/${vieja}/contenido"
+    if [[ "$CURL_RC" -ne 0 ]]; then
+        listado=""
+        v_falla V8 "GET /backups/${vieja}/contenido (la más vieja): curl salió con $CURL_RC: $(primera_linea "$CURL_ERR")"
+        return 0
+    fi
+    curl_operador_con "$listado" -K - -X POST "${URL_NUEVO}/backups"
+    if [[ "$CURL_RC" -ne 0 ]]; then
+        listado=""
+        v_falla V8 "POST /backups: curl salió con $CURL_RC: $(primera_linea "$CURL_ERR")"
+        return 0
+    fi
+    # La corrida nueva es la de id mayor que el máximo de antes del POST (no se compara la hora de
+    # esta máquina con la del servidor). Espera acotada con reloj monotónico.
+    limite=$(($(reloj_segundos) + BACKUP_ESPERA))
+    while :; do
+        curl_operador_con "$listado" -K - "${URL_NUEVO}/backups"
+        if [[ "$CURL_RC" -ne 0 ]]; then
+            listado=""
+            v_falla V8 "GET /backups tras el POST: curl salió con $CURL_RC: $(primera_linea "$CURL_ERR")"
+            return 0
+        fi
+        rc=0
+        nuevas="$(printf '%s' "$CURL_CUERPO" | jq -r --argjson m "$maximo" '[.[] | select(.id > $m) | .resultado] | join(" ")')" || rc=$?
+        if [[ "$rc" -ne 0 ]]; then
+            listado=""
+            v_falla V8 "GET /backups tras el POST no devolvió una lista legible"
+            return 0
+        fi
+        exitosas=0
+        otras=""
+        for nuevo_resultado in $nuevas; do
+            if [[ "$nuevo_resultado" == "Exitosa" ]]; then exitosas=1; else otras+="$nuevo_resultado "; fi
+        done
+        if [[ -n "$otras" ]]; then
+            listado=""
+            v_falla V8 "la corrida de POST /backups terminó ${otras% }"
+            return 0
+        fi
+        if [[ "$exitosas" -eq 1 ]]; then
+            break
+        fi
+        if [[ "$(reloj_segundos)" -ge "$limite" ]]; then
+            listado=""
+            v_falla V8 "POST /backups no terminó en una corrida Exitosa en ${BACKUP_ESPERA} s"
+            return 0
+        fi
+        sleep 2
+    done
+    listado=""
+    v_ok V8 "$cantidad corridas en el historial, descarga de la #$vieja y una corrida nueva Exitosa"
+}
+
+verificar_v10() {
+    local actual esperado
+    orq_ssh VIEJO "systemctl is-enabled stockapp-api"
+    if [[ "$ORQ_SALIDA" != "masked" || ( "$ORQ_RC" -ne 0 && "$ORQ_RC" -ne 1 ) ]]; then
+        v_falla V10 "is-enabled dice '${ORQ_SALIDA:-no pude consultar}' (se esperaba masked)"
+        return 0
+    fi
+    orq_ssh VIEJO "systemctl is-active stockapp-api"
+    if [[ "$ORQ_SALIDA" != "inactive" || "$ORQ_RC" -ne 3 ]]; then
+        v_falla V10 "is-active dice '${ORQ_SALIDA:-no pude consultar}' (se esperaba inactive)"
+        return 0
+    fi
+    orq_ssh VIEJO "docker ps --format '{{.Names}}'"
+    if [[ "$ORQ_RC" -ne 0 || -z "$ORQ_SALIDA" ]]; then
+        v_falla V10 "no pude consultar la lista de contenedores (salió con $ORQ_RC)"
+        return 0
+    fi
+    actual="$(printf '%s\n' "$ORQ_SALIDA" | LC_ALL=C sort)"
+    esperado="$(cat "$ORQ_CORRIDA/contenedores-viejo.txt" 2>/dev/null)" || esperado=""
+    if [[ "$actual" != "$esperado" ]]; then
+        v_falla V10 "la lista de contenedores cambió: antes '$(printf '%s' "$esperado" | tr '\n' ' ')', ahora '$(printf '%s' "$actual" | tr '\n' ' ')'"
+        return 0
+    fi
+    v_ok V10
+}
+
+V_FALLIDAS=""
+corte_paso12() {
+    local v
+    paso 12
+    verificar_v1
+    verificar_v2
+    verificar_v3
+    verificar_v4
+    verificar_v5
+    verificar_v6
+    verificar_v7
+    verificar_v8
+    verificar_v10
+    TOKEN=""
+    # La referencia de --revertir: si después de esto LogsAuditoria crece, hubo escrituras reales.
+    psql_nuevo 'SELECT count(*) FROM "LogsAuditoria";'
+    if [[ "$ORQ_RC" -eq 0 && "$ORQ_SALIDA" =~ ^[0-9]+$ ]]; then
+        orq_estado_poner logs_auditoria_post_verificacion "$ORQ_SALIDA"
+    else
+        echo "  - no pude contar LogsAuditoria en el VPS nuevo (salió con $ORQ_RC): --revertir no va a tener valor de referencia."
+    fi
+    V_FALLIDAS=""
+    for v in "${V_ORDEN[@]}"; do
+        if [[ "${V_ESTADO[$v]:-}" != "OK" ]]; then
+            V_FALLIDAS+="${V_FALLIDAS:+, }$v"
+        fi
+    done
+    if [[ -z "$V_FALLIDAS" ]]; then
+        cerrar_paso 12 OK
+    else
+        PASO_ABIERTO=0
+        sincronizar_reloj
+        orq_fin_paso FALLÓ "$V_FALLIDAS"
+    fi
+}
+
+corte_paso13() {
+    local congelado fin e n valor resultado nombre detalle
+    paso 13
+    congelado="$(orq_estado_leer congelado_utc)" || congelado=""
+    if e="$(date -u -d "$congelado" +%s 2>/dev/null)"; then
+        fin="$(date -u -d "@$((e + 14 * 86400))" +%Y-%m-%dT%H:%M:%SZ)"
+        orq_estado_poner fin_rollback "$fin"
+    else
+        fin="(no pude calcularlo: congelado_utc ilegible)"
+    fi
+    if [[ -z "$V_FALLIDAS" ]]; then
+        resultado="GO"
+    else
+        resultado="NO-GO"
+    fi
+
+    echo
+    echo "== Resumen del corte =="
+    if [[ "$resultado" == "GO" ]]; then
+        echo "Resultado: GO técnico: todas las verificaciones automáticas dieron OK."
+    else
+        echo "Resultado: NO-GO: fallaron $V_FALLIDAS. La API nueva queda arriba para diagnosticar (las PCs no están instaladas: nadie escribe)."
+    fi
+    echo "Pasos:"
+    for ((n = 1; n <= PASOS_TOTAL; n++)); do
+        valor="$(orq_estado_leer "paso_$n" 2>/dev/null)" || valor="—"
+        printf '  (%2d/%d) %-42s %s\n' "$n" "$PASOS_TOTAL" "${PASO_NOMBRES[$n]}" "$valor"
+    done
+    echo "Verificación:"
+    for v in V1 V2 V3 V4 V5 V6 V7 V8 V9 V10; do
+        if [[ "$v" == "V9" ]]; then
+            printf '  %-4s %-46s %s\n' V9 "smoke de la GUI" "PENDIENTE (agente con scripts/gui-verificacion)"
+            continue
+        fi
+        nombre="${V_NOMBRE[$v]}"
+        detalle="${V_DETALLE[$v]:-}"
+        printf '  %-4s %-46s %s%s\n' "$v" "$nombre" "${V_ESTADO[$v]:-FALLÓ}" "${detalle:+  ($detalle)}"
+    done
+    echo "Pendiente:"
+    echo "  - V9: el smoke de la GUI, por un agente con scripts/gui-verificacion"
+    echo "  - la decisión de GO de Martin"
+    echo "  - instalar las PCs"
+    echo "Fechas:"
+    echo "  - corte (congelamiento del viejo): $congelado"
+    echo "  - fin del rollback (D+14):         $fin"
+    echo "Para volver atrás (el viejo vuelve a servir y el nuevo se detiene):"
+    echo "    deploy/migrar-vps.sh --revertir $ORQ_CORRIDA"
+
+    cerrar_paso 13 OK
+    # resultado es lo último que se escribe.
+    orq_estado_poner resultado "$resultado"
+    if [[ "$resultado" == "GO" ]]; then
+        exit 0
+    fi
+    exit 7
+}
+
+# ---------------------------------------------------------------------------------------
 # Principal
 # ---------------------------------------------------------------------------------------
 
@@ -923,6 +1902,7 @@ main() {
     prevuelo
     cerrar_paso 1 OK
 
+    sincronizar_reloj
     PASO_T0="$SECONDS"
     if [[ "$MODO" == "corte" ]]; then
         orq_paso 2 "$PASOS_TOTAL" "confirmación"
@@ -933,8 +1913,24 @@ main() {
         cerrar_paso 2 OMITIDO "ensayo: sin confirmación" omitido
     fi
 
-    echo "migrar: el pre-vuelo y la confirmación terminaron bien, pero la secuencia del corte todavía no está en esta versión del script. No se tocó nada." >&2
-    exit 1
+    if [[ "$MODO" == "ensayo" ]]; then
+        # El ensayo corre la misma secuencia con el volcado --ensayo y V10 invertido; hasta que esté,
+        # termina acá sin tocar nada (correr la del corte enmascararía el viejo).
+        echo "migrar: la secuencia de --ensayo todavía no está en esta versión del script. No se tocó nada." >&2
+        exit 1
+    fi
+
+    corte_paso3
+    corte_paso4
+    corte_paso5
+    corte_paso6
+    corte_paso7
+    corte_paso8
+    corte_paso9
+    corte_paso10
+    corte_paso11
+    corte_paso12
+    corte_paso13
 }
 
 main
