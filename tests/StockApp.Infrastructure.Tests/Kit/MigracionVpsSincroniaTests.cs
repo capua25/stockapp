@@ -114,6 +114,43 @@ public class MigracionVpsSincroniaTests
     }
 
     /// <summary>
+    /// El conocido bypass de `ufw` por Docker (Docker publica los puertos saltando las reglas)
+    /// no expone Postgres solo si el compose lo publica en loopback: cualquier puerto sin
+    /// `127.0.0.1:` lo dejaría abierto a Internet.
+    /// </summary>
+    [Fact]
+    public void Compose_PostgresSoloEnLoopback()
+    {
+        var texto = Texto("deploy/docker-compose.postgres.yml");
+        var bloque = Regex.Match(texto, @"(?m)^\s*ports:\s*\n((?:\s+-\s+.+\n)+)");
+        Assert.True(bloque.Success, "el compose ya no declara `ports:`");
+
+        var puertos = bloque.Groups[1].Value.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(l => l.Trim().TrimStart('-').Trim().Trim('"', '\'')).ToList();
+        Assert.NotEmpty(puertos);
+        Assert.All(puertos, p => Assert.StartsWith("127.0.0.1:", p));
+        Assert.Single(Regex.Matches(texto, @"(?m)^\s*ports:"));
+    }
+
+    /// <summary>
+    /// El paso 6 de preparar usa la MISMA consulta de "base vacía" que restaurar-backup.sh: si una
+    /// cambia y la otra no, preparar aprobaría una base que restaurar rechaza (o al revés).
+    /// </summary>
+    [Fact]
+    public void Preparar_ConsultaDeBaseVacia_IgualALaDeRestaurar()
+    {
+        static string Normalizar(string sql) => Regex.Replace(sql, @"\s+", " ").Trim();
+        var restaurar = Regex.Match(Texto("deploy/restaurar-backup.sh"),
+            "consultar \"\\$BASE\" \"(SELECT\\s+\\(SELECT count.*?;)\" \"si la base está vac", RegexOptions.Singleline);
+        var preparar = Regex.Match(Texto(Preparar),
+            @"<<'SQL'\s*\n(SELECT\s+\(SELECT count.*?;)\s*\nSQL", RegexOptions.Singleline);
+
+        Assert.True(restaurar.Success, "no encontré la consulta de base vacía en restaurar-backup.sh");
+        Assert.True(preparar.Success, "no encontré la consulta de base vacía en preparar-vps-nuevo.sh");
+        Assert.Equal(Normalizar(restaurar.Groups[1].Value), Normalizar(preparar.Groups[1].Value));
+    }
+
+    /// <summary>
     /// La lista de prohibidos, en un solo lugar. <paramref name="exentos"/> son los tokens que
     /// ese script puede nombrar (el hook, "certbot"; preparar, "ufw" y "certbot"); todo lo demás
     /// se afirma ausente, comentarios incluidos.

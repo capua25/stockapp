@@ -560,18 +560,60 @@ public class OrquestacionLibTests : IDisposable
     }
 
     [Fact]
-    public void Ssh_SinCorrida_EsteTemporalEsLocalYNoQuedaNada()
+    public void Ssh_SinCorrida_ElTemporalViveEnUnDirPrivado0700_YSeBorraAlSalir()
     {
+        // R27: sin corrida (preparar no tiene), el stderr de ssh cae en un `mktemp -d` 0700 propio
+        // dentro de TMPDIR, y el trap EXIT lo borra: al terminar no queda nada en TMPDIR.
         var tmp = Path.Combine(_dir, "tmp");
         Directory.CreateDirectory(tmp);
 
         var r = Correr(PrepararSsh() + $"export TMPDIR='{tmp}'\n" +
             "orq_ssh VIEJO 'ver'\n" +
-            $"ls -A '{tmp}'");
+            "orq_ssh VIEJO 'ver otra vez'\n" +
+            "orq_tmp_dir\n" +
+            "echo \"modo=$(stat -c %a \"$ORQ_TMP_DIR\")\"\n" +
+            "echo \"dentro=$(ls -A \"$ORQ_TMP_DIR\" | wc -l)\"\n" +
+            "echo \"dir=$ORQ_TMP_DIR\"");
 
         Assert.True(r.ExitCode == 0, Diag(r));
-        Assert.Equal("", r.Stdout);
-        Assert.Matches($"STDERR_EN:{Regex.Escape(tmp)}/", RastroSsh());
+        var lineas = r.Stdout.Split('\n');
+        Assert.Equal("modo=700", lineas[0]);
+        Assert.Equal("dentro=0", lineas[1]);   // el stderr de cada llamada se borra al leerlo
+        var dir = lineas[2]["dir=".Length..];
+        Assert.StartsWith(tmp + "/", dir);
+        Assert.Matches($"STDERR_EN:{Regex.Escape(dir)}/", RastroSsh());
+        Assert.Empty(Directory.GetFileSystemEntries(tmp));   // el trap EXIT lo borró
+    }
+
+    [Theory]
+    [InlineData("exit 5", 5)]
+    [InlineData("kill -TERM $$", 130)]
+    [InlineData("kill -INT $$", 130)]
+    public void Ssh_SinCorrida_ElDirPrivadoSeBorraTambienAlAbortarOInterrumpir(string como, int esperado)
+    {
+        var tmp = Path.Combine(_dir, "tmp");
+        Directory.CreateDirectory(tmp);
+
+        var r = Correr(PrepararSsh() + $"export TMPDIR='{tmp}'\n" +
+            "orq_ssh VIEJO 'ver'\n" + como + "\n");
+
+        Assert.True(r.ExitCode == esperado, Diag(r));
+        Assert.Empty(Directory.GetFileSystemEntries(tmp));
+    }
+
+    [Fact]
+    public void Ssh_ConCorrida_NoCreaOtroDirectorio_ElTemporalSigueDentroDeLaCorrida()
+    {
+        var tmp = Path.Combine(_dir, "tmp");
+        Directory.CreateDirectory(tmp);
+
+        var r = Correr(PrepararSsh() + Corrida() + $"export TMPDIR='{tmp}'\n" +
+            "orq_ssh VIEJO 'ver'\n" +
+            "orq_tmp_dir\necho \"dir=$ORQ_TMP_DIR\"");
+
+        Assert.True(r.ExitCode == 0, Diag(r));
+        Assert.Equal($"dir={Path.Combine(Home, "corrida")}", r.Stdout);
+        Assert.Empty(Directory.GetFileSystemEntries(tmp));
     }
 
     [Fact]

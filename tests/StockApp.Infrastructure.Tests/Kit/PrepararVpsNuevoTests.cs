@@ -28,11 +28,26 @@ public class PrepararVpsNuevoTests
     private static string Sq(string s) => "'" + s.Replace("'", "'\\''") + "'";
 
     /// <summary>Host simulado con el dominio de la API resolviendo a su IP (lo normal).</summary>
-    private static HostSimulado CrearHost()
+    private static HostSimulado CrearHost(string baseVacia = "0|0")
     {
         var h = HostSimulado.Crear();
         h.ResolverDominio(Dominio);
+        PlantarPsqlDelCaminoFeliz(h, baseVacia);
         return h;
+    }
+
+    /// <summary>
+    /// Lo que responde `docker exec stockapp-pg psql` en el camino feliz: la base nace vacía
+    /// (consulta de restaurar-backup.sh) y, con la API ya desplegada, tiene tablas, auditoría y
+    /// usuarios. Cada patrón es de una consulta distinta (gana el primero que la contiene).
+    /// </summary>
+    private static void PlantarPsqlDelCaminoFeliz(HostSimulado h, string baseVacia = "0|0")
+    {
+        h.PlantarRespuestaPsql("FROM pg_class c JOIN pg_namespace", baseVacia);
+        h.PlantarRespuestaPsql("FROM information_schema.tables", "31");
+        h.PlantarRespuestaPsql("to_regclass", "t");
+        h.PlantarRespuestaPsql("public.\"LogsAuditoria\"", "1234");
+        h.PlantarRespuestaPsql("public.\"Usuarios\"", "3");
     }
 
     internal sealed record Resultado(int Exit, string Stdout, string Stderr)
@@ -61,8 +76,7 @@ public class PrepararVpsNuevoTests
             Copiar(raizRepo, "deploy/docker-compose.postgres.yml");
 
             Directory.CreateDirectory(Path.Combine(Raiz, "releases", "win"));
-            File.WriteAllText(Path.Combine(Raiz, "releases", "win", "releases.win.json"),
-                $"{{\"Assets\":[{{\"Type\":\"Full\",\"Version\":\"{Version}\",\"FileName\":\"StockApp-{Version}-full.nupkg\"}}]}}\n");
+            EscribirFeed(Version);
             File.WriteAllText(Path.Combine(Raiz, "releases", "win", "StockAppSetup.exe"), "");
 
             EscribirBloqueFalso("deploy/deploy-vps.sh", "deploy-vps.sh", "STUB_DEPLOY_EXIT", creaLaUnit: true);
@@ -85,9 +99,24 @@ public class PrepararVpsNuevoTests
 
         public string Raiz { get; }
         public string Home { get; }
+        public string Releases => Path.Combine(Raiz, "releases", "win");
         public string EnvViejo { get; }
         public string EnvNuevo => Path.Combine(Raiz, "deploy", ".env.vps-nuevo");
         public string Script => Path.Combine(Raiz, "deploy", "preparar-vps-nuevo.sh");
+
+        /// <summary>
+        /// Escribe releases/win con un Full de la versión (el .nupkg es un archivo real, con su
+        /// Size y su SHA256 en el feed, como los deja pack-win.ps1).
+        /// </summary>
+        public void EscribirFeed(string version, string? sha256 = null, int? size = null, bool conNupkg = true)
+        {
+            var nombre = $"StockApp-{version}-full.nupkg";
+            var contenido = System.Text.Encoding.UTF8.GetBytes($"nupkg-falso-{version}");
+            if (conNupkg) File.WriteAllBytes(Path.Combine(Releases, nombre), contenido);
+            var hash = sha256 ?? Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(contenido));
+            File.WriteAllText(Path.Combine(Releases, "releases.win.json"),
+                $"{{\"Assets\":[{{\"Type\":\"Full\",\"Version\":\"{version}\",\"FileName\":\"{nombre}\",\"Size\":{size ?? contenido.Length},\"SHA256\":\"{hash}\"}}]}}\n");
+        }
 
         private void Copiar(string raizRepo, string relativo, bool ejecutable = false)
         {
@@ -97,21 +126,37 @@ public class PrepararVpsNuevoTests
             if (ejecutable) File.SetUnixFileMode(destino, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
         }
 
+        /// <summary>
+        /// Bloque falso: registra sus argumentos y el STOCKAPP_ENV_LOCAL con el que lo llamaron y sale con
+        /// el código pedido. Si sale 0 deja en el host lo que dejaría el real: el deploy instala y habilita la
+        /// unit, abre el puerto de la API y la hace responder `/` y `/licencia/estado`; el publicador deja
+        /// servido el releases.win.json del árbol.
+        /// </summary>
         private void EscribirBloqueFalso(string relativo, string nombre, string variableDeSalida, bool creaLaUnit)
         {
-            var crear = creaLaUnit
-                ? "if [[ \"$rc\" == 0 ]]; then\n" +
-                  "    source \"$HS_DIR/hostsim.env\"\n" +
+            const string preparar =
+                "    source \"$HS_DIR/hostsim.env\"\n" +
+                "    puerto=\"$(sed -n 's/^API_PORT=//p' \"${STOCKAPP_ENV_LOCAL:-/dev/null}\" 2>/dev/null | tail -n 1 || true)\"\n" +
+                "    puerto=\"${puerto:-8443}\"\n" +
+                "    plantar() { docker exec -i -u 0 \"$HS_CONTENEDOR\" bash -c 'mkdir -p \"$(dirname \"$1\")\" && cat > \"$1\"' _ \"$1\"; }\n";
+            var efecto = creaLaUnit
+                ? "if [[ \"$rc\" == 0 ]]; then\n" + preparar +
                   "    docker exec -u 0 \"$HS_CONTENEDOR\" install -D -m 0644 /dev/null /etc/systemd/system/stockapp-api.service\n" +
+                  "    docker exec -u 0 \"$HS_CONTENEDOR\" systemctl enable --now stockapp-api 2>/dev/null\n" +
+                  "    docker exec -u 0 \"$HS_CONTENEDOR\" bash -c \"echo $puerto >> /var/lib/hostsim/puertos\"\n" +
+                  "    printf 'ok' | plantar \"/var/lib/hostsim/http/$puerto/_raiz\"\n" +
+                  "    printf '{\"activada\":true}' | plantar \"/var/lib/hostsim/http/$puerto/licencia/estado\"\n" +
                   "fi\n"
-                : "";
+                : "if [[ \"$rc\" == 0 ]]; then\n" + preparar +
+                  "    plantar \"/var/lib/hostsim/http/$puerto/updates/releases.win.json\" < \"$(dirname \"$0\")/../releases/win/releases.win.json\"\n" +
+                  "fi\n";
             BashLimpio.EscribirEjecutable(Path.Combine(Raiz, relativo),
                 "#!/usr/bin/env bash\n" +
                 $"# Bloque falso de los tests: {nombre}.\n" +
                 "set -euo pipefail\n" +
                 $"{{ printf 'BLOQUE {nombre}'; printf ' %q' \"$@\"; printf ' ENV=%s\\n' \"${{STOCKAPP_ENV_LOCAL:-}}\"; }} >> \"$HS_DIR/rastro.txt\"\n" +
                 $"rc=\"${{{variableDeSalida}:-0}}\"\n" +
-                crear +
+                efecto +
                 "exit \"$rc\"\n");
         }
 
@@ -483,6 +528,7 @@ public class PrepararVpsNuevoTests
         using var h = CrearHost();
         Assert.Equal(0, h.Ejecutar("sudo apt-get install -y docker.io docker-compose-v2").ExitCode);
         h.PlantarContenedorAjeno("stockapp-pg");
+        h.Escribir("/var/lib/hostsim/docker/stockapp-pg/salud", "healthy");   // el compose real trae healthcheck
 
         var r = Correr(h, ConBase("--verificar"));
 
@@ -761,6 +807,7 @@ public class PrepararVpsNuevoTests
     {
         using var h = HostSimulado.Crear(puertoSsh: 2222);
         h.ResolverDominio(Dominio);
+        PlantarPsqlDelCaminoFeliz(h);
 
         var r = Correr(h, ConBase());
 
@@ -864,7 +911,8 @@ public class PrepararVpsNuevoTests
         Assert.Matches(@"\(\s*3/10\) firewall \.+ YA ESTABA", r.Stdout);
         var nuevas = string.Join('\n', LineasSsh(h)[sshAntes..]) + "\n" + string.Join('\n', LineasAdicionales(hostAntes, h.RastroHost()));
         Assert.DoesNotContain("systemd-run", nuevas);
-        Assert.DoesNotContain("enable", nuevas);
+        Assert.DoesNotContain("--force enable", nuevas);   // `is-enabled` (paso 10) es solo una lectura
+        Assert.DoesNotContain("systemctl enable", nuevas);
         Assert.DoesNotContain("ufw allow", nuevas);
     }
 
@@ -998,7 +1046,9 @@ public class PrepararVpsNuevoTests
         var todo = string.Join('\n', LineasSsh(h)) + "\n" + h.RastroHost();
         Assert.DoesNotContain("ufw allow", todo);
         Assert.DoesNotContain("systemd-run", todo);
-        Assert.DoesNotContain("enable", todo);
+        // `--force enable` es habilitar el firewall; `is-enabled` (el paso 10) es solo una lectura.
+        Assert.DoesNotContain("--force enable", todo);
+        Assert.DoesNotContain("systemctl enable", todo);
     }
 
     // ---------- Paso 4: TLS (certbot + deploy-hook) ----------
@@ -1015,7 +1065,10 @@ public class PrepararVpsNuevoTests
     private static void PlantarApiActiva(HostSimulado h)
     {
         h.Escribir("/etc/systemd/system/stockapp-api.service", "[Service]\nExecStart=/bin/true\n");
-        Assert.Equal(0, h.Ejecutar("sudo systemctl start stockapp-api").ExitCode);
+        Assert.Equal(0, h.Ejecutar("sudo systemctl enable --now stockapp-api 2>/dev/null").ExitCode);
+        h.EscucharEn(8443);
+        h.PlantarRespuestaHttp(8443, "/", "ok");
+        h.PlantarRespuestaHttp(8443, "/licencia/estado", "{\"activada\":true}");
     }
 
     [Fact]
@@ -1317,6 +1370,719 @@ public class PrepararVpsNuevoTests
         Assert.Matches(@"\(\s*9/10\) renovación del certificado \.+ FALLÓ", r.Stdout);
         Assert.Equal("active", h.Ejecutar("systemctl is-active stockapp-api").Salida.Trim());
         Assert.NotEqual(0, h.Ejecutar($"test -e ~/{Marcador}").ExitCode);
+    }
+
+    // ---------- Pasos 5 a 8 y 10: .env del servidor, Postgres, primer deploy, feed y verificación final ----------
+
+    private static readonly string RutaEnvServidor = $"/home/{HostSimulado.Usuario}/stockapp-deploy/.env";
+
+    private static string EnvDelServidor(HostSimulado h) => h.Leer(RutaEnvServidor);
+
+    private static Dictionary<string, string> Parsear(string env) =>
+        env.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Where(l => l.Contains('='))
+            .ToDictionary(l => l[..l.IndexOf('=')], l => l[(l.IndexOf('=') + 1)..]);
+
+    private static string Linea(string salida, int n) =>
+        salida.Split('\n').FirstOrDefault(l => Regex.IsMatch(l, $@"\(\s*{n}/10\)")) ?? "";
+
+    private static readonly string[] ClavesDeSecretos = ["POSTGRES_PASSWORD", "JWT_SECRET", "BOOTSTRAP_PASSWORD"];
+
+    [Fact]
+    public void Env_SeGeneraEnElServidor_ConLosValoresFijosYSecretosPropios()
+    {
+        using var h = CrearHost();
+
+        var r = Correr(h, ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*5/10\) \.env del servidor \.+ OK", r.Stdout);
+        var env = Parsear(EnvDelServidor(h));
+        Assert.Equal("stockapp", env["POSTGRES_USER"]);
+        Assert.Equal("stockapp", env["POSTGRES_DB"]);
+        Assert.Equal("admin", env["BOOTSTRAP_ADMIN_USER"]);
+        Assert.Equal("0.0.0.0", env["API_BIND"]);
+        Assert.Equal("https", env["API_SCHEME"]);
+        Assert.Equal("8443", env["API_PORT"]);
+        Assert.Equal(Dominio, env["API_HOSTNAME"]);
+        Assert.Equal("/var/lib/stockapp/tls/fullchain.pem", env["Kestrel__Certificates__Default__Path"]);
+        Assert.Equal("/var/lib/stockapp/tls/privkey.pem", env["Kestrel__Certificates__Default__KeyPath"]);
+        Assert.Equal("false", env["Licencia__Habilitado"]);
+        Assert.Equal("10", env["RateLimiting__Login__PermitLimit"]);
+        Assert.Equal(ClaveValida, env["LICENCIA_CLAVE_PUBLICA_BASE64"]);
+        // Secretos: generados ahí, con la longitud de `openssl rand -base64 24/48`.
+        Assert.Equal(32, env["POSTGRES_PASSWORD"].Length);
+        Assert.Equal(64, env["JWT_SECRET"].Length);
+        Assert.True(env["BOOTSTRAP_PASSWORD"].Length >= 8);
+        Assert.Matches("[0-9]", env["BOOTSTRAP_PASSWORD"]);
+        Assert.Matches("[A-Za-z]", env["BOOTSTRAP_PASSWORD"]);
+        Assert.DoesNotContain(env, kv => kv.Value.StartsWith("CAMBIAR", StringComparison.Ordinal));
+        Assert.Equal($"{HostSimulado.Usuario} 600",
+            h.Ejecutar("stat -c '%U %a' ~/stockapp-deploy/.env").Salida.Trim());
+    }
+
+    [Fact]
+    public void Env_ElScriptRemotoViajaPorStdin_NoPorElComando()
+    {
+        using var h = CrearHost();
+
+        var r = Correr(h, ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        var generar = LineasSsh(h).Where(l => l.Contains("env-escribir")).ToList();
+        Assert.Single(generar);
+        // El comando es solo `bash -s -- env-escribir`: ni el script ni ningún valor van en argv.
+        Assert.EndsWith("bash -s -- env-escribir", generar[0]);
+        Assert.DoesNotContain("openssl", generar[0]);
+        Assert.DoesNotContain(ClaveValida, h.Rastro());
+        Assert.All(ClavesDeSecretos, k => Assert.DoesNotContain(k, generar[0]));
+    }
+
+    [Fact]
+    public void Env_DosCorridasGeneranSecretosDistintos_EnServidoresDistintos()
+    {
+        using var h1 = CrearHost();
+        using var h2 = CrearHost();
+
+        Assert.Equal(0, Correr(h1, ConBase()).Exit);
+        Assert.Equal(0, Correr(h2, ConBase()).Exit);
+
+        var a = Parsear(EnvDelServidor(h1));
+        var b = Parsear(EnvDelServidor(h2));
+        Assert.All(ClavesDeSecretos, k => Assert.NotEqual(a[k], b[k]));
+    }
+
+    [Fact]
+    public void DosCorridas_SegundaTodoYaEstaba_SinAccionesEnElRastro()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        var primera = arbol.Correr(ConBase());
+        Assert.True(primera.Exit == 0, primera.Todo);
+        var operadorAntes = h.Rastro();
+        var hostAntes = h.RastroHost();
+
+        var segunda = arbol.Correr(ConBase());
+
+        Assert.True(segunda.Exit == 0, segunda.Todo);
+        for (var n = 1; n <= 8; n++)
+            Assert.True(Regex.IsMatch(Linea(segunda.Stdout, n), @"\.+ YA ESTABA"), $"paso {n}:\n{segunda.Todo}");
+        Assert.Matches(@"\(\s*9/10\) .* OMITIDO", segunda.Stdout);
+        Assert.Matches(@"\(\s*10/10\) .* OK", segunda.Stdout);
+
+        // Ninguna acción: solo lecturas. El rastro del operador (ssh/scp/bloques) y el del host.
+        var operador = LineasAdicionales(operadorAntes, h.Rastro()).Select(l => l.Replace("\\", "")).ToArray();
+        string[] acciones = ["apt-get", "useradd", "usermod", "install", "certonly", "certbot", "ufw allow", "ufw --force", "systemd-run",
+            "env-escribir", " up -d", "systemctl stop", "systemctl restart"];
+        foreach (var linea in operador)
+        {
+            Assert.False(linea.StartsWith("SCP-ARGS:", StringComparison.Ordinal), "scp en la segunda corrida: " + linea);
+            Assert.False(linea.StartsWith("BLOQUE", StringComparison.Ordinal), "bloque en la segunda corrida: " + linea);
+            Assert.All(acciones, a => Assert.DoesNotContain(a, linea));
+        }
+        var host = LineasAdicionales(hostAntes, h.RastroHost());
+        Assert.DoesNotContain(host, l => l.StartsWith("apt-get") || l.StartsWith("certbot") || l.StartsWith("systemd-run"));
+        Assert.DoesNotContain(host, l => l.StartsWith("ufw allow") || l.StartsWith("ufw --force"));
+        Assert.DoesNotContain(host, l => l.StartsWith("docker compose") && l.Contains(" up"));
+    }
+
+    [Fact]
+    public void EnvExistente_NoSeReescribe()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        Assert.Equal(0, arbol.Correr(ConBase()).Exit);
+        var antes = EnvDelServidor(h);
+        var inodo = h.Ejecutar("stat -c '%i %Y' ~/stockapp-deploy/.env").Salida;
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*5/10\) \.env del servidor \.+ YA ESTABA", r.Stdout);
+        Assert.Equal(antes, EnvDelServidor(h));
+        Assert.Equal(inodo, h.Ejecutar("stat -c '%i %Y' ~/stockapp-deploy/.env").Salida);
+        // El script de escritura corrió UNA vez en total (la primera).
+        Assert.Single(LineasSsh(h).Where(l => l.Contains("env-escribir")));
+    }
+
+    [Fact]
+    public void EnvExistenteConValorFijoDistinto_FallaNombrandoSoloLaClave()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        Assert.Equal(0, arbol.Correr(ConBase()).Exit);
+        Assert.Equal(0, h.Ejecutar("sed -i 's/^API_PORT=.*/API_PORT=9876/' ~/stockapp-deploy/.env").ExitCode);
+        var antes = EnvDelServidor(h);
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 5, r.Todo);
+        Assert.Matches(@"\(\s*5/10\) \.env del servidor \.+ FALLÓ", r.Stdout);
+        Assert.Contains("API_PORT", r.Stderr);
+        Assert.DoesNotContain("9876", r.Todo);
+        Assert.All(ClavesDeSecretos, k => Assert.DoesNotContain(Parsear(antes)[k], r.Todo));
+        Assert.Equal(antes, EnvDelServidor(h));
+        Assert.Single(LineasSsh(h).Where(l => l.Contains("env-escribir")));
+        Assert.DoesNotMatch(@"\(\s*6/10\)", r.Stdout);
+    }
+
+    [Theory]
+    [InlineData("JWT_SECRET", "falta")]
+    [InlineData("POSTGRES_PASSWORD", "cambiar")]
+    [InlineData("LICENCIA_CLAVE_PUBLICA_BASE64", "distinta")]
+    [InlineData("modo", "644")]
+    public void EnvExistenteInvalido_FallaNombrandoSoloLasClaves(string que, string caso)
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        Assert.Equal(0, arbol.Correr(ConBase()).Exit);
+        const string valorPlantado = "CAMBIAR-VALOR-PLANTADO-XYZ";
+        const string otraClave = "MCowBQYDK2VwAyEAzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz=";
+        var comando = caso switch
+        {
+            "falta" => $"sed -i '/^{que}=/d' ~/stockapp-deploy/.env",
+            "cambiar" => $"sed -i 's/^{que}=.*/{que}={valorPlantado}/' ~/stockapp-deploy/.env",
+            "distinta" => $"sed -i 's/^{que}=.*/{que}={otraClave}/' ~/stockapp-deploy/.env",
+            _ => "chmod 644 ~/stockapp-deploy/.env",
+        };
+        Assert.Equal(0, h.Ejecutar(comando).ExitCode);
+        var antes = EnvDelServidor(h);
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 5, r.Todo);
+        Assert.Contains(que, r.Stderr);
+        Assert.DoesNotContain(valorPlantado, r.Todo);
+        Assert.DoesNotContain(otraClave, r.Todo);
+        Assert.Equal(antes, EnvDelServidor(h));
+        Assert.Single(LineasSsh(h).Where(l => l.Contains("env-escribir")));
+    }
+
+    [Fact]
+    public void Env_AparecioEntreLaLecturaYLaEscritura_NoSePisa()
+    {
+        // La lectura dijo "no existe"; mientras tanto alguien creó el archivo. El script remoto
+        // revisa de nuevo antes de escribir (A10): un .env existente nunca se pisa.
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        File.Move(Path.Combine(h.DirOperador, "ssh"), Path.Combine(h.DirOperador, "ssh.real"));
+        BashLimpio.EscribirEjecutable(Path.Combine(h.DirOperador, "ssh"),
+            "#!/usr/bin/env bash\n" +
+            "AQUI=\"$(cd \"$(dirname \"$0\")\" && pwd)\"\n" +
+            "if [[ \"$*\" == *env-escribir* ]]; then\n" +
+            "    source \"$AQUI/hostsim.env\"\n" +
+            "    docker exec -u \"$HS_USUARIO\" -e HOME=\"/home/$HS_USUARIO\" \"$HS_CONTENEDOR\" bash -c 'printf \"PLANTADO=1\\n\" > \"$HOME/stockapp-deploy/.env\"; chmod 600 \"$HOME/stockapp-deploy/.env\"'\n" +
+            "fi\n" +
+            "exec \"$AQUI/ssh.real\" \"$@\"\n");
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 5, r.Todo);
+        Assert.Equal("PLANTADO=1", EnvDelServidor(h).TrimEnd());
+        Assert.Matches(@"\(\s*5/10\) \.env del servidor \.+ FALLÓ", r.Stdout);
+    }
+
+    [Fact]
+    public void Secretos_NuncaEnRastroArgvNiLog()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        var tmp = Path.Combine(arbol.Home, "tmp-operador");
+        Directory.CreateDirectory(tmp);
+        // El ssh del operador registra, por cada llamada, el modo del directorio donde cae su stderr.
+        File.Move(Path.Combine(h.DirOperador, "ssh"), Path.Combine(h.DirOperador, "ssh.real"));
+        BashLimpio.EscribirEjecutable(Path.Combine(h.DirOperador, "ssh"),
+            "#!/usr/bin/env bash\n" +
+            "AQUI=\"$(cd \"$(dirname \"$0\")\" && pwd)\"\n" +
+            "destino=\"$(readlink \"/proc/$$/fd/2\" || true)\"\n" +
+            "printf 'STDERR_DIR %s %s\\n' \"$(stat -c %a -- \"$(dirname \"$destino\")\" 2>/dev/null)\" \"$(dirname \"$destino\")\" >> \"$AQUI/stderr-dirs.txt\"\n" +
+            "exec \"$AQUI/ssh.real\" \"$@\"\n");
+
+        var r = arbol.Correr(ConBase(), new Dictionary<string, string> { ["TMPDIR"] = tmp });
+
+        Assert.True(r.Exit == 0, r.Todo);
+        var env = Parsear(EnvDelServidor(h));
+        var secretos = ClavesDeSecretos.Select(k => env[k]).Append(ClaveValida).ToArray();
+        Assert.All(secretos, v => Assert.False(string.IsNullOrWhiteSpace(v)));
+
+        // stdout y stderr completos, el rastro del operador (argv de ssh y scp, args de curl y los
+        // bloques) y el rastro del host.
+        var visible = r.Stdout + "\n" + r.Stderr + "\n" + h.Rastro() + "\n" + h.RastroHost();
+        foreach (var secreto in secretos) Assert.DoesNotContain(secreto, visible);
+
+        // Archivos de la máquina del operador: el HOME de la corrida y el TMPDIR (el árbol del
+        // repo falso solo tiene el .env del operador y el env-viejo, que ya traen la clave pública).
+        foreach (var archivo in Directory.EnumerateFiles(arbol.Home, "*", SearchOption.AllDirectories)
+                     .Concat(Directory.EnumerateFiles(arbol.Raiz, "*", SearchOption.AllDirectories)
+                         .Where(a => a != arbol.EnvViejo)))
+        {
+            var texto = File.ReadAllText(archivo);
+            foreach (var secreto in secretos.Take(3)) Assert.DoesNotContain(secreto, texto);
+        }
+
+        // R27: los temporales del stderr de ssh viven en un directorio propio 0700 dentro de TMPDIR
+        // y desaparecen al salir (trap EXIT): no queda NADA en TMPDIR.
+        var dirs = File.ReadAllLines(Path.Combine(h.DirOperador, "stderr-dirs.txt"))
+            .Select(l => l.Split(' ', 3)).ToList();
+        Assert.NotEmpty(dirs);
+        Assert.All(dirs, d =>
+        {
+            Assert.Equal("700", d[1]);
+            Assert.StartsWith(tmp + "/", d[2]);
+            Assert.NotEqual(tmp, d[2]);
+        });
+        Assert.Empty(Directory.GetFileSystemEntries(tmp));
+    }
+
+    [Fact]
+    public void BaseNoVaciaSinUnit_Aborta5SinBorrar()
+    {
+        using var h = CrearHost(baseVacia: "12|0");
+        using var arbol = new Arbol(h);
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 5, r.Todo);
+        Assert.Matches(@"\(\s*6/10\) Postgres \.+ FALLÓ", r.Stdout);
+        Assert.Contains("12", r.Stderr);   // las relaciones que encontró
+        Assert.Contains("no está vacía", r.Stderr);
+        Assert.DoesNotMatch(@"\(\s*7/10\)", r.Stdout);
+        Assert.DoesNotContain("BLOQUE", h.Rastro());
+        // Nada se borró: ninguna consulta destructiva, ningún down/rm del contenedor.
+        var consultas = h.Leer("/var/lib/hostsim/psql/consultas.log").ToUpperInvariant();
+        Assert.DoesNotContain("DROP", consultas);
+        Assert.DoesNotContain("DELETE", consultas);
+        Assert.DoesNotContain("TRUNCATE", consultas);
+        Assert.DoesNotContain(LineasSsh(h), l => l.Contains(" down") || l.Contains("rm -f") || l.Contains("volume"));
+    }
+
+    [Fact]
+    public void ConUnitInstalada_NuncaDeployVps()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        Assert.Equal(0, arbol.Correr(ConBase()).Exit);
+        Assert.Contains("BLOQUE deploy-vps.sh", h.Rastro());
+        var antes = h.Rastro();
+
+        var segunda = arbol.Correr(ConBase());
+
+        Assert.True(segunda.Exit == 0, segunda.Todo);
+        Assert.Matches(@"\(\s*7/10\) primer deploy \.+ YA ESTABA", segunda.Stdout);
+        Assert.DoesNotContain("deploy-vps.sh", LineasAdicionales(antes, h.Rastro()).Aggregate("", (a, l) => a + l + "\n"));
+        Assert.Single(h.Rastro().Split('\n').Where(l => l.StartsWith("BLOQUE deploy-vps.sh")));
+    }
+
+    [Fact]
+    public void ConUnitInstaladaDeAntes_NoDesplegaNiConUnaSegundaVersion()
+    {
+        // La unit ya está (la API es producción): ni el primer ni ningún deploy sin backup.
+        using var h = CrearHost();
+        PlantarApiActiva(h);
+        using var arbol = new Arbol(h);
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*7/10\) primer deploy \.+ YA ESTABA", r.Stdout);
+        Assert.DoesNotContain("deploy-vps.sh", h.Rastro());
+    }
+
+    [Fact]
+    public void PrimerDeploy_ConSinBackupYEnvExplicito()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        var rastro = h.Rastro().Split('\n');
+        var iDeploy = Array.FindIndex(rastro, l => l.StartsWith("BLOQUE deploy-vps.sh"));
+        var iFeed = Array.FindIndex(rastro, l => l.StartsWith("BLOQUE publicar-release.sh"));
+        Assert.True(iDeploy >= 0 && iFeed > iDeploy, h.Rastro());
+        Assert.Equal($"BLOQUE deploy-vps.sh {Version} --sin-backup ENV={arbol.EnvNuevo}", rastro[iDeploy]);
+        Assert.Equal($"BLOQUE publicar-release.sh {Version} ENV={arbol.EnvNuevo}", rastro[iFeed]);
+        Assert.Matches(@"\(\s*7/10\) primer deploy \.+ OK", r.Stdout);
+        Assert.Matches(@"\(\s*8/10\) feed de actualizaciones \.+ OK", r.Stdout);
+    }
+
+    [Fact]
+    public void PrimerDeploy_ElBloqueSeEjecutaConLaSalidaSangrada()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        BashLimpio.EscribirEjecutable(Path.Combine(arbol.Raiz, "deploy", "deploy-vps.sh"),
+            "#!/usr/bin/env bash\necho SALIDA-DEL-BLOQUE\necho ERROR-DEL-BLOQUE >&2\nexit 7\n");
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 5, r.Todo);
+        Assert.Matches(@"(?m)^    │ SALIDA-DEL-BLOQUE$", r.Stdout);
+        Assert.Matches(@"(?m)^    │ ERROR-DEL-BLOQUE$", r.Stdout);
+        Assert.Contains("deploy-vps.sh", r.Stderr);
+        Assert.Contains("7", r.Stderr);
+    }
+
+    [Fact]
+    public void DeployFalla_Aborta5_NoSigueAlFeed_YRecorrerRetoma()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+
+        var r = arbol.Correr(ConBase(), new Dictionary<string, string> { ["STUB_DEPLOY_EXIT"] = "7" });
+
+        Assert.True(r.Exit == 5, r.Todo);
+        Assert.Matches(@"\(\s*7/10\) primer deploy \.+ FALLÓ", r.Stdout);
+        Assert.DoesNotMatch(@"\(\s*8/10\)", r.Stdout);
+        Assert.DoesNotContain("publicar-release.sh", h.Rastro());
+        Assert.DoesNotContain("quedó listo", r.Stdout);
+
+        var otra = arbol.Correr(ConBase());
+
+        Assert.True(otra.Exit == 0, otra.Todo);
+        Assert.Matches(@"\(\s*5/10\) \.env del servidor \.+ YA ESTABA", otra.Stdout);
+        Assert.Matches(@"\(\s*6/10\) Postgres \.+ YA ESTABA", otra.Stdout);
+        Assert.Matches(@"\(\s*7/10\) primer deploy \.+ OK", otra.Stdout);
+    }
+
+    [Fact]
+    public void Postgres_ScpDelComposeYUpConElEnvDelServidor()
+    {
+        using var h = CrearHost();
+
+        var r = Correr(h, ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*6/10\) Postgres \.+ OK", r.Stdout);
+        var operador = h.Rastro().Split('\n').Select(l => l.Replace("\\", "")).ToArray();
+        var iScp = Array.FindIndex(operador, l => l.StartsWith("SCP-ARGS:") && l.Contains("docker-compose.postgres.yml"));
+        var iUp = Array.FindIndex(operador, l => l.StartsWith("ARGS:") && l.Contains("compose --env-file .env -f docker-compose.postgres.yml up -d"));
+        Assert.True(iScp >= 0 && iUp > iScp, h.Rastro());
+        // El .env no viaja por scp: lo generó el servidor.
+        Assert.DoesNotContain(operador, l => l.StartsWith("SCP-ARGS:") && l.Contains(".env "));
+        Assert.Equal("healthy", h.Leer("/var/lib/hostsim/docker/stockapp-pg/salud").Trim());
+        Assert.Contains("stockapp-deploy/docker-compose.postgres.yml",
+            operador.First(l => l.StartsWith("SCP-ARGS:") && l.Contains("docker-compose.postgres.yml")));
+    }
+
+    [Fact]
+    public void Postgres_NoLlegaAHealthy_Aborta5Acotado()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        // El contenedor ya existe y no sale de "starting": el `up -d` no lo cambia.
+        h.Escribir("/var/lib/hostsim/docker/stockapp-pg/estado", "running");
+        h.Escribir("/var/lib/hostsim/docker/stockapp-pg/salud", "starting");
+
+        var r = arbol.Correr(ConBase(), new Dictionary<string, string> { ["PREPARAR_ESPERA_PG_SEGUNDOS"] = "3" });
+
+        Assert.True(r.Exit == 5, r.Todo);
+        Assert.Matches(@"\(\s*6/10\) Postgres \.+ FALLÓ", r.Stdout);
+        Assert.Contains("healthy", r.Stderr);
+        Assert.DoesNotMatch(@"\(\s*7/10\)", r.Stdout);
+    }
+
+    [Fact]
+    public void Postgres_ConLaUnit_InformaTablasAuditoriaYUsuariosSinChequearVacia()
+    {
+        using var h = CrearHost(baseVacia: "12|0");   // si se la consultara, abortaría
+        PlantarApiActiva(h);
+        using var arbol = new Arbol(h);
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*6/10\) Postgres \.+ OK", r.Stdout);
+        Assert.Contains("31 tablas", r.Stdout);
+        Assert.Contains("LogsAuditoria: 1234 filas", r.Stdout);
+        Assert.Contains("Usuarios: 3 filas", r.Stdout);
+        Assert.DoesNotContain("FROM pg_class", h.Leer("/var/lib/hostsim/psql/consultas.log"));
+    }
+
+    [Fact]
+    public void Postgres_SinPoderConsultar_NoEsBaseVacia_Aborta8()
+    {
+        using var h = HostSimulado.Crear();
+        h.ResolverDominio(Dominio);
+        // Sin respuesta planteada: la consulta sale 1. "No pude consultar" nunca es "vacía".
+        using var arbol = new Arbol(h);
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 8, r.Todo);
+        Assert.Matches(@"\(\s*6/10\) Postgres \.+ FALLÓ", r.Stdout);
+        Assert.DoesNotContain("BLOQUE", h.Rastro());
+    }
+
+    [Fact]
+    public void Feed_YaServido_NoPublica()
+    {
+        using var h = CrearHost();
+        PlantarApiActiva(h);
+        h.PlantarRespuestaHttp(8443, "/updates/releases.win.json",
+            $"{{\"Assets\":[{{\"Type\":\"Full\",\"Version\":\"{Version}\"}}]}}");
+        using var arbol = new Arbol(h);
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*8/10\) feed de actualizaciones \.+ YA ESTABA", r.Stdout);
+        Assert.DoesNotContain("publicar-release.sh", h.Rastro());
+    }
+
+    [Fact]
+    public void Feed_ServidoUnaVersionMayor_CuentaComoHecho()
+    {
+        using var h = CrearHost();
+        PlantarApiActiva(h);
+        h.PlantarRespuestaHttp(8443, "/updates/releases.win.json",
+            "{\"Assets\":[{\"Type\":\"Full\",\"Version\":\"1.2.2\"},{\"Type\":\"Full\",\"Version\":\"1.10.0\"}]}");
+        using var arbol = new Arbol(h);
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*8/10\) feed de actualizaciones \.+ YA ESTABA", r.Stdout);
+    }
+
+    [Fact]
+    public void Feed_ServidoUnaVersionMenor_Publica()
+    {
+        using var h = CrearHost();
+        PlantarApiActiva(h);
+        h.PlantarRespuestaHttp(8443, "/updates/releases.win.json",
+            "{\"Assets\":[{\"Type\":\"Full\",\"Version\":\"1.2.2\"}]}");
+        using var arbol = new Arbol(h);
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*8/10\) feed de actualizaciones \.+ OK", r.Stdout);
+        Assert.Contains($"BLOQUE publicar-release.sh {Version} ENV={arbol.EnvNuevo}", h.Rastro());
+    }
+
+    [Fact]
+    public void Feed_PublicarFalla_Aborta5()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+
+        var r = arbol.Correr(ConBase(), new Dictionary<string, string> { ["STUB_PUBLICAR_EXIT"] = "4" });
+
+        Assert.True(r.Exit == 5, r.Todo);
+        Assert.Matches(@"\(\s*8/10\) feed de actualizaciones \.+ FALLÓ", r.Stdout);
+        Assert.Contains("publicar-release.sh", r.Stderr);
+        Assert.DoesNotMatch(@"\(\s*10/10\)", r.Stdout);
+        Assert.DoesNotContain("quedó listo", r.Stdout);
+    }
+
+    [Fact]
+    public void Feed_SinPoderConsultar_Aborta8SinPublicar()
+    {
+        // El curl del operador se queda sin respuesta (28, timeout): no es "el feed no está", es
+        // "no pude consultar", y publicar encima sería adivinar.
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        Assert.Equal(0, arbol.Correr(ConBase()).Exit);
+        File.Move(Path.Combine(h.DirOperador, "curl"), Path.Combine(h.DirOperador, "curl.real"));
+        BashLimpio.EscribirEjecutable(Path.Combine(h.DirOperador, "curl"),
+            "#!/usr/bin/env bash\n" +
+            "AQUI=\"$(cd \"$(dirname \"$0\")\" && pwd)\"\n" +
+            "if [[ \"$*\" == *updates/releases.win.json* ]]; then echo 'curl: (28) Connection timed out' >&2; exit 28; fi\n" +
+            "exec \"$AQUI/curl.real\" \"$@\"\n");
+        var antes = h.Rastro();
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 8, r.Todo);
+        Assert.Matches(@"\(\s*8/10\) feed de actualizaciones \.+ FALLÓ", r.Stdout);
+        Assert.DoesNotContain("BLOQUE", string.Join('\n', LineasAdicionales(antes, h.Rastro())));
+    }
+
+    [Fact]
+    public void Final_VerificaDesdeElOperadorSinMenosK()
+    {
+        using var h = CrearHost();
+
+        var r = Correr(h, ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*10/10\) verificación final \.+ OK", r.Stdout);
+        var curls = h.Rastro().Split('\n').Where(l => l.StartsWith("CURL-ARGS:")).ToArray();
+        Assert.Contains(curls, l => l.EndsWith($"https://{Dominio}:8443/"));
+        Assert.Contains(curls, l => l.EndsWith($"https://{Dominio}:8443/licencia/estado"));
+        Assert.Contains(curls, l => l.EndsWith($"https://{Dominio}:8443/updates/releases.win.json"));
+        Assert.All(curls, l =>
+        {
+            Assert.DoesNotContain(" -k", l);
+            Assert.DoesNotContain("--insecure", l);
+            Assert.DoesNotMatch(@" -[a-zA-Z]*k", l);
+        });
+    }
+
+    [Theory]
+    [InlineData("licencia")]
+    [InlineData("raiz")]
+    public void Final_UnaVerificacionFalla_Aborta5NombrandoCual(string cual)
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        Assert.Equal(0, arbol.Correr(ConBase()).Exit);
+        if (cual == "licencia") h.PlantarRespuestaHttp(8443, "/licencia/estado", "{\"activada\":false}");
+        else Assert.Equal(0, h.Ejecutar("sudo rm /var/lib/hostsim/http/8443/_raiz").ExitCode);
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 5, r.Todo);
+        Assert.Matches(@"\(\s*10/10\) verificación final \.+ FALLÓ", r.Stdout);
+        Assert.Contains(cual == "licencia" ? "/licencia/estado" : "GET /", r.Stderr);
+        Assert.DoesNotContain("quedó listo", r.Stdout);
+    }
+
+    [Fact]
+    public void Final_UnidadNoHabilitada_Falla()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        Assert.Equal(0, arbol.Correr(ConBase()).Exit);
+        Assert.Equal(0, h.Ejecutar("sudo systemctl disable stockapp-api").ExitCode);
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 5, r.Todo);
+        Assert.Contains("enabled", r.Stderr);
+    }
+
+    [Fact]
+    public void Verificar_Paso10Falla_NoCambiaElExit()
+    {
+        // R10: el exit de --verificar depende SOLO de los pasos 1 a 8.
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        Assert.Equal(0, arbol.Correr(ConBase()).Exit);
+        h.PlantarRespuestaHttp(8443, "/licencia/estado", "{\"activada\":false}");
+
+        var r = arbol.Correr(ConBase("--verificar"));
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*10/10\) verificación final \.+ FALLÓ", r.Stdout);
+        Assert.DoesNotContain("PENDIENTE", r.Stdout);
+    }
+
+    [Fact]
+    public void Verificar_Paso9ConMarcador_Hecho()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        Assert.Equal(0, arbol.Correr(ConBase("--probar-renovacion")).Exit);
+
+        var r = arbol.Correr(ConBase("--verificar"));
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*9/10\) renovación del certificado \.+ HECHO", r.Stdout);
+    }
+
+    [Fact]
+    public void PuntaAPunta_HostEnBlanco_Exit0YVerificarTodoHecho()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+
+        var primera = arbol.Correr(ConBase());
+
+        Assert.True(primera.Exit == 0, primera.Todo);
+        for (var n = 1; n <= 8; n++)
+            Assert.True(Regex.IsMatch(Linea(primera.Stdout, n), @"\.+ OK"), $"paso {n}:\n{primera.Todo}");
+        Assert.Matches(@"\(\s*0/10\) .*OK", primera.Stdout);
+        Assert.Matches(@"\(\s*9/10\) .* OMITIDO", primera.Stdout);
+        Assert.Matches(@"\(\s*10/10\) .* OK", primera.Stdout);
+        Assert.Contains("el VPS quedó listo", primera.Stdout);
+
+        var antes = h.RastroHost();
+        var verificar = arbol.Correr(ConBase("--verificar"));
+
+        Assert.True(verificar.Exit == 0, verificar.Todo);
+        for (var n = 1; n <= 8; n++)
+            Assert.True(Regex.IsMatch(Linea(verificar.Stdout, n), @"\.+ HECHO"), $"paso {n}:\n{verificar.Todo}");
+        Assert.Matches(@"\(\s*9/10\) .* OMITIDO.*renovación nunca probada", verificar.Stdout);
+        Assert.Matches(@"\(\s*10/10\) .* OK", verificar.Stdout);
+        Assert.DoesNotContain("PENDIENTE", verificar.Stdout);
+        Assert.DoesNotContain("quedó listo", verificar.Stdout);
+        // Solo lectura.
+        var nuevas = string.Join('\n', LineasAdicionales(antes, h.RastroHost()));
+        Assert.DoesNotContain("apt-get", nuevas);
+        Assert.DoesNotContain("ufw allow", nuevas);
+        Assert.DoesNotMatch(@"docker compose .* up", nuevas);
+    }
+
+    [Fact]
+    public void Resumen_ListaLoPendienteParaElOperador()
+    {
+        using var h = CrearHost();
+
+        var r = Correr(h, ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Contains("overrides", r.Stdout);
+        Assert.Contains("--probar-renovacion", r.Stdout);
+        Assert.Contains("Setup.exe", r.Stdout);
+        Assert.Contains(Version, r.Stdout[r.Stdout.IndexOf("Setup.exe", StringComparison.Ordinal)..]);
+    }
+
+    [Fact]
+    public void Resumen_YaProbadaLaRenovacion_NoLaPideDeNuevo()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        Assert.Equal(0, arbol.Correr(ConBase("--probar-renovacion")).Exit);
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        var resumen = r.Stdout[r.Stdout.IndexOf("quedó listo", StringComparison.Ordinal)..];
+        Assert.DoesNotContain("--probar-renovacion", resumen);
+        Assert.Contains("overrides", resumen);
+    }
+
+    // ---------- Pre-vuelo: los paquetes del feed local (existencia, tamaño y SHA256) ----------
+
+    [Theory]
+    [InlineData("sinnupkg", "StockApp-1.2.3-full.nupkg")]
+    [InlineData("shadistinto", "SHA256")]
+    [InlineData("shainvalido", "SHA256")]
+    [InlineData("tamanodistinto", "pesa")]
+    public void Prevuelo_PaqueteDelFeedLocalInvalido_Aborta3SinSsh(string caso, string mensaje)
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        switch (caso)
+        {
+            case "sinnupkg": arbol.EscribirFeed(Version, conNupkg: false); File.Delete(Path.Combine(arbol.Releases, $"StockApp-{Version}-full.nupkg")); break;
+            case "shadistinto": arbol.EscribirFeed(Version, sha256: new string('A', 64)); break;
+            case "shainvalido": arbol.EscribirFeed(Version, sha256: "xyz"); break;
+            default: arbol.EscribirFeed(Version, size: 3); break;
+        }
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.Contains(mensaje, r.Stderr);
+        SinSsh(h);
+    }
+
+    [Fact]
+    public void Prevuelo_ShaEnMinusculasEnElFeed_Vale()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        var sha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            File.ReadAllBytes(Path.Combine(arbol.Releases, $"StockApp-{Version}-full.nupkg")))).ToLowerInvariant();
+        arbol.EscribirFeed(Version, sha256: sha);
+
+        var r = arbol.Correr(ConBase("--verificar"));
+
+        Assert.Matches(@"\(\s*0/10\) .*OK", r.Stdout);
     }
 
     // ---------- Lock ----------

@@ -56,6 +56,23 @@ fi
 # señal sigue ejecutando el script, y un corte seguiría después de la interrupción.
 trap 'exit 130' INT TERM
 
+# Directorio de temporales del operador (ver orq_tmp_dir). El trap EXIT lo borra al terminar, también
+# tras un exit de error o una señal (que pasan por `exit 130`). Un orquestador que necesite su propio
+# trap EXIT tiene que llamar a _orq_tmp_limpiar desde él: poner otro trap reemplaza a este.
+ORQ_TMP_DIR=""
+_ORQ_TMP_PRIVADO=""
+_orq_tmp_limpiar() {
+    # Solo el directorio que creó orq_tmp_dir (nunca el de la corrida, que no es de la lib), y sin
+    # borrado recursivo: lo único que guarda son archivos sueltos de stderr.
+    if [[ -n "$_ORQ_TMP_PRIVADO" ]]; then
+        # Es limpieza al salir: si falla no hay nada más que hacer, y no puede cambiar el exit.
+        rm -f -- "$_ORQ_TMP_PRIVADO"/* "$_ORQ_TMP_PRIVADO"/.[!.]* 2>/dev/null || :
+        rmdir -- "$_ORQ_TMP_PRIVADO" 2>/dev/null || :
+    fi
+    return 0
+}
+trap '_orq_tmp_limpiar' EXIT
+
 _ORQ_PASO_N=""
 _ORQ_PASO_TOTAL=""
 _ORQ_PASO_NOMBRE=""
@@ -119,14 +136,43 @@ orq_hosts_de_ensayo() {
 }
 
 # ---------------------------------------------------------------------------------------
+# Temporales del operador
+# ---------------------------------------------------------------------------------------
+
+# orq_tmp_dir -> define ORQ_TMP_DIR, el directorio donde van los temporales de esta máquina (el
+# stderr de ssh, el de curl). Con una corrida (ORQ_CORRIDA, 700) son los de la corrida. Sin
+# corrida (preparar no tiene) es un `mktemp -d` propio, siempre 0700, que se crea la primera vez y
+# se borra al salir (trap EXIT): así ni un temporal suelto en /tmp ni un directorio compartido. Se
+# llama SIN `$()`: lo que define se pierde dentro de un subshell.
+orq_tmp_dir() {
+    local dir
+    if [[ -n "${ORQ_CORRIDA:-}" ]]; then
+        ORQ_TMP_DIR="$ORQ_CORRIDA"
+        return 0
+    fi
+    if [[ -n "$_ORQ_TMP_PRIVADO" && -d "$_ORQ_TMP_PRIVADO" ]]; then
+        ORQ_TMP_DIR="$_ORQ_TMP_PRIVADO"
+        return 0
+    fi
+    if ! dir="$(mktemp -d "${TMPDIR:-/tmp}/stockapp-orq.XXXXXX")"; then
+        ORQ_TMP_DIR=""
+        echo "orq_tmp_dir: no pude crear el directorio de temporales" >&2
+        return 1
+    fi
+    chmod 700 -- "$dir"
+    _ORQ_TMP_PRIVADO="$dir"
+    ORQ_TMP_DIR="$dir"
+}
+
+# ---------------------------------------------------------------------------------------
 # ssh
 # ---------------------------------------------------------------------------------------
 
 # _orq_ssh_correr <PREFIJO> <comando> <tiene_entrada 0|1> <entrada> [opciones de ssh...]
 # Deja ORQ_RC, ORQ_SALIDA y ORQ_STDERR. Nunca sale. Un 255 (o una configuración incompleta)
 # deja ORQ_SALIDA vacía: lo que haya salido junto con un 255 no es una respuesta.
-# El stderr va a un temporal local (dentro de ORQ_CORRIDA si existe), jamás al servidor, y se
-# borra al leerlo. El fd 9 (lock) se cierra para ssh: un ControlMaster que sobreviva al script
+# El stderr va a un temporal local (ORQ_TMP_DIR: la corrida si existe, si no un directorio 0700
+# propio que se borra al salir), jamás al servidor, y se borra al leerlo. El fd 9 (lock) se cierra para ssh: un ControlMaster que sobreviva al script
 # no puede dejar tomado el lock.
 _orq_ssh_correr() {
     local p="$1" comando="$2" tiene_entrada="$3" entrada="$4" tmp
@@ -142,7 +188,7 @@ _orq_ssh_correr() {
         ORQ_STDERR="orq_ssh: falta ${nombre_host}, ${nombre_usuario} o ${nombre_puerto}"
         return 0
     fi
-    if ! tmp="$(mktemp "${ORQ_CORRIDA:-${TMPDIR:-/tmp}}/ssh-stderr.XXXXXX")"; then
+    if ! orq_tmp_dir 2>/dev/null || ! tmp="$(mktemp "$ORQ_TMP_DIR/ssh-stderr.XXXXXX")"; then
         ORQ_RC=255
         ORQ_STDERR="orq_ssh: no pude crear el temporal para el stderr"
         return 0

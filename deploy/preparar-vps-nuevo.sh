@@ -14,7 +14,10 @@
 #   --version           OBLIGATORIA, sin default. La misma para el deploy y para el feed.
 #   --env-viejo         De donde se lee SOLO LICENCIA_CLAVE_PUBLICA_BASE64, línea por línea y sin
 #                       `source`. Default: deploy/.env.
-#   --verificar         Solo lectura: informa HECHO o PENDIENTE en cada paso, sin aplicar nada.
+#   --verificar         Solo lectura: informa HECHO o PENDIENTE en cada paso, sin aplicar nada. Su exit
+#                       depende SOLO de los pasos 1 a 8 (0 si todos están HECHO, 5 si alguno está
+#                       PENDIENTE, 8 si no pudo consultar). El 9 se informa (HECHO si la renovación se
+#                       probó, OMITIDO si nunca) y el 10 (OK o FALLÓ) sin cambiar el exit.
 #   --probar-renovacion Prueba la renovación del certificado (gasta cupo de Let's Encrypt): solo
 #                       con este flag explícito, una vez y a mano.
 #
@@ -30,6 +33,12 @@
 #
 # Pasos: 0 pre-vuelo | 1 Docker | 2 usuario y directorios | 3 firewall | 4 TLS | 5 .env del
 # servidor | 6 Postgres | 7 primer deploy | 8 feed | 9 renovación | 10 verificación final.
+#
+# Secretos: POSTGRES_PASSWORD, JWT_SECRET y BOOTSTRAP_PASSWORD se generan EN EL SERVIDOR (paso 5) y
+# nunca pasan por esta máquina: ni en argv, ni en archivos, ni en la salida. Lo que viaja al
+# servidor (el script remoto y la clave pública de licencias) va por el stdin de ssh. Un .env que
+# ya existe en el servidor NO se reescribe jamás (regenerar los secretos sobre un volumen de
+# Postgres ya inicializado deja a la API sin poder conectarse).
 #
 # Códigos de salida (estables):
 #   0  el VPS quedó listo (o ya lo estaba)
@@ -162,9 +171,40 @@ correr_paso() {
     orq_paso "$n" "$PASOS_TOTAL" "$nombre"
     PASO_DETALLE=""
 
+    # --verificar no decide con el 9 ni con el 10 (solo con los pasos 1 a 8): se informan y listo.
+    # Paso 9: HECHO si el marcador existe, OMITIDO si la renovación nunca se probó.
+    if [[ "$VERIFICAR" -eq 1 && "$n" -eq 9 ]]; then
+        "paso9_hecho" || rc=$?
+        case "$rc" in
+            0) linea_estado "$n" "$nombre" HECHO ;;
+            1) orq_fin_paso OMITIDO "renovación nunca probada" ;;
+            *) orq_fin_paso OMITIDO "no pude consultar el marcador de la renovación" ;;
+        esac
+        return 0
+    fi
+
     # El paso 9 gasta cupo de Let's Encrypt: solo con el flag explícito. Sin él, nunca se renueva.
     if [[ "$n" -eq 9 && "$PROBAR_RENOVACION" -eq 0 ]]; then
         orq_fin_paso OMITIDO "sin --probar-renovacion"
+        return 0
+    fi
+
+    # Paso 10: solo verifica (no hay nada que aplicar). En --verificar se informa OK o FALLÓ sin
+    # cambiar el exit; fuera de él, una verificación que falla es un paso fallado.
+    if [[ "$n" -eq 10 ]]; then
+        "paso10_hecho" || rc=$?
+        case "$rc" in
+            0) orq_fin_paso OK ;;
+            *)
+                if [[ "$VERIFICAR" -eq 1 ]]; then
+                    orq_fin_paso FALLÓ "$PASO_DETALLE"
+                elif [[ "$rc" -eq 1 ]]; then
+                    abortar 5 "paso $n ($nombre): ${PASO_DETALLE}"
+                else
+                    abortar 8 "paso $n ($nombre): ${PASO_DETALLE}"
+                fi
+                ;;
+        esac
         return 0
     fi
 
@@ -288,6 +328,64 @@ prevuelo_configuracion() {
     fi
 }
 
+# prevuelo_paquetes <releases.win.json>
+# Lo que publicar-release.sh exige al final del camino y que acá se comprueba ANTES de tocar nada:
+# cada paquete del feed dentro de la ventana de versiones que publica (las FEED_VERSIONES_MAX
+# mayores) tiene que ser un nombre seguro, estar en releases/win, pesar lo que dice el feed y
+# tener el SHA256 que dice el feed. Los paquetes de versiones fuera de la ventana no se miran:
+# publicar-release.sh los poda (o los conserva por severity: critical y los pide al servidor).
+prevuelo_paquetes() {
+    local json="$1" ventana max rc=0 invalidos pares nombre tamano ver sha dir local_tam local_sha
+    max="${FEED_VERSIONES_MAX:-5}"
+    if [[ ! "$max" =~ ^[1-9][0-9]*$ ]]; then
+        abortar 3 "FEED_VERSIONES_MAX ('$max') no es un entero positivo."
+    fi
+    dir="$(dirname -- "$json")"
+    ventana="$(jq -r '.Assets[] | select(.Type == "Full") | .Version' "$json" | sort -uV | tail -n "$max" | jq -R . | jq -s .)" || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        abortar 3 "no pude calcular las versiones del feed de releases/win/releases.win.json."
+    fi
+    # FileName y SHA256 vacíos o mal formados se rechazan ACÁ: en el TSV de abajo un campo vacío se
+    # colapsa (el tab es espacio en blanco para IFS) y correría los demás campos en silencio.
+    rc=0
+    invalidos="$(jq -r --argjson v "$ventana" '.Assets[] | select(.Version as $x | $v | index($x))
+        | select(((.FileName // "") == "") or (((.SHA256 // "") | test("^[0-9A-Fa-f]{64}$")) | not))
+        | "FileName=\(.FileName // "")"' "$json")" || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        abortar 3 "no pude validar FileName/SHA256 de releases/win/releases.win.json."
+    fi
+    if [[ -n "$invalidos" ]]; then
+        abortar 3 "releases/win/releases.win.json tiene paquetes con FileName vacío o SHA256 inválido (${invalidos%%$'\n'*}): publicar-release.sh no los publicaría."
+    fi
+    rc=0
+    pares="$(jq -r --argjson v "$ventana" '.Assets[] | select(.Version as $x | $v | index($x))
+        | [.FileName, (.Size | tostring), .Version, .SHA256] | @tsv' "$json")" || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        abortar 3 "no pude leer la lista de paquetes de releases/win/releases.win.json."
+    fi
+    while IFS=$'\t' read -r nombre tamano ver sha; do
+        [[ -n "$nombre" ]] || continue
+        if [[ ! "$nombre" =~ ^[A-Za-z0-9._-]+\.nupkg$ ]]; then
+            abortar 3 "FileName inseguro en el feed de releases/win: '$nombre'."
+        fi
+        if [[ ! "$tamano" =~ ^[0-9]+$ ]]; then
+            abortar 3 "Size inválido para '$nombre' en el feed de releases/win: '$tamano'."
+        fi
+        if [[ ! -f "$dir/$nombre" ]]; then
+            abortar 3 "falta el paquete '$nombre' (versión $ver) en releases/win: publicar-release.sh fallaría."
+        fi
+        local_tam="$(stat -c %s -- "$dir/$nombre")"
+        if [[ "$local_tam" != "$tamano" ]]; then
+            abortar 3 "'$nombre' pesa $local_tam bytes y el feed dice $tamano."
+        fi
+        local_sha="$(sha256sum -- "$dir/$nombre")"
+        local_sha="${local_sha%% *}"
+        if [[ "${local_sha,,}" != "${sha,,}" ]]; then
+            abortar 3 "el SHA256 de '$nombre' no es el que dice el feed de releases/win."
+        fi
+    done <<< "$pares"
+}
+
 prevuelo_local() {
     local json mayor clave rc ips_vps ips_api
 
@@ -307,6 +405,8 @@ prevuelo_local() {
     if [[ "$mayor" != "$VERSION" ]]; then
         abortar 3 "releases/win no tiene la versión $VERSION como la mayor del feed (la mayor es '${mayor:-ninguna}'): publicar-release.sh fallaría al final."
     fi
+
+    prevuelo_paquetes "$json"
 
     # La clave pública de licencias: solo el NOMBRE de la clave se imprime, nunca el valor.
     clave="LICENCIA_CLAVE_PUBLICA_BASE64"
@@ -872,6 +972,533 @@ paso4_aplicar() {
 }
 
 # ---------------------------------------------------------------------------------------
+# Paso 5: .env del servidor (se genera ACÁ, en el servidor; A10)
+# ---------------------------------------------------------------------------------------
+
+# Resultado de paso5_hecho: hecho | pendiente | invalido (existe pero no está bien) y, en ese caso,
+# los NOMBRES de las claves que no cumplen (nunca un valor).
+P5_ESTADO=""
+P5_NOMBRES=""
+
+# p5_entrada <script>: lo que viaja por stdin de ssh. Primero los valores que el script remoto
+# compara o escribe y que vienen del .env del operador (nada secreto: el esquema, el host, el
+# puerto y la clave PÚBLICA de licencias), después el script. Los secretos no pasan por acá.
+p5_entrada() {
+    printf 'E_API_SCHEME=%q\nE_API_HOSTNAME=%q\nE_API_PORT=%q\nE_CLAVE=%q\n' \
+        "$NUEVO_API_SCHEME" "$NUEVO_API_HOSTNAME" "$NUEVO_API_PORT" "$VIEJO_LICENCIA_CLAVE_PUBLICA_BASE64"
+    printf '%s\n' "$1"
+}
+
+# Lee el .env del servidor y dice si está bien. Imprime SOLO: pendiente (no existe), hecho, o
+# `invalido` seguido de los nombres de las claves que faltan, difieren de lo fijo o empiezan con
+# CAMBIAR (y `modo` si el archivo no es 600). Jamás imprime un valor.
+PASO5_LEER="$(cat <<'EOS'
+set -u
+f="$HOME/stockapp-deploy/.env"
+if [ ! -e "$f" ]; then
+    echo pendiente
+    exit 0
+fi
+mal=""
+{ [ -f "$f" ] && [ "$(stat -c %a -- "$f")" = 600 ]; } || mal="$mal modo"
+valor() { sed -n "s/^$1=//p" "$f" | tail -n 1; }
+fijo() {
+    [ "$(valor "$1")" = "$2" ] || mal="$mal $1"
+}
+secreto() {
+    case "$(valor "$1")" in
+        ""|CAMBIAR*) mal="$mal $1" ;;
+    esac
+}
+fijo POSTGRES_USER stockapp
+fijo POSTGRES_DB stockapp
+fijo BOOTSTRAP_ADMIN_USER admin
+fijo API_BIND 0.0.0.0
+fijo API_SCHEME "$E_API_SCHEME"
+fijo API_PORT "$E_API_PORT"
+fijo API_HOSTNAME "$E_API_HOSTNAME"
+fijo Kestrel__Certificates__Default__Path /var/lib/stockapp/tls/fullchain.pem
+fijo Kestrel__Certificates__Default__KeyPath /var/lib/stockapp/tls/privkey.pem
+fijo Licencia__Habilitado false
+fijo RateLimiting__Login__PermitLimit 10
+fijo LICENCIA_CLAVE_PUBLICA_BASE64 "$E_CLAVE"
+secreto POSTGRES_PASSWORD
+secreto JWT_SECRET
+secreto BOOTSTRAP_PASSWORD
+# Cualquier otra clave que haya quedado en el valor de ejemplo.
+while IFS='=' read -r k v; do
+    case "$k" in *[!A-Za-z0-9_]*|"") continue ;; esac
+    case "$v" in
+        CAMBIAR*) case " $mal " in *" $k "*) ;; *) mal="$mal $k" ;; esac ;;
+    esac
+done < "$f"
+if [ -n "$mal" ]; then
+    echo "invalido$mal"
+else
+    echo hecho
+fi
+EOS
+)"
+
+# Genera el .env. Corre con umask 077, escribe con `install -m 600 /dev/null` + append y nunca pisa
+# un archivo existente (sale 17). Los tres secretos nacen acá. Si algo falla después de crear el
+# archivo, lo borra: un .env a medio escribir sería uno "existente" que nadie puede reescribir.
+PASO5_ESCRIBIR="$(cat <<'EOS'
+set -eu
+umask 077
+d="$HOME/stockapp-deploy"
+f="$d/.env"
+[ -d "$d" ] || { echo "falta $d" >&2; exit 20; }
+if [ -e "$f" ]; then
+    echo ya-existe
+    exit 17
+fi
+pg="$(openssl rand -base64 24)"
+jwt="$(openssl rand -base64 48)"
+# La contraseña inicial del admin pide al menos una letra y un número.
+while :; do
+    boot="$(openssl rand -base64 18)"
+    case "$boot" in
+        *[0-9]*) case "$boot" in *[A-Za-z]*) break ;; esac ;;
+    esac
+done
+if [ -z "$pg" ] || [ -z "$jwt" ] || [ -z "$boot" ]; then
+    echo "openssl no generó los secretos" >&2
+    exit 21
+fi
+contenido="POSTGRES_USER=stockapp
+POSTGRES_PASSWORD=$pg
+POSTGRES_DB=stockapp
+JWT_SECRET=$jwt
+BOOTSTRAP_ADMIN_USER=admin
+BOOTSTRAP_PASSWORD=$boot
+LICENCIA_CLAVE_PUBLICA_BASE64=$E_CLAVE
+API_BIND=0.0.0.0
+API_SCHEME=$E_API_SCHEME
+API_PORT=$E_API_PORT
+API_HOSTNAME=$E_API_HOSTNAME
+Kestrel__Certificates__Default__Path=/var/lib/stockapp/tls/fullchain.pem
+Kestrel__Certificates__Default__KeyPath=/var/lib/stockapp/tls/privkey.pem
+Licencia__Habilitado=false
+RateLimiting__Login__PermitLimit=10"
+listo=0
+install -m 600 /dev/null "$f"
+trap '[ "$listo" = 1 ] || rm -f -- "$f"' EXIT
+printf '%s\n' "$contenido" >> "$f"
+listo=1
+echo escrito
+EOS
+)"
+
+paso5_hecho() {
+    local entrada
+    P5_ESTADO=""
+    P5_NOMBRES=""
+    entrada="$(p5_entrada "$PASO5_LEER")"
+    orq_ssh NUEVO "bash -s -- env-leer" "$entrada"
+    if [[ "$ORQ_RC" -ne 0 ]]; then
+        PASO_DETALLE="no pude leer el .env del servidor (salió con $ORQ_RC). ${ORQ_STDERR}"
+        return 8
+    fi
+    case "$ORQ_SALIDA" in
+        hecho)
+            P5_ESTADO=hecho
+            return 0
+            ;;
+        pendiente)
+            P5_ESTADO=pendiente
+            return 1
+            ;;
+        "invalido "*)
+            P5_NOMBRES="${ORQ_SALIDA#invalido }"
+            if [[ ! "$P5_NOMBRES" =~ ^[A-Za-z0-9_]+( [A-Za-z0-9_]+)*$ ]]; then
+                PASO_DETALLE="respuesta ilegible del servidor sobre el .env."
+                return 8
+            fi
+            P5_ESTADO=invalido
+            PASO_DETALLE="el .env del servidor existe pero no está bien; faltan, difieren de lo fijo o siguen en el valor de ejemplo: ${P5_NOMBRES// /, }. No se reescribe (regenerar los secretos sobre un volumen de Postgres ya inicializado deja a la API sin base): corregilo a mano en ~/stockapp-deploy/.env del servidor."
+            if [[ " $P5_NOMBRES " == *" modo "* ]]; then
+                PASO_DETALLE+=" ('modo': el archivo tiene que ser 600.)"
+            fi
+            return 1
+            ;;
+        *)
+            PASO_DETALLE="respuesta ilegible del servidor sobre el .env."
+            return 8
+            ;;
+    esac
+}
+
+paso5_aplicar() {
+    local entrada
+    # Existe pero no está bien: nunca se toca. Se informa y se deja la corrección al operador.
+    if [[ "$P5_ESTADO" == "invalido" ]]; then
+        return 1
+    fi
+    entrada="$(p5_entrada "$PASO5_ESCRIBIR")"
+    orq_ssh NUEVO "bash -s -- env-escribir" "$entrada"
+    case "$ORQ_RC" in
+        0) ;;
+        17)
+            PASO_DETALLE="apareció un .env en el servidor mientras tanto: no se pisa (A10). Re-corré para validarlo."
+            return 1
+            ;;
+        255)
+            PASO_DETALLE="${ORQ_STDERR}"
+            return 8
+            ;;
+        *)
+            PASO_DETALLE="el script remoto que genera el .env salió con $ORQ_RC."
+            return 1
+            ;;
+    esac
+    if [[ "$ORQ_SALIDA" != "escrito" ]]; then
+        PASO_DETALLE="el servidor no confirmó que escribió el .env."
+        return 1
+    fi
+}
+
+# ---------------------------------------------------------------------------------------
+# Paso 6: Postgres (contenedor stockapp-pg)
+# ---------------------------------------------------------------------------------------
+
+# Espera máxima a que el contenedor esté healthy. La variable existe para poder probar el límite sin
+# esperar dos minutos.
+PG_ESPERA="${PREPARAR_ESPERA_PG_SEGUNDOS:-120}"
+
+# P6_SANO (1 running + healthy), P6_ESTADO_TXT (qué dijo), P6_BASE_NO_VACIA.
+P6_SANO=0
+P6_ESTADO_TXT=""
+P6_BASE_NO_VACIA=0
+
+# reloj_segundos: segundos de un reloj MONOTÓNICO (el uptime de Linux; no salta si alguien cambia la
+# hora). Sin /proc/uptime cae en $SECONDS del propio bash.
+reloj_segundos() {
+    local up
+    if [[ -r /proc/uptime ]] && read -r up _ < /proc/uptime; then
+        printf '%s' "${up%%.*}"
+    else
+        printf '%s' "$SECONDS"
+    fi
+}
+
+# Como root (sudo): docker no depende de que la sesión ya tenga el grupo docker.
+PASO6_SALUD="$(cat <<'EOS'
+set -u
+command -v docker >/dev/null 2>&1 || { echo ausente; exit 0; }
+salud="$(docker inspect -f '{{.State.Health.Status}}' stockapp-pg 2>&1)" && rc=0 || rc=$?
+if [ "$rc" != 0 ]; then
+    case "$salud" in
+        *"No such object"*) echo ausente; exit 0 ;;
+        *) echo "$salud" >&2; exit 3 ;;
+    esac
+fi
+run="$(docker inspect -f '{{.State.Running}}' stockapp-pg 2>&1)" || { echo "$run" >&2; exit 3; }
+echo "$salud $run"
+EOS
+)"
+
+# La MISMA consulta de "base vacía" que restaurar-backup.sh (una sincronía de tests la custodia).
+PASO6_BASE_VACIA="$(cat <<'EOS'
+set -u
+docker exec -i stockapp-pg psql -U stockapp -d stockapp -tA -v ON_ERROR_STOP=1 <<'SQL'
+SELECT
+  (SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+      AND n.nspname NOT LIKE 'pg_toast%' AND n.nspname NOT LIKE 'pg_temp%')
+  || '|' ||
+  (SELECT count(*) FROM pg_namespace
+    WHERE nspname NOT IN ('public', 'pg_catalog', 'information_schema')
+      AND nspname NOT LIKE 'pg_toast%' AND nspname NOT LIKE 'pg_temp%');
+SQL
+EOS
+)"
+
+# Con la API ya desplegada la base deja de estar vacía: se informa qué tiene, sin tocar nada.
+PASO6_BASE_INFO="$(cat <<'EOS'
+set -u
+q() { docker exec -i stockapp-pg psql -U stockapp -d stockapp -tA -v ON_ERROR_STOP=1; }
+tablas="$(q <<'SQL'
+SELECT count(*) FROM information_schema.tables
+WHERE table_schema NOT IN ('pg_catalog', 'information_schema') AND table_type = 'BASE TABLE';
+SQL
+)" || exit 3
+echo "tablas=$tablas"
+for t in LogsAuditoria Usuarios; do
+    existe="$(q <<SQL
+SELECT to_regclass(format('public.%I', '$t')) IS NOT NULL;
+SQL
+)" || exit 3
+    if [ "$existe" = f ]; then
+        echo "$t=no existe"
+        continue
+    fi
+    filas="$(q <<SQL
+SELECT count(*) FROM public."$t";
+SQL
+)" || exit 3
+    echo "$t=$filas"
+done
+EOS
+)"
+
+# paso6_salud: deja P6_SANO y P6_ESTADO_TXT. rc 0 / 8.
+paso6_salud() {
+    P6_SANO=0
+    P6_ESTADO_TXT=""
+    orq_ssh NUEVO "sudo -n bash -s" "$PASO6_SALUD"
+    if [[ "$ORQ_RC" -ne 0 ]]; then
+        PASO_DETALLE="no pude consultar el estado de stockapp-pg (salió con $ORQ_RC). ${ORQ_STDERR}"
+        return 8
+    fi
+    case "$ORQ_SALIDA" in
+        ausente) P6_ESTADO_TXT="no existe" ;;
+        "healthy true") P6_SANO=1; P6_ESTADO_TXT="healthy" ;;
+        [a-z]*" "true|[a-z]*" "false) P6_ESTADO_TXT="${ORQ_SALIDA%% *}" ;;
+        *)
+            PASO_DETALLE="respuesta ilegible del servidor sobre stockapp-pg."
+            return 8
+            ;;
+    esac
+}
+
+# paso6_base_vacia: 0 vacía, 1 no vacía (deja PASO_DETALLE), 8 no pude consultar.
+paso6_base_vacia() {
+    local relaciones schemas
+    orq_ssh NUEVO "sudo -n bash -s" "$PASO6_BASE_VACIA"
+    if [[ "$ORQ_RC" -ne 0 ]]; then
+        PASO_DETALLE="no pude consultar si la base está vacía (psql salió con $ORQ_RC). Esto NO es 'base vacía'. ${ORQ_STDERR}"
+        return 8
+    fi
+    if [[ ! "$ORQ_SALIDA" =~ ^([0-9]+)\|([0-9]+)$ ]]; then
+        PASO_DETALLE="respuesta inesperada al chequear si la base está vacía. Esto NO es 'base vacía'."
+        return 8
+    fi
+    relaciones="${BASH_REMATCH[1]}"
+    schemas="${BASH_REMATCH[2]}"
+    if [[ "$relaciones" -ne 0 || "$schemas" -ne 0 ]]; then
+        PASO_DETALLE="la base de stockapp-pg no está vacía ($relaciones relaciones, $schemas schemas extra) y la unit stockapp-api no existe: algo arrancó contra esta base sin pasar por este script. No se borra nada."
+        return 1
+    fi
+}
+
+# paso6_base_info: imprime qué tiene la base. rc 0 / 8.
+paso6_base_info() {
+    local tablas="" auditoria="" usuarios="" linea
+    orq_ssh NUEVO "sudo -n bash -s" "$PASO6_BASE_INFO"
+    if [[ "$ORQ_RC" -ne 0 ]]; then
+        PASO_DETALLE="no pude consultar qué tiene la base (psql salió con $ORQ_RC). ${ORQ_STDERR}"
+        return 8
+    fi
+    while IFS= read -r linea; do
+        case "$linea" in
+            tablas=*) tablas="${linea#tablas=}" ;;
+            LogsAuditoria=*) auditoria="${linea#LogsAuditoria=}" ;;
+            Usuarios=*) usuarios="${linea#Usuarios=}" ;;
+        esac
+    done <<< "$ORQ_SALIDA"
+    if [[ ! "$tablas" =~ ^[0-9]+$ || ! "$auditoria" =~ ^([0-9]+|no\ existe)$ || ! "$usuarios" =~ ^([0-9]+|no\ existe)$ ]]; then
+        PASO_DETALLE="respuesta ilegible del servidor sobre el contenido de la base."
+        return 8
+    fi
+    [[ "$auditoria" =~ ^[0-9]+$ ]] && auditoria+=" filas"
+    [[ "$usuarios" =~ ^[0-9]+$ ]] && usuarios+=" filas"
+    printf '    base: %s tablas, LogsAuditoria: %s, Usuarios: %s\n' "$tablas" "$auditoria" "$usuarios"
+}
+
+# unit_existe: deja UNIT_EXISTE (1 la unit stockapp-api existe, 0 no). rc 0 / 8.
+UNIT_EXISTE=0
+unit_existe() {
+    UNIT_EXISTE=0
+    orq_ssh NUEVO "systemctl show -p LoadState --value stockapp-api.service"
+    if [[ "$ORQ_RC" -ne 0 ]]; then
+        PASO_DETALLE="no pude consultar la unit stockapp-api (salió con $ORQ_RC). ${ORQ_STDERR}"
+        return 8
+    fi
+    case "$ORQ_SALIDA" in
+        loaded) UNIT_EXISTE=1 ;;
+        not-found) UNIT_EXISTE=0 ;;
+        *)
+            PASO_DETALLE="respuesta ilegible sobre la unit stockapp-api."
+            return 8
+            ;;
+    esac
+}
+
+# Hecho = stockapp-pg corriendo y healthy, y la base en el estado que corresponde: vacía si la unit
+# todavía no existe (la primera vez), o simplemente informada si ya existe.
+paso6_hecho() {
+    local rc=0
+    P6_BASE_NO_VACIA=0
+    paso6_salud || return $?
+    if [[ "$P6_SANO" -ne 1 ]]; then
+        return 1
+    fi
+    unit_existe || return $?
+    if [[ "$UNIT_EXISTE" -eq 0 ]]; then
+        paso6_base_vacia || rc=$?
+        if [[ "$rc" -eq 1 ]]; then
+            P6_BASE_NO_VACIA=1
+        fi
+        return "$rc"
+    fi
+    paso6_base_info
+}
+
+paso6_aplicar() {
+    local limite rc=0
+    # La base no está vacía y no hay unit: no se levanta ni se toca nada; se informa (exit 5).
+    if [[ "$P6_BASE_NO_VACIA" -eq 1 ]]; then
+        return 1
+    fi
+
+    scp -P "$NUEVO_VPS_SSH_PORT" -o BatchMode=yes -q "$REPO_ROOT/deploy/docker-compose.postgres.yml" \
+        "${NUEVO_VPS_USER}@${NUEVO_VPS_HOST}:stockapp-deploy/docker-compose.postgres.yml" \
+        9>&- </dev/null 2>/dev/null || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        if [[ "$rc" -eq 255 ]]; then
+            return 8
+        fi
+        PASO_DETALLE="scp del compose de Postgres salió con $rc."
+        return 1
+    fi
+
+    orq_ssh NUEVO 'cd "$HOME/stockapp-deploy" && sudo -n docker compose --env-file .env -f docker-compose.postgres.yml up -d'
+    if [[ "$ORQ_RC" -ne 0 ]]; then
+        volcar_error
+        if [[ "$ORQ_RC" -eq 255 ]]; then
+            return 8
+        fi
+        PASO_DETALLE="'docker compose up -d' salió con $ORQ_RC."
+        return 1
+    fi
+
+    # Espera acotada, con reloj monotónico, a que el healthcheck lo dé por sano.
+    limite=$(($(reloj_segundos) + PG_ESPERA))
+    while :; do
+        paso6_salud || return $?
+        if [[ "$P6_SANO" -eq 1 ]]; then
+            break
+        fi
+        if [[ "$(reloj_segundos)" -ge "$limite" ]]; then
+            PASO_DETALLE="stockapp-pg no llegó a healthy en ${PG_ESPERA} s (estado: ${P6_ESTADO_TXT})."
+            return 1
+        fi
+        sleep 2
+    done
+}
+
+# ---------------------------------------------------------------------------------------
+# Paso 7: primer deploy (solo si la unit no existe)
+# ---------------------------------------------------------------------------------------
+
+paso7_hecho() {
+    local rc=0
+    unit_existe || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        return "$rc"
+    fi
+    if [[ "$UNIT_EXISTE" -eq 1 ]]; then
+        return 0
+    fi
+    return 1
+}
+
+# Con la API instalada preparar NUNCA vuelve a desplegar: después del corte este VPS es producción y
+# un deploy-vps.sh --sin-backup sería un deploy sin backup. Los deploys posteriores se hacen con
+# deploy-vps.sh sin --sin-backup. El exit 0 del bloque ya verificó /licencia/estado, las migraciones
+# y is-active.
+paso7_aplicar() {
+    orq_bloque deploy/deploy-vps.sh "$STOCKAPP_ENV_LOCAL" "$VERSION" --sin-backup
+    if [[ "$ORQ_RC_BLOQUE" -ne 0 ]]; then
+        PASO_DETALLE="deploy-vps.sh salió con $ORQ_RC_BLOQUE (la salida está arriba)."
+        return 1
+    fi
+}
+
+# ---------------------------------------------------------------------------------------
+# Paso 8: feed de actualizaciones
+# ---------------------------------------------------------------------------------------
+
+CURL_RC=0
+CURL_CUERPO=""
+CURL_ERR=""
+
+# curl_operador <url>: GET desde esta máquina, SIN -k (el certificado se valida de verdad). Deja
+# CURL_RC, CURL_CUERPO y CURL_ERR; nunca sale. El stderr va al directorio de temporales privado.
+curl_operador() {
+    local err
+    CURL_RC=0
+    CURL_CUERPO=""
+    CURL_ERR=""
+    if ! orq_tmp_dir || ! err="$(mktemp "$ORQ_TMP_DIR/curl-stderr.XXXXXX")"; then
+        CURL_RC=255
+        CURL_ERR="no pude crear el temporal para el stderr de curl"
+        return 0
+    fi
+    CURL_CUERPO="$(curl -fsS --connect-timeout 10 --max-time 30 "$1" 9>&- 2>"$err" </dev/null)" || CURL_RC=$?
+    CURL_ERR="$(cat "$err" 2>/dev/null)" || CURL_ERR=""
+    rm -f -- "$err"
+}
+
+# consultar_feed: deja FEED_ESTADO = servido (sirve una versión >= la pedida) | viejo | ausente.
+# rc 0 / 8. Un 404 o nadie escuchando es "no hay feed"; cualquier otra falla es "no pude consultar".
+FEED_ESTADO=""
+consultar_feed() {
+    local versiones mayor menor rc=0
+    FEED_ESTADO=""
+    curl_operador "https://${NUEVO_API_HOSTNAME}:${NUEVO_API_PORT}/updates/releases.win.json"
+    case "$CURL_RC" in
+        0) ;;
+        22 | 7)
+            FEED_ESTADO=ausente
+            return 0
+            ;;
+        *)
+            PASO_DETALLE="no pude consultar el feed del servidor (curl salió con $CURL_RC). ${CURL_ERR}"
+            return 8
+            ;;
+    esac
+    versiones="$(printf '%s' "$CURL_CUERPO" | jq -r '.Assets[] | select(.Type == "Full") | .Version')" || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        PASO_DETALLE="el feed que sirve el servidor no es un releases.win.json válido."
+        return 8
+    fi
+    mayor="$(printf '%s\n' "$versiones" | sort -V | tail -n 1)"
+    if [[ -z "$mayor" ]]; then
+        FEED_ESTADO=ausente
+        return 0
+    fi
+    menor="$(printf '%s\n%s\n' "$VERSION" "$mayor" | sort -V | head -n 1)"
+    if [[ "$menor" == "$VERSION" ]]; then
+        FEED_ESTADO=servido
+    else
+        FEED_ESTADO=viejo
+    fi
+}
+
+paso8_hecho() {
+    local rc=0
+    consultar_feed || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        return "$rc"
+    fi
+    if [[ "$FEED_ESTADO" == "servido" ]]; then
+        return 0
+    fi
+    return 1
+}
+
+# El exit 0 del bloque ya verificó el feed por HTTP.
+paso8_aplicar() {
+    orq_bloque build/publicar-release.sh "$STOCKAPP_ENV_LOCAL" "$VERSION"
+    if [[ "$ORQ_RC_BLOQUE" -ne 0 ]]; then
+        PASO_DETALLE="publicar-release.sh salió con $ORQ_RC_BLOQUE (la salida está arriba)."
+        return 1
+    fi
+}
+
+# ---------------------------------------------------------------------------------------
 # Paso 9: prueba de la renovación (solo con --probar-renovacion, una única vez)
 # ---------------------------------------------------------------------------------------
 
@@ -950,17 +1577,98 @@ paso9_aplicar() {
 }
 
 # ---------------------------------------------------------------------------------------
+# Paso 10: verificación final (siempre). Desde esta máquina, sin -k.
+# ---------------------------------------------------------------------------------------
+
+# Junta TODAS las fallas (no se detiene en la primera) y las nombra. rc 0 todo bien, 1 alguna
+# verificación falló (PASO_DETALLE las lista), 8 alguna no se pudo consultar y ninguna falló.
+paso10_hecho() {
+    local base fallos="" sin_consultar="" rc=0 regla
+
+    base="https://${NUEVO_API_HOSTNAME}:${NUEVO_API_PORT}"
+
+    curl_operador "$base/"
+    if [[ "$CURL_RC" -ne 0 ]]; then
+        fallos+="GET / no respondió (curl salió con $CURL_RC); "
+    fi
+
+    curl_operador "$base/licencia/estado"
+    if [[ "$CURL_RC" -ne 0 ]]; then
+        fallos+="GET /licencia/estado no respondió (curl salió con $CURL_RC); "
+    else
+        rc=0
+        printf '%s' "$CURL_CUERPO" | jq -e '.activada == true' >/dev/null 2>&1 || rc=$?
+        if [[ "$rc" -ne 0 ]]; then
+            fallos+="/licencia/estado no dice activada:true; "
+        fi
+    fi
+
+    rc=0
+    consultar_feed || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        sin_consultar+="el feed (${PASO_DETALLE}); "
+    elif [[ "$FEED_ESTADO" != "servido" ]]; then
+        fallos+="el feed no sirve la versión $VERSION; "
+    fi
+
+    rc=0
+    fw_estado || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        sin_consultar+="ufw (${PASO_DETALLE}); "
+    elif [[ "$FW_ACTIVO" -ne 1 || -n "$FW_REGLAS_FALTAN" ]]; then
+        regla="${FW_REGLAS_FALTAN:-las tres reglas}"
+        fallos+="ufw no está activo con las tres reglas (faltan: ${regla}); "
+    fi
+
+    orq_ssh NUEVO "sudo -n openssl x509 -checkend 2592000 -noout -in /etc/letsencrypt/live/${NUEVO_API_HOSTNAME}/fullchain.pem"
+    if [[ "$ORQ_RC" -eq 255 ]]; then
+        sin_consultar+="el certificado (${ORQ_STDERR}); "
+    elif [[ "$ORQ_RC" -ne 0 ]]; then
+        fallos+="el certificado vence en menos de 30 días o no se pudo leer; "
+    fi
+
+    orq_ssh NUEVO "systemctl is-enabled stockapp-api"
+    if [[ "$ORQ_RC" -eq 255 ]]; then
+        sin_consultar+="la unit (${ORQ_STDERR}); "
+    elif [[ "$ORQ_SALIDA" != "enabled" ]]; then
+        fallos+="la unit stockapp-api no está enabled (dice '${ORQ_SALIDA}'); "
+    fi
+
+    orq_ssh NUEVO "sudo -n docker ps --format '{{.Names}}'"
+    if [[ "$ORQ_RC" -ne 0 ]]; then
+        sin_consultar+="docker ps (salió con $ORQ_RC); "
+    elif [[ "$ORQ_SALIDA" != "stockapp-pg" ]]; then
+        fallos+="docker ps no muestra solo stockapp-pg; "
+    fi
+
+    if [[ -n "$fallos" ]]; then
+        PASO_DETALLE="falló: ${fallos%; }"
+        return 1
+    fi
+    if [[ -n "$sin_consultar" ]]; then
+        PASO_DETALLE="no pude consultar: ${sin_consultar%; }"
+        return 8
+    fi
+    PASO_DETALLE=""
+}
+
+# ---------------------------------------------------------------------------------------
 # Programa principal
 # ---------------------------------------------------------------------------------------
 
 # Cada paso es el par pasoN_hecho / pasoN_aplicar; se registra acá con su nombre.
-PASOS=(1 2 3 4 9)
+PASOS=(1 2 3 4 5 6 7 8 9 10)
 declare -A PASOS_NOMBRE=(
     [1]="Docker"
     [2]="usuario y directorios"
     [3]="firewall"
     [4]="certificado TLS"
+    [5]=".env del servidor"
+    [6]="Postgres"
+    [7]="primer deploy"
+    [8]="feed de actualizaciones"
     [9]="renovación del certificado"
+    [10]="verificación final"
 )
 
 main() {
@@ -985,7 +1693,23 @@ main() {
         echo "preparar: todos los pasos están HECHO."
         exit 0
     fi
+    resumen_final
+}
+
+# resumen_final: el VPS quedó listo (todos los pasos terminaron bien) y lo que queda pendiente.
+resumen_final() {
+    local rc=0
     echo "preparar: el VPS quedó listo."
+    echo "Queda pendiente:"
+    echo "  - los overrides del api.env del VPS viejo: sus nombres salen de overrides-api-env.txt del volcado"
+    echo "    (se conocen tras el primer --ensayo de migrar-vps.sh); se cargan a mano en ~/stockapp-deploy/.env del servidor."
+    paso9_hecho || rc=$?
+    case "$rc" in
+        0) ;;
+        1) echo "  - la prueba de la renovación del certificado: correr una vez con --probar-renovacion (gasta cupo de Let's Encrypt)." ;;
+        *) echo "  - la prueba de la renovación del certificado: no pude consultar si ya se hizo (${PASO_DETALLE})." ;;
+    esac
+    echo "  - el Setup.exe de la versión ${VERSION} (releases/win) para instalar en las PCs."
 }
 
 main
