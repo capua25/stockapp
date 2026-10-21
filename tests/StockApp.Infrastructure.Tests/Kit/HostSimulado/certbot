@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+# =======================================================================================
+# certbot -- certbot FALSO del host simulado (no hay Let's Encrypt contra el cual emitir).
+# =======================================================================================
+# Reproduce certbot 2.9.0 (Ubuntu 24.04, paquete `certbot`) en lo que importa a preparar:
+#   certbot certonly --standalone -n --agree-tos -d DOMINIO --deploy-hook HOOK
+#   certbot renew [--force-renewal] --cert-name DOMINIO
+#   - antes de `apt-get install certbot` el comando no existe (lo enlaza apt-get);
+#   - como no-root: `Either run as root, or set --config-dir, --work-dir, and --logs-dir to
+#     writeable paths.` (exit 1);
+#   - puerto 80 ocupado (según `ss`): `Could not bind TCP port 80 because it is already in use
+#     by another process on this system` (exit 1); NO se escribe nada;
+#   - ufw activo sin regla para el 80: `Timeout during connect (likely firewall problem)`
+#     (exit 1): Let's Encrypt valida desde afuera;
+#   - emisión: escribe /etc/letsencrypt/archive/D/{cert,chain,fullchain,privkey}1.pem y
+#     los symlinks de /etc/letsencrypt/live/D/ (como el real: privkey en un archive 0700),
+#     /etc/letsencrypt/renewal/D.conf con `renew_hook = HOOK` (--deploy-hook se guarda así),
+#     y corre el hook como `RENEWED_LINEAGE=/etc/letsencrypt/live/D HOOK`. El certificado es el
+#     autofirmado de 90 días que genera el operador al crear el host (openssl req -x509 -days
+#     90), igual para todos los dominios: no es válido para D, pero vence como uno de LE;
+#   - exit: el código del hook si falla. NO VERIFICADO contra certbot real: el diseño (spec
+#     6.4, TLS) supone que el fallo del hook en la primera emisión se refleja en el exit, y
+#     por eso preparar mira el RESULTADO (live/, renew_hook, PEM copiados) y no el exit;
+#   - certificado vigente (más de 30 días) y sin --force-renewal: `Certificate not yet due for
+#     renewal; no action taken.` (exit 0), sin hook;
+#   - `renew --force-renewal --cert-name D`: nueva versión (cert2.pem...), repunta los symlinks y
+#     vuelve a correr el hook de renewal/D.conf; sin renewal conf: exit 1.
+# NO simula: cuentas ACME y el correo (el real, con -n y sin --email ni
+# --register-unsafely-without-email, probablemente se niega: NO verificado, así que el
+# shim lo acepta), la validación de DNS, múltiples dominios, --dry-run (no corre hooks, como el
+# real: acá sale 0 sin tocar nada), certificados de otras aplicaciones, ni los hooks de
+# /etc/letsencrypt/renewal-hooks.
+# =======================================================================================
+set -euo pipefail
+
+source /usr/local/lib/hostsim/lib.sh
+hs_rastro "$@"
+
+if ! hs_instalado certbot; then
+    echo "bash: line 1: certbot: command not found" >&2
+    exit 127
+fi
+if ! hs_es_root; then
+    echo "Either run as root, or set --config-dir, --work-dir, and --logs-dir to writeable paths." >&2
+    exit 1
+fi
+
+LE=/etc/letsencrypt
+CERT_ORIGEN="${HS_ESTADO}/cert"
+
+orden=""
+dominio=""
+hook=""
+cert_name=""
+forzar=0
+dry=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        certonly|renew) orden="$1"; shift ;;
+        --standalone|-n|--non-interactive|--agree-tos|--quiet) shift ;;
+        --force-renewal) forzar=1; shift ;;
+        --dry-run) dry=1; shift ;;
+        -d|--domain|--domains) dominio="${2:-}"; shift 2 ;;
+        --deploy-hook) hook="${2:-}"; shift 2 ;;
+        --cert-name) cert_name="${2:-}"; shift 2 ;;
+        --version) echo "certbot 2.9.0"; exit 0 ;;
+        -m|--email) shift 2 ;;
+        *) echo "certbot: error: unrecognized arguments: $1" >&2; exit 2 ;;
+    esac
+done
+
+vigente() { # cert vigente por más de 30 días
+    openssl x509 -checkend $((30 * 86400)) -noout -in "$1" >/dev/null 2>&1
+}
+
+correr_hook() { # DOMINIO HOOK -> exit del hook
+    local d="$1" h="$2" rc=0
+    [[ -z "$h" ]] && return 0
+    echo "Running deploy-hook command: ${h}"
+    RENEWED_LINEAGE="${LE}/live/${d}" RENEWED_DOMAINS="$d" "$h" || rc=$?
+    if (( rc != 0 )); then
+        echo "Hook 'deploy-hook' reported error code ${rc}" >&2
+    fi
+    return "$rc"
+}
+
+# Escribe la versión N del certificado en archive/ y repunta live/.
+emitir_version() { # DOMINIO N
+    local d="$1" n="$2"
+    mkdir -p "${LE}/archive/${d}" "${LE}/live/${d}"
+    chmod 0700 "${LE}/archive"
+    chmod 0755 "${LE}/live"
+    install -m 0644 "${CERT_ORIGEN}/cert.pem" "${LE}/archive/${d}/cert${n}.pem"
+    install -m 0644 "${CERT_ORIGEN}/cert.pem" "${LE}/archive/${d}/chain${n}.pem"
+    install -m 0644 "${CERT_ORIGEN}/cert.pem" "${LE}/archive/${d}/fullchain${n}.pem"
+    install -m 0600 "${CERT_ORIGEN}/key.pem" "${LE}/archive/${d}/privkey${n}.pem"
+    local f
+    for f in cert chain fullchain privkey; do
+        ln -sfn "../../archive/${d}/${f}${n}.pem" "${LE}/live/${d}/${f}.pem"
+    done
+}
+
+case "$orden" in
+    certonly)
+        if [[ -z "$dominio" ]]; then
+            echo "certbot: hostsim: falta -d DOMINIO" >&2
+            exit 1
+        fi
+        if (( dry )); then echo "The dry run was successful."; exit 0; fi
+        if [[ -e "${LE}/live/${dominio}/fullchain.pem" ]] && vigente "${LE}/live/${dominio}/fullchain.pem" && (( forzar == 0 )); then
+            echo "Certificate not yet due for renewal; no action taken."
+            exit 0
+        fi
+        if grep -qxF 80 "${HS_ESTADO}/puertos" 2>/dev/null; then
+            echo "Could not bind TCP port 80 because it is already in use by another process on" >&2
+            echo "this system (such as a web server). Please stop the program in question and then" >&2
+            echo "try again." >&2
+            exit 1
+        fi
+        if [[ -e "${HS_ESTADO}/ufw/activo" ]] && ! grep -qxE '80(/tcp)?' "${HS_ESTADO}/ufw/reglas" 2>/dev/null; then
+            echo "Challenge failed for domain ${dominio}" >&2
+            echo "  Timeout during connect (likely firewall problem)" >&2
+            exit 1
+        fi
+        emitir_version "$dominio" 1
+        mkdir -p "${LE}/renewal"
+        {
+            echo "# renew_before_expiry = 30 days"
+            echo "version = 2.9.0"
+            echo "archive_dir = ${LE}/archive/${dominio}"
+            echo "cert = ${LE}/live/${dominio}/cert.pem"
+            echo "privkey = ${LE}/live/${dominio}/privkey.pem"
+            echo "chain = ${LE}/live/${dominio}/chain.pem"
+            echo "fullchain = ${LE}/live/${dominio}/fullchain.pem"
+            echo
+            echo "# Options used in the renewal process"
+            echo "[renewalparams]"
+            echo "authenticator = standalone"
+            echo "server = https://acme-v02.api.letsencrypt.org/directory"
+            [[ -n "$hook" ]] && echo "renew_hook = ${hook}"
+        } > "${LE}/renewal/${dominio}.conf"
+        echo "Successfully received certificate."
+        echo "Certificate is saved at: ${LE}/live/${dominio}/fullchain.pem"
+        correr_hook "$dominio" "$hook"
+        ;;
+    renew)
+        if [[ -z "$cert_name" ]]; then
+            echo "certbot: hostsim: solo se simula renew --cert-name DOMINIO" >&2
+            exit 1
+        fi
+        if (( dry )); then echo "The dry run was successful."; exit 0; fi
+        conf="${LE}/renewal/${cert_name}.conf"
+        if [[ ! -f "$conf" ]]; then
+            echo "Error: no renewal configuration file for ${cert_name}" >&2
+            exit 1
+        fi
+        if (( forzar == 0 )) && vigente "${LE}/live/${cert_name}/fullchain.pem"; then
+            echo "Certificate not yet due for renewal; no action taken."
+            exit 0
+        fi
+        ultimo="$(ls "${LE}/archive/${cert_name}" | sed -n 's/^cert\([0-9]*\)\.pem$/\1/p' | sort -n | tail -1)"
+        emitir_version "$cert_name" $((ultimo + 1))
+        hook_conf="$(sed -n 's/^renew_hook = //p' "$conf" | head -1)"
+        echo "Congratulations, all renewals succeeded."
+        correr_hook "$cert_name" "$hook_conf"
+        ;;
+    *)
+        echo "certbot: hostsim: orden no simulada" >&2
+        exit 1
+        ;;
+esac

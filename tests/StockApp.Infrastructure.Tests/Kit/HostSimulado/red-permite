@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# =======================================================================================
+# red-permite -- ¿llega hoy una conexión TCP NUEVA desde afuera al puerto $1 de este host?
+# =======================================================================================
+# Es la "red" del host simulado, y la consultan el ssh/scp/curl falsos del operador
+# (docker exec ... red-permite <puerto>). Reproduce lo que importa de ufw 0.36 con la política
+# por defecto de Ubuntu (incoming: deny): con ufw activo, solo pasa lo que tiene una regla
+# `allow N` o `allow N/tcp`.
+#
+# Exit: 0 llega; 1 bloqueado por el firewall (el cliente real vería un timeout);
+#       2 nadie escucha en ese puerto (el cliente real vería "Connection refused").
+# Solo mira puertos en todas las interfaces: un puerto en loopback (127.0.0.1:5433) no es
+# alcanzable desde afuera. Las conexiones YA establecidas (ControlMaster) no pasan por acá:
+# conntrack las deja pasar, y las modela el ssh falso.
+# NO simula: IPv6, reglas con origen/destino, límites de tasa, ni la política de salida.
+# =======================================================================================
+set -euo pipefail
+
+HS_ESTADO=/var/lib/hostsim
+puerto="${1:?uso: red-permite <puerto>}"
+
+grep -qxF -- "$puerto" "${HS_ESTADO}/puertos" 2>/dev/null || exit 2
+[[ -e "${HS_ESTADO}/ufw/activo" ]] || exit 0
+grep -qxE -- "${puerto}(/tcp)?" "${HS_ESTADO}/ufw/reglas" 2>/dev/null && exit 0
+exit 1

@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# =======================================================================================
+# ssh -- ssh FALSO del operador contra el host simulado.
+# =======================================================================================
+# Reproduce de OpenSSH 9.6 (Ubuntu 24.04) lo que importa a los orquestadores:
+#   ssh [-p PUERTO] [-o Opción=valor]... [-i/-F/-l ...] usuario@host COMANDO...
+#   - registra `ARGS:` + los argumentos con `printf ' %q'` (el mismo rastro que el ssh falso de
+#     DeployVpsTests); el stdin NO se registra, para que los secretos que viajan por ahí no
+#     aparezcan en el rastro;
+#   - host distinto del simulado: `Could not resolve hostname X: Name or service not known`
+#     (255); usuario distinto de stockapp-deploy-user: `Permission denied (publickey).` (255);
+#     puerto sin nada escuchando: `Connection refused` (255); firewall que no deja pasar:
+#     `Connection timed out` (255); ver lib-red.sh para el ControlMaster;
+#   - el comando corre con `bash -c` como el usuario, en una sesión nueva del contenedor (PATH
+#     de Ubuntu con /usr/local/sbin, HOME, grupos de /etc/group en ese momento), con el stdin del
+#     cliente, y devuelve su stdout, stderr y exit code. Como en ssh real, los argumentos del
+#     comando se unen con espacios.
+# NO simula: sesión interactiva (sin comando sale 255), reenvío de puertos, known_hosts,
+# claves, -t/-T, ni la salida `Warning: Permanently added...`.
+# =======================================================================================
+set -uo pipefail
+
+AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${AQUI}/lib-red.sh"
+
+{ printf 'ARGS:'; printf ' %q' "$@"; printf '\n'; } >> "$HS_RASTRO"
+
+puerto=22
+usuario_l=""
+opciones=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -p) puerto="${2:-}"; shift 2 ;;
+        -p[0-9]*) puerto="${1#-p}"; shift ;;
+        -o) opciones+=("${2:-}"); shift 2 ;;
+        -o?*) opciones+=("${1#-o}"); shift ;;
+        -l) usuario_l="${2:-}"; shift 2 ;;
+        -i|-F|-J|-L|-R|-D|-b|-c|-E|-e|-I|-m|-O|-S|-W|-w) shift 2 ;;
+        -[46AaCfGgKkMNnqsTtVvXxYy]*) shift ;;
+        -*) echo "unknown option -- ${1#-}" >&2; exit 255 ;;
+        *) break ;;
+    esac
+done
+
+destino="${1:-}"
+if [[ -z "$destino" ]]; then
+    echo "usage: ssh [-options] destination [command]" >&2
+    exit 255
+fi
+shift
+if [[ "$destino" == *@* ]]; then
+    usuario="${destino%@*}"
+    host="${destino#*@}"
+else
+    usuario="${usuario_l:-$(id -un)}"
+    host="$destino"
+fi
+
+if [[ "$host" != "$HS_HOST" && "$host" != "$HS_IP" ]]; then
+    echo "ssh: Could not resolve hostname ${host}: Name or service not known" >&2
+    exit 255
+fi
+if (($# == 0)); then
+    echo "ssh: hostsim: sesión interactiva no simulada" >&2
+    exit 255
+fi
+
+desactivado=0
+hs_maestro_desactivado "${opciones[@]+"${opciones[@]}"}" && desactivado=1
+hs_conectar "$puerto" "$desactivado" "$usuario" || exit 255
+
+comando="$*"
+hs_sesion "$usuario" bash -c "$comando"

@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# =======================================================================================
+# /usr/sbin/ufw -- ufw FALSO del host simulado (vive donde vive el real: la reversa del
+# firewall arma `systemd-run ... /usr/sbin/ufw disable`).
+# =======================================================================================
+# Reproduce ufw 0.36.2 (Ubuntu 24.04), con IPv6 habilitado (cada regla tiene su gemela "(v6)"):
+#   - solo root: como no-root, `ERROR: You need to be root to run this script` (exit 1);
+#   - `allow N` / `allow N/tcp` / `allow N/udp`: la primera vez imprime `Rules updated` y
+#     `Rules updated (v6)`; una regla idéntica ya existente imprime `Skipping adding existing
+#     rule` (y la (v6)) y NO se duplica. `22` y `22/tcp` son reglas distintas, como en ufw;
+#   - `--force enable` / `enable`: activa el firewall (`Firewall is active and enabled on
+#     system startup`). Sin --force pregunta `Command may disrupt existing ssh connections.
+#     Proceed with operation (y|n)?` por stdin; sin un `y`, `Aborted` (exit 0);
+#   - `disable`: `Firewall stopped and disabled on system startup`;
+#   - `status`: `Status: inactive`, o `Status: active` + tabla To/Action/From con las reglas.
+#     El formato de columnas es el de ufw pero sin el relleno de espacios al final.
+# La red del host (red-permite) lee este estado: con ufw activo y sin regla para un puerto, las
+# conexiones nuevas a ese puerto no llegan.
+#
+# DIFERENCIA INTENCIONAL: `ufw reset` (con o sin --force) sale 1 sin tocar nada y queda en el
+# rastro del host. El real borra todas las reglas: el flujo de preparar no debe usarlo NUNCA, y
+# un test lo vigila mirando el rastro.
+# NO simula: política por defecto, `deny`/`delete`/`limit`, `status verbose|numbered`, reglas
+# con origen/destino/interfaz, `logging`, ni los archivos /etc/ufw.
+# =======================================================================================
+set -euo pipefail
+
+source /usr/local/lib/hostsim/lib.sh
+hs_rastro "$@"
+
+if ! hs_es_root; then
+    echo "ERROR: You need to be root to run this script" >&2
+    exit 1
+fi
+
+D="${HS_ESTADO}/ufw"
+mkdir -p "$D"
+touch "${D}/reglas"
+
+forzar=0
+if [[ "${1:-}" == "--force" ]]; then
+    forzar=1
+    shift
+fi
+
+listar_estado() {
+    if [[ ! -e "${D}/activo" ]]; then
+        echo "Status: inactive"
+        return
+    fi
+    echo "Status: active"
+    echo
+    printf '%-26s %-11s %s\n' "To" "Action" "From"
+    printf '%-26s %-11s %s\n' "--" "------" "----"
+    local r
+    while IFS= read -r r; do
+        [[ -z "$r" ]] && continue
+        printf '%-26s %-11s %s\n' "$r" "ALLOW" "Anywhere"
+        printf '%-26s %-11s %s\n' "$r (v6)" "ALLOW" "Anywhere (v6)"
+    done < "${D}/reglas"
+}
+
+case "${1:-}" in
+    allow)
+        regla="${2:-}"
+        if [[ ! "$regla" =~ ^([0-9]+)(/(tcp|udp))?$ ]]; then
+            echo "ERROR: Bad port '${regla}'" >&2
+            exit 1
+        fi
+        if (( 10#${BASH_REMATCH[1]} < 1 || 10#${BASH_REMATCH[1]} > 65535 )); then
+            echo "ERROR: Bad port '${BASH_REMATCH[1]}'" >&2
+            exit 1
+        fi
+        if grep -qxF -- "$regla" "${D}/reglas"; then
+            echo "Skipping adding existing rule"
+            echo "Skipping adding existing rule (v6)"
+        else
+            echo "$regla" >> "${D}/reglas"
+            echo "Rules updated"
+            echo "Rules updated (v6)"
+        fi
+        ;;
+    enable)
+        if [[ "$forzar" != 1 ]]; then
+            printf 'Command may disrupt existing ssh connections. Proceed with operation (y|n)? '
+            respuesta=""
+            read -r respuesta || true
+            if [[ "$respuesta" != "y" && "$respuesta" != "Y" ]]; then
+                echo "Aborted"
+                exit 0
+            fi
+        fi
+        touch "${D}/activo"
+        echo "Firewall is active and enabled on system startup"
+        ;;
+    disable)
+        rm -f "${D}/activo"
+        echo "Firewall stopped and disabled on system startup"
+        ;;
+    status)
+        listar_estado
+        ;;
+    reset)
+        echo "ERROR: hostsim: 'ufw reset' borraría todas las reglas; el host simulado no lo ejecuta (queda en el rastro)" >&2
+        exit 1
+        ;;
+    *)
+        echo "ERROR: Invalid syntax" >&2
+        exit 1
+        ;;
+esac

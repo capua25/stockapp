@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# =======================================================================================
+# journalctl -- journalctl FALSO del host simulado (ubuntu:24.04 pelado no lo trae).
+# =======================================================================================
+# Reproduce lo que importa de systemd 255: `journalctl -u UNIDAD --no-pager [-n N]
+# [--since X] [-o short|short-iso|cat]` imprime los eventos que escribió el systemctl falso
+# ("Started X.service", "Stopped X.service"...). Sin eventos, `-- No entries --` (exit 0).
+# `--since` acepta lo que acepta `date -d` (por ejemplo "1 minute ago", "@1700000000").
+# El formato `short` es `Mes dd HH:MM:SS host systemd[1]: mensaje`; `short-iso`, la fecha ISO.
+# NO simula: permisos del journal (el real pide estar en adm/systemd-journal o ser root),
+# -f, -b, -p, --until, -k, ni los campos de otros procesos.
+# =======================================================================================
+set -euo pipefail
+
+source /usr/local/lib/hostsim/lib.sh
+hs_rastro "$@"
+
+unidad=""
+desde=0
+ultimas=""
+formato="short"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -u|--unit) unidad="${2:-}"; shift 2 ;;
+        --unit=*) unidad="${1#*=}"; shift ;;
+        --since)
+            desde="$(date -d "${2:-}" +%s)" || { echo "Failed to parse timestamp: ${2:-}" >&2; exit 1; }
+            shift 2
+            ;;
+        -n|--lines) ultimas="${2:-}"; shift 2 ;;
+        -o|--output) formato="${2:-}"; shift 2 ;;
+        --no-pager|-q|--quiet) shift ;;
+        *) echo "journalctl: hostsim: opción no simulada: $1" >&2; exit 1 ;;
+    esac
+done
+case "$formato" in short|short-iso|cat) ;; *) echo "journalctl: hostsim: formato no simulado: $formato" >&2; exit 1 ;; esac
+[[ -n "$unidad" && "$unidad" != *.* ]] && unidad="${unidad}.service"
+
+lineas=()
+while IFS=$'\t' read -r epoch u mensaje; do
+    [[ -z "${epoch:-}" ]] && continue
+    [[ -n "$unidad" && "$u" != "$unidad" ]] && continue
+    (( epoch < desde )) && continue
+    case "$formato" in
+        cat) lineas+=("$mensaje") ;;
+        short-iso) lineas+=("$(date -d "@${epoch}" '+%Y-%m-%dT%H:%M:%S%z') $(hostname) systemd[1]: ${mensaje}") ;;
+        short) lineas+=("$(date -d "@${epoch}" '+%b %d %H:%M:%S') $(hostname) systemd[1]: ${mensaje}") ;;
+    esac
+done < "${HS_ESTADO}/journal"
+
+if [[ -n "$ultimas" ]] && ((${#lineas[@]} > ultimas)); then
+    lineas=("${lineas[@]: -$ultimas}")
+fi
+if ((${#lineas[@]} == 0)); then
+    echo "-- No entries --"
+else
+    printf '%s\n' "${lineas[@]}"
+fi

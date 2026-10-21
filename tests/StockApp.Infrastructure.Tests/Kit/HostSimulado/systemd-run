@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# =======================================================================================
+# systemd-run -- systemd-run FALSO del host simulado.
+# =======================================================================================
+# Reproduce systemd 255 en lo que importa a la reversa del firewall:
+#   systemd-run --unit=NOMBRE --on-active=N /ruta/ejecutable args...
+# crea un timer transitorio (/run/systemd/transient/NOMBRE.timer, con OnActiveSec=N) y su
+# servicio, e imprime por stderr `Running timer as unit: NOMBRE.timer` y `Will run service as
+# unit: NOMBRE.service`.
+#   - como no-root: `Failed to start transient timer unit: Interactive authentication
+#     required.` (exit 1);
+#   - si el ejecutable NO existe: `Failed to find executable X: No such file or directory`
+#     (exit 1) y no se crea nada. Por eso el shim de ufw vive en /usr/sbin/ufw;
+#   - si la unidad ya está armada: `Failed to start transient timer unit: Unit X.timer was
+#     already loaded or has a fragment file.` (exit 1).
+# DIFERENCIA: el tiempo no corre. El timer queda armado hasta que algo lo pare
+# (`systemctl stop NOMBRE.timer`) o el test dispare el servicio (`systemctl start
+# NOMBRE.service`), que corre el comando armado como root.
+# NO simula: otras opciones (--user, -p, --scope, --wait, --on-calendar...), ni servicios
+# transitorios sin timer: se rechazan con exit 1 en lugar de hacer algo distinto de lo pedido.
+# =======================================================================================
+set -euo pipefail
+
+source /usr/local/lib/hostsim/lib.sh
+hs_rastro "$@"
+
+TRANS_DIR=/run/systemd/transient
+unidad=""
+segundos=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --unit=*) unidad="${1#*=}"; shift ;;
+        --unit) unidad="${2:-}"; shift 2 ;;
+        --on-active=*) segundos="${1#*=}"; shift ;;
+        --on-active) segundos="${2:-}"; shift 2 ;;
+        --no-ask-password|--quiet|-q) shift ;;
+        --) shift; break ;;
+        -*) echo "systemd-run: hostsim: opción no simulada: $1" >&2; exit 1 ;;
+        *) break ;;
+    esac
+done
+
+if [[ $# -eq 0 ]]; then
+    echo "Command line to execute required." >&2
+    exit 1
+fi
+if [[ -z "$segundos" ]]; then
+    echo "systemd-run: hostsim: solo se simula --on-active=N (timer transitorio)" >&2
+    exit 1
+fi
+if [[ ! "$segundos" =~ ^[0-9]+$ ]]; then
+    echo "Failed to parse timer value: ${segundos}" >&2
+    exit 1
+fi
+[[ -z "$unidad" ]] && unidad="run-u$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')"
+unidad="${unidad%.service}"
+
+if ! hs_es_root; then
+    echo "Failed to start transient timer unit: Interactive authentication required." >&2
+    exit 1
+fi
+
+ejecutable="$1"
+if [[ "$ejecutable" == */* ]]; then
+    ruta="$ejecutable"
+else
+    ruta="$(command -v -- "$ejecutable" 2>/dev/null || true)"
+fi
+if [[ -z "$ruta" || ! -f "$ruta" || ! -x "$ruta" ]]; then
+    echo "Failed to find executable ${ejecutable}: No such file or directory" >&2
+    exit 1
+fi
+
+mkdir -p "$TRANS_DIR"
+if [[ -e "${TRANS_DIR}/${unidad}.timer" ]]; then
+    echo "Failed to start transient timer unit: Unit ${unidad}.timer was already loaded or has a fragment file." >&2
+    exit 1
+fi
+
+comando="$(printf '%q ' "$ruta" "${@:2}")"
+cat > "${TRANS_DIR}/${unidad}.timer" <<TIMER
+# This is a transient unit file, created programmatically via the systemd API. Do not edit.
+# hostsim: armado=$(date +%s)
+[Unit]
+Description=${*}
+
+[Timer]
+OnActiveSec=${segundos}
+RemainAfterElapse=no
+TIMER
+cat > "${TRANS_DIR}/${unidad}.service" <<SERVICE
+# This is a transient unit file, created programmatically via the systemd API. Do not edit.
+[Unit]
+Description=${*}
+
+[Service]
+ExecStart=${comando}
+SERVICE
+hs_journal "${unidad}.timer" "Started ${unidad}.timer - ${*}."
+echo "Running timer as unit: ${unidad}.timer" >&2
+echo "Will run service as unit: ${unidad}.service" >&2

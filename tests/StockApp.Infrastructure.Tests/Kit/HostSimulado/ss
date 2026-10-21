@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# =======================================================================================
+# ss -- ss FALSO del host simulado (ubuntu:24.04 pelado no trae iproute2).
+# =======================================================================================
+# Reproduce `ss -ltn` de iproute2 6.1.0: lista los sockets TCP en LISTEN, sin resolver nombres.
+# Los puertos salen de $HS_ESTADO/puertos: "N" aparece en 0.0.0.0:N y [::]:N; "ADDR:N"
+# (por ejemplo 127.0.0.1:5433) aparece solo en esa dirección. Acepta un filtro
+# `sport = :N` (con o sin paréntesis), que es lo que usan los scripts para preguntar por un
+# puerto concreto.
+# Los anchos de columna son aproximados (los de ss real dependen del contenido): quien lo
+# parsee tiene que separar por espacios, no por posición. Sin columna Process (ss -p
+# requiere root; no se simula).
+# Solo acepta las banderas -l, -t, -n (juntas o separadas) y -p/-4/-6 (ignoradas): cualquier
+# otra sale con 1 en vez de devolver algo que no entiende.
+# =======================================================================================
+set -euo pipefail
+
+source /usr/local/lib/hostsim/lib.sh
+hs_rastro "$@"
+
+declare -A banderas=()
+filtro=()
+for a in "$@"; do
+    if [[ "$a" =~ ^-[a-zA-Z]+$ ]]; then
+        for ((i = 1; i < ${#a}; i++)); do
+            c="${a:i:1}"
+            case "$c" in
+                l|t|n|p|4|6) banderas[$c]=1 ;;
+                *) echo "ss: invalid option -- '$c'" >&2; exit 1 ;;
+            esac
+        done
+    else
+        filtro+=("$a")
+    fi
+done
+if [[ -z "${banderas[l]:-}" || -z "${banderas[t]:-}" || -z "${banderas[n]:-}" ]]; then
+    echo "ss: hostsim: solo se simula 'ss -ltn'" >&2
+    exit 1
+fi
+
+solo_puerto=""
+if ((${#filtro[@]} > 0)); then
+    texto="${filtro[*]}"
+    if [[ "$texto" =~ ^\(?[[:space:]]*sport[[:space:]]*=[[:space:]]*:([0-9]+)[[:space:]]*\)?$ ]]; then
+        solo_puerto="${BASH_REMATCH[1]}"
+    else
+        echo "ss: hostsim: filtro no simulado: ${texto}" >&2
+        exit 1
+    fi
+fi
+
+printf '%-6s %-6s %-6s %-22s %-22s %s\n' "State" "Recv-Q" "Send-Q" "Local Address:Port" "Peer Address:Port" "Process"
+while IFS= read -r linea; do
+    [[ -z "$linea" ]] && continue
+    if [[ "$linea" == *:* ]]; then
+        puerto="${linea##*:}"
+        locales=("$linea")
+    else
+        puerto="$linea"
+        locales=("0.0.0.0:${linea}" "[::]:${linea}")
+    fi
+    if [[ -n "$solo_puerto" && "$puerto" != "$solo_puerto" ]]; then
+        continue
+    fi
+    for direccion in "${locales[@]}"; do
+        pares="0.0.0.0:*"
+        [[ "$direccion" == "["* ]] && pares="[::]:*"
+        printf '%-6s %-6s %-6s %-22s %-22s\n' "LISTEN" "0" "4096" "$direccion" "$pares"
+    done
+done < "${HS_ESTADO}/puertos"

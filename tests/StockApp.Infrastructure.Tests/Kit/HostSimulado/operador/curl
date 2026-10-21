@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# =======================================================================================
+# curl -- curl FALSO del operador contra el host simulado.
+# =======================================================================================
+# Reproduce de curl 8.5.0 (Ubuntu 24.04) `curl [-f] [-s] [-S] [-k] [-L] [-o ARCHIVO]
+# [-w FORMATO] [-m SEG] [--connect-timeout SEG] [-H ...] URL`:
+#   - registra `CURL-ARGS:` + argumentos con `printf ' %q'` (así los tests pueden afirmar que
+#     el chequeo final NO usa -k);
+#   - nombre que el archivo `dns` no conoce: `curl: (6) Could not resolve host: X` (exit 6);
+#     el nombre debe resolver a la IP del host simulado;
+#   - red del host (lib-red.sh, sin ControlMaster): nadie escucha en el puerto -> `curl: (7)
+#     Failed to connect to X port P ...: Connection refused` (7); firewall -> `curl: (28)
+#     Connection timed out` (28). El puerto por defecto es 80 (http) o 443 (https);
+#   - respuesta: el archivo `/var/lib/hostsim/http/<puerto>/<ruta>` del host (la ruta `/` es
+#     `_raiz`; sin querystring), que planta el test con PlantarRespuestaHttp. Si no existe es
+#     un 404: con -f, `curl: (22) The requested URL returned error: 404` (22); sin -f, cuerpo
+#     vacío y exit 0. `-w '%{http_code}'` imprime 200 o 404 al final.
+#   - -s silencia el mensaje de error salvo que también venga -S, como curl.
+# NO simula: la validación TLS (se trata como confiable el certificado del host: lo que
+# importa para "sin -k" es que el argumento no esté en CURL-ARGS), redirecciones (-L se
+# acepta y se ignora), métodos/cuerpos (-X/-d/-H se aceptan y se ignoran), -I, proxies ni
+# reintentos.
+# =======================================================================================
+set -uo pipefail
+
+AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${AQUI}/lib-red.sh"
+
+{ printf 'CURL-ARGS:'; printf ' %q' "$@"; printf '\n'; } >> "$HS_RASTRO"
+
+fallar=0 silencioso=0 mostrar_error=0 salida="" formato="" url=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --fail) fallar=1; shift ;;
+        --silent) silencioso=1; shift ;;
+        --show-error) mostrar_error=1; shift ;;
+        --insecure|--location) shift ;;
+        --output) salida="${2:-}"; shift 2 ;;
+        --write-out) formato="${2:-}"; shift 2 ;;
+        --max-time|--connect-timeout|--retry|--header|--request|--data|--data-binary|--user|--cacert) shift 2 ;;
+        --*) echo "curl: option $1: is unknown" >&2; exit 2 ;;
+        -[a-zA-Z]*)
+            letras="${1#-}"; shift
+            for ((i = 0; i < ${#letras}; i++)); do
+                c="${letras:i:1}"
+                case "$c" in
+                    f) fallar=1 ;; s) silencioso=1 ;; S) mostrar_error=1 ;; k|L|I|v|g) ;;
+                    o|w|m|H|X|d|u)
+                        # La opción con valor toma el resto de las letras o el argumento siguiente.
+                        resto="${letras:i+1}"
+                        if [[ -n "$resto" ]]; then valor="$resto"; else valor="${1:-}"; [[ $# -gt 0 ]] && shift; fi
+                        [[ "$c" == "o" ]] && salida="$valor"
+                        [[ "$c" == "w" ]] && formato="$valor"
+                        break
+                        ;;
+                    *) echo "curl: option -$c: is unknown" >&2; exit 2 ;;
+                esac
+            done
+            ;;
+        *) url="$1"; shift ;;
+    esac
+done
+
+avisar() { if (( silencioso == 0 || mostrar_error == 1 )); then echo "$1" >&2; fi; }
+
+if [[ ! "$url" =~ ^(https?)://([^/:?#]+)(:([0-9]+))?(/[^?#]*)?(\?[^#]*)?(#.*)?$ ]]; then
+    avisar "curl: (3) URL using bad/illegal format or missing URL"
+    exit 3
+fi
+esquema="${BASH_REMATCH[1]}"
+host="${BASH_REMATCH[2]}"
+puerto="${BASH_REMATCH[4]:-}"
+ruta="${BASH_REMATCH[5]:-/}"
+[[ -z "$puerto" ]] && { [[ "$esquema" == https ]] && puerto=443 || puerto=80; }
+
+ip="$(awk -v n="$host" '$1 == n { print $2; exit }' "${AQUI}/dns")"
+if [[ -z "$ip" || "$ip" != "$HS_IP" ]]; then
+    if [[ -z "$ip" ]]; then
+        avisar "curl: (6) Could not resolve host: ${host}"
+        exit 6
+    fi
+    avisar "curl: (7) Failed to connect to ${host} port ${puerto} after 0 ms: Couldn't connect to server"
+    exit 7
+fi
+
+rc=0
+hs_red "$puerto" || rc=$?
+case "$rc" in
+    0) ;;
+    1) avisar "curl: (28) Connection timed out after 5001 milliseconds"; exit 28 ;;
+    *) avisar "curl: (7) Failed to connect to ${host} port ${puerto} after 0 ms: Connection refused"; exit 7 ;;
+esac
+
+clave="$ruta"
+[[ "$clave" == "/" ]] && clave="/_raiz"
+cuerpo_f="/var/lib/hostsim/http/${puerto}${clave}"
+codigo=404
+cuerpo=""
+if docker exec "$HS_CONTENEDOR" test -f "$cuerpo_f"; then
+    cuerpo="$(docker exec "$HS_CONTENEDOR" cat "$cuerpo_f"; printf x)"
+    cuerpo="${cuerpo%x}"
+    codigo=200
+fi
+if (( codigo == 404 && fallar == 1 )); then
+    avisar "curl: (22) The requested URL returned error: 404"
+    [[ "$formato" == *"%{http_code}"* ]] && printf '%s' "${formato//%\{http_code\}/404}"
+    exit 22
+fi
+if [[ -n "$salida" && "$salida" != "-" ]]; then printf '%s' "$cuerpo" > "$salida"; else printf '%s' "$cuerpo"; fi
+[[ "$formato" == *"%{http_code}"* ]] && printf '%s' "${formato//%\{http_code\}/${codigo}}"
+exit 0

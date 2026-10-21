@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# =======================================================================================
+# getent -- getent FALSO del operador (la resolución de nombres del host simulado).
+# =======================================================================================
+# Reproduce de glibc 2.39 (Ubuntu 24.04) `getent hosts N`, `getent ahosts N` y `getent
+# ahostsv4 N`: resuelve SOLO lo que figura en el archivo `dns` de DirOperador (líneas
+# `nombre ip`; el host simulado queda registrado al crearlo, y ResolverDominio agrega los
+# demás). Un nombre desconocido sale con 2 y sin salida, como getent.
+#   hosts      -> `IP<espacios>nombre`
+#   ahosts*    -> tres líneas `IP  STREAM nombre`, `IP  DGRAM`, `IP  RAW`
+# NO simula: IPv6, alias, /etc/hosts, otras bases (passwd, group...), ni resolución por IP.
+# =======================================================================================
+set -uo pipefail
+
+AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+base="${1:-}"
+nombre="${2:-}"
+case "$base" in hosts|ahosts|ahostsv4) ;; *) echo "getent: hostsim: base no simulada: ${base}" >&2; exit 1 ;; esac
+
+ip="$(awk -v n="$nombre" '$1 == n { print $2; exit }' "${AQUI}/dns")"
+[[ -z "$ip" ]] && exit 2
+
+if [[ "$base" == "hosts" ]]; then
+    printf '%-15s %s\n' "$ip" "$nombre"
+else
+    printf '%-15s STREAM %s\n' "$ip" "$nombre"
+    printf '%-15s DGRAM\n' "$ip"
+    printf '%-15s RAW\n' "$ip"
+fi

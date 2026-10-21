@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# =======================================================================================
+# sudo -- sudo FALSO del host simulado, pero que ELEVA de verdad.
+# =======================================================================================
+# Reproduce sudo 1.9.15 (Ubuntu 24.04) con NOPASSWD para el usuario de deploy:
+#   - `sudo [-n] [-E] [-H] [-u root] [--] comando args...` corre el comando como uid 0;
+#   - sin comando: usage (exit 1); comando inexistente: `sudo: X: command not found` (exit 1);
+#   - con el marcador sudo-pide-contrasena (un sudoers SIN NOPASSWD): `sudo -n` sale 1 con
+#     `sudo: a password is required`; sin -n y sin terminal, `sudo: a terminal is required...`.
+#
+# Un shim de bash que corre como no-root NO puede elevar: la elevación la hace una copia
+# setuid-root de `setpriv` (/usr/local/lib/hostsim/elevar, modo 4755), verificada en
+# ubuntu:24.04 (de uid 1001 a 0). Si el setuid no funcionara en otro Docker, la alternativa
+# es una sesión root con HOME/USER del usuario de deploy.
+#
+# El entorno del comando se reinicia como el de sudo (env_reset): PATH = secure_path de Ubuntu
+# (con /usr/local/sbin primero, donde viven los shims), HOME=/root, USER/LOGNAME=root y las
+# SUDO_*. NO verificado byte a byte contra el sudo real: HOME=/root es lo que hace
+# `always_set_home`/env_reset en la configuración por defecto de Ubuntu.
+# NO simula: sudoers, timestamps, `-i`, `-s`, `-S`, `-k`, `-l`, ni el log de auth.
+# =======================================================================================
+set -euo pipefail
+
+HS_ESTADO=/var/lib/hostsim
+HS_LIB=/usr/local/lib/hostsim
+SECURE_PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin"
+
+noninteractive=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -n|--non-interactive) noninteractive=1; shift ;;
+        -E|--preserve-env|-H|--set-home) shift ;;
+        -u|--user)
+            if [[ "${2:-}" != "root" ]]; then
+                echo "sudo: hostsim: solo se simula -u root" >&2
+                exit 1
+            fi
+            shift 2
+            ;;
+        --) shift; break ;;
+        -*) echo "sudo: invalid option -- '${1#-}'" >&2; exit 1 ;;
+        *) break ;;
+    esac
+done
+
+# `sudo VAR=valor comando`: las asignaciones iniciales van al entorno del comando.
+asignaciones=()
+while [[ $# -gt 0 && "$1" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; do
+    asignaciones+=("$1")
+    shift
+done
+
+if [[ $# -eq 0 ]]; then
+    echo "usage: sudo [-nEH] [-u root] [--] command [args]" >&2
+    exit 1
+fi
+
+if [[ -e "${HS_ESTADO}/sudo-pide-contrasena" && "$(id -u)" != "0" ]]; then
+    if [[ "$noninteractive" == 1 ]]; then
+        echo "sudo: a password is required" >&2
+    else
+        echo "sudo: a terminal is required to read the password; either use the -S option to read from standard input or configure an askpass helper" >&2
+        echo "sudo: a password is required" >&2
+    fi
+    exit 1
+fi
+
+if ! PATH="$SECURE_PATH" command -v -- "$1" >/dev/null 2>&1; then
+    echo "sudo: $1: command not found" >&2
+    exit 1
+fi
+
+exec env -i PATH="$SECURE_PATH" HOME=/root USER=root LOGNAME=root SHELL=/bin/bash \
+    ${LANG:+LANG="$LANG"} ${LC_ALL:+LC_ALL="$LC_ALL"} ${TERM:+TERM="$TERM"} "${asignaciones[@]}" \
+    SUDO_USER="$(id -un)" SUDO_UID="$(id -u)" SUDO_GID="$(id -g)" SUDO_COMMAND="$*" \
+    "${HS_LIB}/elevar" --reuid=0 --regid=0 --init-groups -- "$@"

@@ -1,0 +1,222 @@
+#!/usr/bin/env bash
+# =======================================================================================
+# docker -- docker FALSO del host simulado (el "VPS" no corre un demonio real).
+# =======================================================================================
+# Reproduce docker.io 24.0.7 + docker-compose-v2 2.24.6 (Ubuntu 24.04) para lo que preparar
+# usa. Lo enlaza `apt-get install docker.io`: antes de eso el comando no existe.
+#   - sin permiso para el socket (ni root ni grupo `docker` EN ESTA SESIÓN): `permission denied
+#     while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock ...`
+#     (exit 1). `docker compose version` no necesita el demonio;
+#   - `docker compose version` -> `Docker Compose version v2.24.6` (solo con docker-compose-v2;
+#     sin él, `docker: 'compose' is not a docker command.`, exit 1);
+#   - `docker compose [--env-file F] [-f FILE] up -d`: exige que FILE y F existan y que cada
+#     `${VAR:?...}` del compose tenga valor en F (`required variable VAR is missing a value`,
+#     exit 1); crea el "contenedor" stockapp-pg (running, healthy) y publica 127.0.0.1:5433 en
+#     el `ss`. Una segunda corrida imprime `Container stockapp-pg  Running`;
+#   - `docker ps [-a] [--format '{{.Names}}']`: los contenedores (running; con -a, todos), por
+#     orden alfabético (el real ordena por creación); sin --format, la tabla con sus columnas
+#     (imagen/estado inventados);
+#   - `docker inspect -f '{{.State.Health.Status}}|{{.State.Status}}|{{.State.Running}}' N`;
+#   - `docker exec [-i] N psql ...`: SOLO psql, y responde únicamente a lo que el test planta en
+#     $HS_ESTADO/psql/NN.{patron,respuesta,exit}: la primera consulta que CONTIENE el
+#     patrón (texto fijo) devuelve la respuesta con ese exit. Una consulta sin respuesta
+#     planteada sale 1 con `sin respuesta planteada` (no inventa una base). Cada consulta queda
+#     en $HS_ESTADO/psql/consultas.log. Cualquier otro comando de `exec` sale 126 como el real.
+# El estado vive en archivos; el que planta contenedores ajenos es el test.
+# NO simula: imágenes, redes, volúmenes, `logs`, `stop`, `rm`, `run`, `pull`, `compose down`,
+# ni healthchecks que pasan de starting a healthy con el tiempo (nace healthy).
+# =======================================================================================
+set -euo pipefail
+umask 000
+
+source /usr/local/lib/hostsim/lib.sh
+hs_rastro "$@"
+
+D="${HS_ESTADO}/docker"
+sin_permiso() {
+    echo "permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock: Get \"http://%2Fvar%2Frun%2Fdocker.sock/v1.43/containers/json\": dial unix /var/run/docker.sock: connect: permission denied" >&2
+    exit 1
+}
+exige_demonio() { hs_es_root || hs_en_grupo_docker || sin_permiso; }
+existe() { [[ -d "${D}/$1" ]]; }
+corriendo() { [[ -f "${D}/$1/estado" && "$(cat "${D}/$1/estado")" == "running" ]]; }
+
+orden="${1:-}"
+[[ $# -gt 0 ]] && shift
+
+case "$orden" in
+    --version)
+        echo "Docker version 24.0.7, build hostsim"
+        ;;
+    compose)
+        sub=""
+        env_file=""
+        archivo=""
+        resto=()
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --env-file) env_file="${2:-}"; shift 2 ;;
+                -f|--file) archivo="${2:-}"; shift 2 ;;
+                -p|--project-name|--project-directory) shift 2 ;;
+                version|up) sub="$1"; shift; resto=("$@"); break ;;
+                *) echo "docker compose: hostsim: opción no simulada: $1" >&2; exit 1 ;;
+            esac
+        done
+        if ! hs_instalado docker-compose-v2; then
+            echo "docker: 'compose' is not a docker command." >&2
+            echo "See 'docker --help'" >&2
+            exit 1
+        fi
+        case "$sub" in
+            version) echo "Docker Compose version v2.24.6" ;;
+            up)
+                exige_demonio
+                if [[ "${resto[*]:-}" != "-d" ]]; then
+                    echo "docker compose up: hostsim: solo se simula 'up -d'" >&2
+                    exit 1
+                fi
+                [[ -z "$archivo" ]] && archivo="compose.yaml"
+                if [[ ! -f "$archivo" ]]; then
+                    echo "open ${PWD}/${archivo}: no such file or directory" >&2
+                    exit 1
+                fi
+                if [[ -n "$env_file" && ! -f "$env_file" ]]; then
+                    echo "couldn't find env file: ${PWD}/${env_file}" >&2
+                    exit 1
+                fi
+                while IFS= read -r var; do
+                    valor=""
+                    if [[ -n "$env_file" ]]; then
+                        valor="$(sed -n "s/^${var}=//p" "$env_file" | tail -1)"
+                    fi
+                    if [[ -z "$valor" ]]; then
+                        echo "error while interpolating services.stockapp-pg.environment.${var}: required variable ${var} is missing a value" >&2
+                        exit 1
+                    fi
+                done < <(grep -o '\${[A-Za-z_][A-Za-z0-9_]*:?' "$archivo" | sed 's/^\${//; s/:?$//' | sort -u)
+                if corriendo stockapp-pg; then
+                    echo " Container stockapp-pg  Running" >&2
+                else
+                    mkdir -p "${D}/stockapp-pg"
+                    echo running > "${D}/stockapp-pg/estado"
+                    echo healthy > "${D}/stockapp-pg/salud"
+                    grep -qxF "127.0.0.1:5433" "${HS_ESTADO}/puertos" 2>/dev/null || echo "127.0.0.1:5433" >> "${HS_ESTADO}/puertos"
+                    echo " Container stockapp-pg  Started" >&2
+                fi
+                ;;
+            *) echo "docker compose: hostsim: subcomando no simulado" >&2; exit 1 ;;
+        esac
+        ;;
+    ps)
+        exige_demonio
+        todos=0
+        formato=""
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                -a|--all) todos=1; shift ;;
+                --format) formato="${2:-}"; shift 2 ;;
+                --format=*) formato="${1#*=}"; shift ;;
+                *) echo "docker ps: hostsim: opción no simulada: $1" >&2; exit 1 ;;
+            esac
+        done
+        if [[ -n "$formato" && "$formato" != "{{.Names}}" ]]; then
+            echo "docker ps: hostsim: solo se simula --format '{{.Names}}'" >&2
+            exit 1
+        fi
+        [[ -z "$formato" ]] && printf '%-14s %-18s %-9s %-14s %-14s %-8s %s\n' "CONTAINER ID" "IMAGE" "COMMAND" "CREATED" "STATUS" "PORTS" "NAMES"
+        for dir in "${D}"/*/; do
+            [[ -d "$dir" ]] || continue
+            nombre="$(basename "$dir")"
+            if (( todos )) || corriendo "$nombre"; then
+                if [[ -n "$formato" ]]; then
+                    echo "$nombre"
+                else
+                    printf '%-14s %-18s %-9s %-14s %-14s %-8s %s\n' "$(printf '%s' "$nombre" | sha256sum | cut -c1-12)" "hostsim" '"-"' "1 second ago" "Up 1 second" "" "$nombre"
+                fi
+            fi
+        done
+        ;;
+    inspect)
+        exige_demonio
+        if [[ "${1:-}" != "-f" && "${1:-}" != "--format" ]]; then
+            echo "docker inspect: hostsim: solo se simula inspect -f" >&2
+            exit 1
+        fi
+        plantilla="${2:-}"
+        nombre="${3:-}"
+        if ! existe "$nombre"; then
+            echo "Error: No such object: ${nombre}" >&2
+            exit 1
+        fi
+        case "$plantilla" in
+            "{{.State.Health.Status}}")
+                if [[ ! -f "${D}/${nombre}/salud" ]]; then
+                    echo "template parsing error: template: :1:20: executing \"\" at <.State.Health.Status>: nil pointer evaluating *types.Health.Status" >&2
+                    exit 1
+                fi
+                cat "${D}/${nombre}/salud"
+                ;;
+            "{{.State.Status}}") cat "${D}/${nombre}/estado" ;;
+            "{{.State.Running}}") corriendo "$nombre" && echo true || echo false ;;
+            *) echo "docker inspect: hostsim: plantilla no simulada: ${plantilla}" >&2; exit 1 ;;
+        esac
+        ;;
+    exec)
+        exige_demonio
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                -i|-t|-it|--interactive|--tty) shift ;;
+                -u|-e|-w|--user|--env|--workdir) shift 2 ;;
+                -*) echo "docker exec: hostsim: opción no simulada: $1" >&2; exit 1 ;;
+                *) break ;;
+            esac
+        done
+        nombre="${1:-}"
+        [[ $# -gt 0 ]] && shift
+        if ! existe "$nombre"; then
+            echo "Error response from daemon: No such container: ${nombre}" >&2
+            exit 1
+        fi
+        if ! corriendo "$nombre"; then
+            echo "Error response from daemon: Container ${nombre} is not running" >&2
+            exit 1
+        fi
+        if [[ "${1:-}" != "psql" ]]; then
+            echo "OCI runtime exec failed: exec failed: unable to start container process: exec: \"${1:-}\": executable file not found in \$PATH: unknown" >&2
+            exit 126
+        fi
+        shift
+        sql=""
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                -c|--command) sql+="${2:-}"$'\n'; shift 2 ;;
+                -U|-d|-h|-p|-v) shift 2 ;;
+                -*) shift ;;
+                *) shift ;;
+            esac
+        done
+        if [[ ! -t 0 ]]; then
+            sql+="$(cat)"
+        fi
+        P="${HS_ESTADO}/psql"
+        mkdir -p "$P"
+        printf '%s\n---\n' "$sql" >> "${P}/consultas.log"
+        for patron_f in "${P}"/*.patron; do
+            [[ -e "$patron_f" ]] || continue
+            patron="$(cat "$patron_f")"
+            if [[ "$sql" == *"$patron"* ]]; then
+                base="${patron_f%.patron}"
+                [[ -f "${base}.respuesta" ]] && cat "${base}.respuesta"
+                rc=0
+                [[ -f "${base}.exit" ]] && rc="$(cat "${base}.exit")"
+                exit "$rc"
+            fi
+        done
+        echo "ERROR: hostsim: sin respuesta planteada para esta consulta (el test debe plantarla con PlantarRespuestaPsql)" >&2
+        exit 1
+        ;;
+    *)
+        echo "docker: hostsim: comando no simulado: ${orden}" >&2
+        exit 1
+        ;;
+esac

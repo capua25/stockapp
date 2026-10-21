@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# =======================================================================================
+# scp -- scp FALSO del operador contra el host simulado.
+# =======================================================================================
+# Reproduce de OpenSSH 9.6 lo que importa: `scp [-P PUERTO] [-o ...] [-q] ORIGEN DESTINO`
+# con un extremo remoto `usuario@host:ruta` (la ruta relativa es relativa al HOME) y otro local.
+#   - mismas reglas de red, usuario y ControlMaster que el ssh falso (lib-red.sh);
+#   - local -> remoto: el archivo llega con el MODO del origen (con el umask 022 del usuario,
+#     como scp), dueño el usuario; si la ruta remota es un directorio, entra con el mismo nombre;
+#   - remoto -> local: copia el contenido, con el modo de umask 022; un destino que es un
+#     directorio recibe el nombre del origen;
+#   - registra `SCP-ARGS:` + argumentos con `printf ' %q'` (el ssh registra `ARGS:`, así los
+#     tests pueden contar cada uno por separado).
+# NO simula: -r, varios orígenes, preservar fechas (-p), ni remoto-a-remoto.
+# =======================================================================================
+set -uo pipefail
+
+AQUI="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${AQUI}/lib-red.sh"
+
+{ printf 'SCP-ARGS:'; printf ' %q' "$@"; printf '\n'; } >> "$HS_RASTRO"
+
+puerto=22
+opciones=()
+rutas=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -P) puerto="${2:-}"; shift 2 ;;
+        -o) opciones+=("${2:-}"); shift 2 ;;
+        -i|-F|-J|-l|-S|-c) shift 2 ;;
+        -q|-v|-C|-B|-p|-O|-T|-3|-4|-6) shift ;;
+        -r) echo "scp: hostsim: -r no simulado" >&2; exit 1 ;;
+        -*) echo "scp: unknown option -- ${1#-}" >&2; exit 1 ;;
+        *) rutas+=("$1"); shift ;;
+    esac
+done
+if ((${#rutas[@]} != 2)); then
+    echo "usage: scp [options] source target (hostsim: exactamente dos rutas)" >&2
+    exit 1
+fi
+origen="${rutas[0]}"
+destino="${rutas[1]}"
+
+es_remota() { [[ "$1" =~ ^([^/@:]+@)?[^/:@]+: ]] && [[ "$1" != /* ]]; }
+
+remoto=""
+if es_remota "$destino"; then remoto="$destino"; elif es_remota "$origen"; then remoto="$origen"; else
+    echo "scp: hostsim: ninguno de los extremos es remoto" >&2
+    exit 1
+fi
+spec="${remoto%%:*}"
+ruta_remota="${remoto#*:}"
+if [[ "$spec" == *@* ]]; then usuario="${spec%@*}"; host="${spec#*@}"; else usuario="$(id -un)"; host="$spec"; fi
+
+if [[ "$host" != "$HS_HOST" && "$host" != "$HS_IP" ]]; then
+    echo "ssh: Could not resolve hostname ${host}: Name or service not known" >&2
+    exit 1
+fi
+desactivado=0
+hs_maestro_desactivado "${opciones[@]+"${opciones[@]}"}" && desactivado=1
+hs_conectar "$puerto" "$desactivado" "$usuario" || exit 255
+
+if [[ "$remoto" == "$destino" ]]; then
+    if [[ ! -f "$origen" ]]; then
+        echo "scp: ${origen}: No such file or directory" >&2
+        exit 1
+    fi
+    modo="$(stat -c %a "$origen")"
+    hs_sesion "$usuario" bash -c '
+        ruta="$1"; modo="$2"; nombre="$3"
+        ruta="${ruta/#\~\//$HOME/}"; [[ "$ruta" == "~" ]] && ruta="$HOME"
+        [[ -d "$ruta" ]] && ruta="${ruta%/}/${nombre}"
+        cat > "$ruta" || exit 1
+        chmod "$(printf "%o" $(( 8#$modo & ~8#022 )))" "$ruta"
+    ' _ "$ruta_remota" "$modo" "$(basename "$origen")" < "$origen"
+else
+    if [[ -d "$destino" ]]; then destino="${destino%/}/$(basename "$ruta_remota")"; fi
+    hs_sesion "$usuario" bash -c '
+        ruta="$1"
+        ruta="${ruta/#\~\//$HOME/}"
+        cat -- "$ruta"
+    ' _ "$ruta_remota" > "$destino" < /dev/null || exit 1
+    chmod "$(printf "%o" $(( 8#666 & ~8#022 )))" "$destino"
+fi

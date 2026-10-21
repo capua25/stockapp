@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# =======================================================================================
+# apt-get -- apt-get FALSO del host simulado (sin red ni repositorios).
+# =======================================================================================
+# Reproduce apt 2.7.14 (Ubuntu 24.04) para `apt-get [-y] [-qq] install PAQUETE...` y `update`:
+#   - como no-root: `E: Could not open lock file /var/lib/dpkg/lock-frontend - open (13:
+#     Permission denied)` + `E: Unable to acquire the dpkg frontend lock ..., are you root?`
+#     (exit 100);
+#   - paquete desconocido: `E: Unable to locate package X` (exit 100) y no instala NINGUNO;
+#   - paquetes que una Ubuntu Server 24.04 trae de fábrica (ufw, openssl, curl, sudo,
+#     ca-certificates): `X is already the newest version`, sin cambios;
+#   - paquetes instalables (docker.io, docker-compose-v2, certbot): deja el marcador
+#     $HS_ESTADO/instalado/X; reinstalar imprime `X is already the newest version`.
+# Los scripts de postinst que importan a preparar se reproducen: docker.io crea el grupo de
+# sistema `docker` (como el postinst real) -- el usuario NO queda en él:
+# eso lo hace `usermod -aG docker` y vale para las sesiones nuevas.
+# Los shims de docker y certbot (en /usr/local/lib/hostsim/paquetes/) se enlazan en
+# /usr/local/sbin al instalar el paquete: antes de eso `docker`/`certbot` no existen (bash dice
+# `command not found`, 127; `sudo` dice `sudo: X: command not found`, 1).
+# NO simula: dependencias, versiones, `remove`, `upgrade`, `-o` con efecto, ni los
+# repositorios. Un paquete nuevo hay que sumarlo a INSTALABLES a propósito.
+# =======================================================================================
+set -euo pipefail
+
+source /usr/local/lib/hostsim/lib.sh
+hs_rastro "$@"
+
+INSTALABLES=" docker.io docker-compose-v2 certbot "
+DE_FABRICA=" ufw openssl curl sudo ca-certificates "
+
+orden=""
+paquetes=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -o) shift 2 ;;
+        -*) shift ;;
+        *)
+            if [[ -z "$orden" ]]; then orden="$1"; else paquetes+=("$1"); fi
+            shift
+            ;;
+    esac
+done
+
+if ! hs_es_root; then
+    echo "E: Could not open lock file /var/lib/dpkg/lock-frontend - open (13: Permission denied)" >&2
+    echo "E: Unable to acquire the dpkg frontend lock (/var/lib/dpkg/lock-frontend), are you root?" >&2
+    exit 100
+fi
+
+case "$orden" in
+    update)
+        echo "Reading package lists..."
+        ;;
+    install)
+        if ((${#paquetes[@]} == 0)); then
+            echo "E: No packages specified" >&2   # apt real: usage; el código de salida es el que importa
+            exit 100
+        fi
+        for p in "${paquetes[@]}"; do
+            if [[ "$INSTALABLES" != *" ${p} "* && "$DE_FABRICA" != *" ${p} "* ]]; then
+                echo "E: Unable to locate package ${p}" >&2
+                exit 100
+            fi
+        done
+        echo "Reading package lists..."
+        echo "Building dependency tree..."
+        echo "Reading state information..."
+        mkdir -p "${HS_ESTADO}/instalado"
+        for p in "${paquetes[@]}"; do
+            if [[ "$DE_FABRICA" == *" ${p} "* ]] || hs_instalado "$p"; then
+                echo "${p} is already the newest version."
+                continue
+            fi
+            echo "Setting up ${p} ..."
+            touch "${HS_ESTADO}/instalado/${p}"
+            # El binario "aparece" al instalar el paquete: antes de eso, `command -v` no lo
+            # encuentra (y `sudo docker` dice `sudo: docker: command not found`, como el real).
+            if [[ "$p" == "docker.io" || "$p" == "certbot" ]]; then
+                ln -sf "${HS_LIB}/paquetes/${p/docker.io/docker}" "/usr/local/sbin/${p/docker.io/docker}"
+            fi
+            if [[ "$p" == "docker.io" ]] && ! getent group docker >/dev/null; then
+                groupadd --system docker
+            fi
+        done
+        ;;
+    *)
+        echo "apt-get: hostsim: orden no simulada: ${orden}" >&2
+        exit 1
+        ;;
+esac

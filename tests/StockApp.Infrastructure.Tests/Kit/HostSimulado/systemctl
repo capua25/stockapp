@@ -1,0 +1,232 @@
+#!/usr/bin/env bash
+# =======================================================================================
+# systemctl -- systemctl FALSO del host simulado (VPS nuevo).
+# =======================================================================================
+# Reproduce systemd 255 (Ubuntu 24.04) para las unidades que importan a preparar:
+#   - stockapp-api.service: "cargada" si existe /etc/systemd/system/stockapp-api.service;
+#   - stockapp-ufw-reversa.timer / .service: transitorias, existen mientras estén sus archivos
+#     en /run/systemd/transient/ (los crea el systemd-run falso);
+#   - docker.service: cargada y activa si docker.io está instalado.
+# Cualquier otra unidad es "no encontrada".
+#
+# Comportamiento real que reproduce (el que preparar y el deploy-hook de TLS usan):
+#   - start/stop/restart/enable/disable/daemon-reload como no-root:
+#     `Failed to <verbo> X: Interactive authentication required.` (exit 1);
+#   - start/restart de una unit sin archivo: `Failed to start X.service: Unit X.service not
+#     found.` (exit 5); stop de una unit que no está cargada: `Failed to stop X.timer: Unit
+#     X.timer not loaded.` (exit 5);
+#   - is-active: `active` (0) o `inactive` (3), también para las desconocidas; is-enabled:
+#     `enabled` (0) o `disabled` (1); sin archivo, `Failed to get unit file state for X:
+#     No such file or directory` (1);
+#   - enable de una unit sin archivo: `Failed to enable unit: Unit file X does not exist.` (1);
+#   - stop de un .timer transitorio lo borra (el timer deja de existir);
+#   - list-timers [--all]: tabla NEXT/LEFT/LAST/PASSED/UNIT/ACTIVATES con los timers armados;
+#   - show -p (FragmentPath|LoadState|ActiveState|SubState) UNIDAD [--value].
+# Cada start/stop/restart deja una línea en el journal ("Started X.service", ...).
+#
+# DIFERENCIAS: `start` NO ejecuta el ExecStart de stockapp-api (solo la marca activa: la API
+# real no corre acá), salvo en un servicio transitorio de systemd-run, donde `start` corre el
+# comando armado -- eso representa "el timer venció" -- y después la unidad se borra, como hace
+# systemd con las transitorias terminadas. El tiempo no corre: --on-active=N nunca vence solo.
+# NO simula: dependencias, `status`, `mask`, `reload`, `daemon-reload` real (los archivos de
+# unit se leen siempre frescos), ni targets.
+# =======================================================================================
+set -euo pipefail
+
+source /usr/local/lib/hostsim/lib.sh
+hs_rastro "$@"
+
+UNIT_DIR=/etc/systemd/system
+TRANS_DIR=/run/systemd/transient
+ACTIVOS="${HS_ESTADO}/systemd/activos"
+mkdir -p "${HS_ESTADO}/systemd" 2>/dev/null || true
+
+quiet=0
+valor=0
+propiedad=""
+args=()
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -q|--quiet) quiet=1; shift ;;
+        --no-pager|--now|--no-ask-password|--all|-a|-l|--full) [[ "$1" == "--now" ]] && ahora=1; shift ;;
+        --value) valor=1; shift ;;
+        -p|--property) propiedad="${2:-}"; shift 2 ;;
+        -*) echo "systemctl: unrecognized option '$1'" >&2; exit 1 ;;
+        *) args+=("$1"); shift ;;
+    esac
+done
+ahora="${ahora:-0}"
+verbo="${args[0]:-}"
+unidades=("${args[@]:1}")
+
+normalizar() { [[ "$1" == *.* ]] && echo "$1" || echo "$1.service"; }
+
+# Estado de una unidad: carga (loaded|not-found), archivo.
+cargada() {
+    local u="$1"
+    case "$u" in
+        stockapp-api.service) [[ -f "${UNIT_DIR}/${u}" ]] ;;
+        docker.service) hs_instalado docker.io ;;
+        *) [[ -f "${TRANS_DIR}/${u}" ]] ;;
+    esac
+}
+fragmento() {
+    case "$1" in
+        stockapp-api.service) [[ -f "${UNIT_DIR}/$1" ]] && echo "${UNIT_DIR}/$1" || true ;;
+        docker.service) hs_instalado docker.io && echo "/usr/lib/systemd/system/docker.service" || true ;;
+        *) [[ -f "${TRANS_DIR}/$1" ]] && echo "${TRANS_DIR}/$1" || true ;;
+    esac
+}
+activa() {
+    local u="$1"
+    case "$u" in
+        docker.service) hs_instalado docker.io ;;
+        *.timer) [[ -f "${TRANS_DIR}/${u}" ]] ;;
+        *) grep -qxF -- "$u" "$ACTIVOS" 2>/dev/null ;;
+    esac
+}
+marcar_activa() { grep -qxF -- "$1" "$ACTIVOS" 2>/dev/null || echo "$1" >> "$ACTIVOS"; }
+marcar_inactiva() { [[ -f "$ACTIVOS" ]] && { grep -vxF -- "$1" "$ACTIVOS" > "${ACTIVOS}.tmp" || true; mv "${ACTIVOS}.tmp" "$ACTIVOS"; }; return 0; }
+habilitada() { [[ -L "/etc/systemd/system/multi-user.target.wants/$1" ]]; }
+
+# Corre el comando armado en un servicio transitorio (el "timer venció") y borra la unidad.
+correr_transitoria() {
+    local servicio="$1" base="${1%.service}" linea cmd
+    linea="$(grep -m1 '^ExecStart=' "${TRANS_DIR}/${servicio}")"
+    cmd="${linea#ExecStart=}"
+    hs_journal "$servicio" "Started ${servicio}."
+    set +e
+    eval "$cmd"
+    local rc=$?
+    set -e
+    rm -f "${TRANS_DIR}/${base}.service" "${TRANS_DIR}/${base}.timer"
+    if (( rc != 0 )); then
+        echo "Job for ${servicio} failed because the control process exited with error code." >&2
+        echo "See \"systemctl status ${servicio}\" and \"journalctl -xeu ${servicio}\" for details." >&2
+        return 1
+    fi
+}
+
+mutadores=" start stop restart enable disable daemon-reload "
+if [[ "$mutadores" == *" ${verbo} "* ]] && ! hs_es_root; then
+    objetivo="$(normalizar "${unidades[0]:-}")"
+    if [[ "$verbo" == "daemon-reload" ]]; then
+        hs_sin_autenticacion "reload daemon" ""
+    fi
+    hs_sin_autenticacion "$verbo ${objetivo}" "${objetivo}"
+fi
+
+rc_total=0
+case "$verbo" in
+    start|restart)
+        for u in "${unidades[@]}"; do
+            u="$(normalizar "$u")"
+            if ! cargada "$u"; then
+                echo "Failed to ${verbo} ${u}: Unit ${u} not found." >&2
+                exit 5
+            fi
+            if [[ "$u" == *.service && -f "${TRANS_DIR}/${u}" ]]; then
+                correr_transitoria "$u" || rc_total=1
+                continue
+            fi
+            marcar_activa "$u"
+            hs_journal "$u" "Started ${u}."
+        done
+        ;;
+    stop)
+        for u in "${unidades[@]}"; do
+            u="$(normalizar "$u")"
+            if ! cargada "$u"; then
+                echo "Failed to stop ${u}: Unit ${u} not loaded." >&2
+                exit 5
+            fi
+            if [[ -f "${TRANS_DIR}/${u}" ]]; then
+                rm -f "${TRANS_DIR}/${u}"
+                [[ "$u" == *.timer ]] && rm -f "${TRANS_DIR}/${u%.timer}.service"
+            fi
+            marcar_inactiva "$u"
+            hs_journal "$u" "Stopped ${u}."
+        done
+        ;;
+    enable|disable)
+        for u in "${unidades[@]}"; do
+            u="$(normalizar "$u")"
+            if [[ ! -f "$(fragmento "$u")" ]] || [[ "$u" != stockapp-api.service ]]; then
+                echo "Failed to ${verbo} unit: Unit file ${u} does not exist." >&2
+                exit 1
+            fi
+            enlace="/etc/systemd/system/multi-user.target.wants/${u}"
+            if [[ "$verbo" == enable ]]; then
+                mkdir -p "$(dirname "$enlace")"
+                if [[ ! -L "$enlace" ]]; then
+                    ln -s "${UNIT_DIR}/${u}" "$enlace"
+                    echo "Created symlink ${enlace} → ${UNIT_DIR}/${u}." >&2
+                fi
+                if [[ "$ahora" == 1 ]]; then
+                    marcar_activa "$u"
+                    hs_journal "$u" "Started ${u}."
+                fi
+            else
+                if [[ -L "$enlace" ]]; then
+                    rm -f "$enlace"
+                    echo "Removed ${enlace}." >&2
+                fi
+                if [[ "$ahora" == 1 ]]; then
+                    marcar_inactiva "$u"
+                    hs_journal "$u" "Stopped ${u}."
+                fi
+            fi
+        done
+        ;;
+    daemon-reload) ;;
+    is-active)
+        u="$(normalizar "${unidades[0]:-}")"
+        if activa "$u"; then echo "active"; else echo "inactive"; rc_total=3; fi
+        ;;
+    is-enabled)
+        u="$(normalizar "${unidades[0]:-}")"
+        if [[ -f "${TRANS_DIR}/${u}" ]]; then
+            echo "transient"; rc_total=1
+        elif [[ "$u" != stockapp-api.service || ! -f "${UNIT_DIR}/${u}" ]]; then
+            echo "Failed to get unit file state for ${u}: No such file or directory" >&2
+            rc_total=1
+        elif habilitada "$u"; then
+            echo "enabled"
+        else
+            echo "disabled"; rc_total=1
+        fi
+        ;;
+    list-timers)
+        ahora_epoch="$(date +%s)"
+        filas=()
+        for t in "${TRANS_DIR}"/*.timer; do
+            [[ -e "$t" ]] || continue
+            nombre="$(basename "$t")"
+            segundos="$(sed -n 's/^OnActiveSec=//p' "$t" | head -1)"
+            armado="$(sed -n 's/^# hostsim: armado=//p' "$t" | head -1)"
+            cuando=$(( armado + segundos ))
+            falta=$(( cuando - ahora_epoch )); (( falta < 0 )) && falta=0
+            filas+=("$(printf '%-27s %-8s %-4s %-6s %-28s %s' "$(date -d "@${cuando}" '+%a %Y-%m-%d %H:%M:%S %Z')" "${falta}s" "-" "-" "$nombre" "${nombre%.timer}.service")")
+        done
+        printf '%-27s %-8s %-4s %-6s %-28s %s\n' "NEXT" "LEFT" "LAST" "PASSED" "UNIT" "ACTIVATES"
+        ((${#filas[@]} > 0)) && printf '%s\n' "${filas[@]}"
+        echo
+        echo "${#filas[@]} timers listed."
+        ;;
+    show)
+        u="$(normalizar "${unidades[0]:-}")"
+        case "$propiedad" in
+            FragmentPath) r="$(fragmento "$u")" ;;
+            LoadState) cargada "$u" && r="loaded" || r="not-found" ;;
+            ActiveState) activa "$u" && r="active" || r="inactive" ;;
+            SubState) activa "$u" && r="running" || r="dead" ;;
+            *) echo "systemctl: hostsim: propiedad no simulada: ${propiedad}" >&2; exit 1 ;;
+        esac
+        if [[ "$valor" == 1 ]]; then echo "$r"; else echo "${propiedad}=${r}"; fi
+        ;;
+    *)
+        echo "systemctl: hostsim: verbo no simulado: ${verbo}" >&2
+        exit 1
+        ;;
+esac
+exit "$rc_total"
