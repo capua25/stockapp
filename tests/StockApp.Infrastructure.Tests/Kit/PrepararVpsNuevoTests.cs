@@ -1001,6 +1001,305 @@ public class PrepararVpsNuevoTests
         Assert.DoesNotContain("enable", todo);
     }
 
+    // ---------- Paso 4: TLS (certbot + deploy-hook) ----------
+
+    private const string HookInstalado = "/usr/local/sbin/stockapp-tls-deploy-hook.sh";
+
+    private static string[] LineasHost(HostSimulado h) =>
+        h.RastroHost().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+    private static int Cuantas(string texto, string fragmento) =>
+        Regex.Matches(texto, Regex.Escape(fragmento)).Count;
+
+    /// <summary>Planta la unit de la API y la arranca (lo que dejaría el primer deploy).</summary>
+    private static void PlantarApiActiva(HostSimulado h)
+    {
+        h.Escribir("/etc/systemd/system/stockapp-api.service", "[Service]\nExecStart=/bin/true\n");
+        Assert.Equal(0, h.Ejecutar("sudo systemctl start stockapp-api").ExitCode);
+    }
+
+    [Fact]
+    public void Tls_CertbotSaleDistintoDeCeroPeroCopio_Ok()
+    {
+        using var h = CrearHost();
+
+        var r = Correr(h, ConBase());
+
+        // La API todavía no existe: el hook copia los PEM y su `systemctl restart` falla, así
+        // que certbot sale distinto de cero aunque emitió. El paso mira el RESULTADO.
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*4/10\) certificado TLS \.+ OK", r.Stdout);
+        var host = h.RastroHost();
+        Assert.Contains(
+            $"certbot certonly --standalone -n --agree-tos --register-unsafely-without-email -d {Dominio} --deploy-hook {HookInstalado}",
+            host);
+        Assert.Contains("systemctl restart stockapp-api", host);   // el hook corrió y su restart falló
+        Assert.Equal("stockapp:stockapp 600", h.Ejecutar("sudo stat -c '%U:%G %a' /var/lib/stockapp/tls/fullchain.pem").Salida.Trim());
+        Assert.Equal("stockapp:stockapp 600", h.Ejecutar("sudo stat -c '%U:%G %a' /var/lib/stockapp/tls/privkey.pem").Salida.Trim());
+        Assert.Contains($"renew_hook = {HookInstalado}", h.Leer($"/etc/letsencrypt/renewal/{Dominio}.conf"));
+    }
+
+    [Fact]
+    public void Tls_ElHookSeInstalaPorScpYConInstallRootRoot0755()
+    {
+        using var h = CrearHost();
+
+        var r = Correr(h, ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Contains("SCP-ARGS:", h.Rastro());
+        Assert.Contains("stockapp-deploy/stockapp-tls-deploy-hook.sh", h.Rastro());
+        Assert.Equal("root:root 755", h.Ejecutar($"sudo stat -c '%U:%G %a' {HookInstalado}").Salida.Trim());
+        Assert.Equal(
+            File.ReadAllText(Path.Combine(BashLimpio.RaizRepo(), "deploy", "tls", "stockapp-tls-deploy-hook.sh")).TrimEnd(),
+            h.Leer(HookInstalado).TrimEnd());
+        var l = LineasSsh(h);
+        Assert.Contains(l, x => x.Contains("install -m 0755 -o root -g root") && x.Contains(HookInstalado));
+    }
+
+    [Fact]
+    public void Tls_EmitioPeroNoCopio_CorreElHookAMano()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        // El hook de la primera invocación (la de certbot) sale 1 sin copiar nada; las demás
+        // son el hook real. Así certbot emite pero los PEM no quedan.
+        var real = File.ReadAllText(Path.Combine(arbol.Raiz, "deploy", "tls", "stockapp-tls-deploy-hook.sh"));
+        File.WriteAllText(Path.Combine(arbol.Raiz, "deploy", "tls", "stockapp-tls-deploy-hook.sh"),
+            "#!/usr/bin/env bash\n" +
+            "if [[ ! -e /var/lib/hostsim/hook-primera-vez ]]; then : > /var/lib/hostsim/hook-primera-vez; exit 1; fi\n" +
+            real.Replace("#!/usr/bin/env bash\n", ""));
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*4/10\) certificado TLS \.+ OK", r.Stdout);
+        Assert.Equal(1, Cuantas(h.RastroHost(), "certbot certonly"));
+        Assert.Contains(LineasSsh(h),
+            l => l.Contains($"RENEWED_LINEAGE=/etc/letsencrypt/live/{Dominio}") && l.Contains(HookInstalado));
+        Assert.Equal("stockapp:stockapp 600", h.Ejecutar("sudo stat -c '%U:%G %a' /var/lib/stockapp/tls/privkey.pem").Salida.Trim());
+    }
+
+    [Fact]
+    public void Tls_Vigente_NoReEmite()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        Assert.Equal(0, arbol.Correr(ConBase()).Exit);
+        var rastroAntes = h.Rastro();
+        var hostAntes = h.RastroHost();
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*4/10\) certificado TLS \.+ YA ESTABA", r.Stdout);
+        var nuevas = string.Join('\n', LineasAdicionales(hostAntes, h.RastroHost()));
+        Assert.DoesNotContain("certbot", nuevas);
+        Assert.DoesNotContain("apt-get", nuevas);
+        Assert.Equal(1, Cuantas(h.RastroHost(), "certbot certonly"));
+        Assert.DoesNotContain("SCP-ARGS:", string.Join('\n', LineasAdicionales(rastroAntes, h.Rastro())));
+    }
+
+    [Fact]
+    public void Tls_UsuarioCreadoAntesDelCertificado()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        // El hook deja constancia de si `stockapp` existía cuando certbot lo corrió (hace chown).
+        var ruta = Path.Combine(arbol.Raiz, "deploy", "tls", "stockapp-tls-deploy-hook.sh");
+        File.WriteAllText(ruta, File.ReadAllText(ruta).Replace("set -euo pipefail\n",
+            "set -euo pipefail\nif id stockapp >/dev/null 2>&1; then echo si > /var/lib/hostsim/usuario-al-emitir; fi\n"));
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Equal("si", h.Leer("/var/lib/hostsim/usuario-al-emitir").Trim());
+        var l = LineasSsh(h);
+        var iUsuario = Array.FindIndex(l, x => x.Contains("sudo -n bash -s -- " + HostSimulado.Usuario));
+        var iCertonly = Array.FindIndex(l, x => x.Contains("certbot certonly"));
+        Assert.True(iUsuario >= 0 && iCertonly > iUsuario, string.Join('\n', l));
+    }
+
+    [Fact]
+    public void Tls_ConElFirewallActivo_LaReglaDelPuerto80DejaPasarALetsEncrypt()
+    {
+        using var h = CrearHost();
+
+        var r = Correr(h, ConBase());
+
+        // El certbot falso falla con `Timeout during connect (likely firewall problem)` si ufw
+        // está activo y no tiene la regla del 80: el paso 3 tiene que dejarla antes del 4.
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"(?m)^80/tcp\s+ALLOW\s+Anywhere$", h.EstadoUfw());
+        var l = LineasHost(h);
+        Assert.True(Array.FindIndex(l, x => x.StartsWith("ufw --force enable"))
+                    < Array.FindIndex(l, x => x.StartsWith("certbot certonly")), string.Join('\n', l));
+        Assert.Equal(0, h.Ejecutar($"sudo test -e /etc/letsencrypt/live/{Dominio}/fullchain.pem").ExitCode);
+    }
+
+    [Fact]
+    public void Tls_CertbotQueNoEmite_Aborta5NombrandoElPaso()
+    {
+        using var h = CrearHost();
+        Assert.Equal(0, h.Ejecutar("sudo apt-get install -y certbot").ExitCode);
+        Envolver(h, "/usr/local/sbin/certbot", "*certonly*");   // "anda" (exit 0) y no emite nada
+
+        var r = Correr(h, ConBase());
+
+        Assert.True(r.Exit == 5, r.Todo);
+        Assert.Matches(@"\(\s*4/10\) certificado TLS \.+ FALLÓ", r.Stdout);
+        Assert.NotEqual(0, h.Ejecutar($"sudo test -e /etc/letsencrypt/live/{Dominio}").ExitCode);
+    }
+
+    [Fact]
+    public void Tls_CertificadoPorVencer_NoCuentaComoHecho()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        Assert.Equal(0, arbol.Correr(ConBase()).Exit);
+        // Un certificado que vence en 10 días (menos de los 30 exigidos), en el lugar del vigente.
+        var tmp = Path.Combine(Path.GetTempPath(), "stockapp-corto-" + Guid.NewGuid().ToString("N")[..12]);
+        Directory.CreateDirectory(tmp);
+        try
+        {
+            var (exitSsl, _, errSsl) = BashLimpio.Ejecutar(
+                $"openssl req -x509 -days 10 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes " +
+                $"-subj /CN=corto.test.invalid -keyout {Sq(tmp)}/k.pem -out {Sq(tmp)}/c.pem");
+            Assert.True(exitSsl == 0, errSsl);
+            h.Escribir($"/etc/letsencrypt/archive/{Dominio}/fullchain1.pem", File.ReadAllText(Path.Combine(tmp, "c.pem")));
+        }
+        finally
+        {
+            Directory.Delete(tmp, recursive: true);
+        }
+
+        var r = arbol.Correr(ConBase("--verificar"));
+
+        Assert.True(r.Exit == 5, r.Todo);
+        Assert.Matches(@"\(\s*4/10\) certificado TLS \.+ PENDIENTE", r.Stdout);
+    }
+
+    [Fact]
+    public void Tls_RenewHookDistinto_NoCuentaComoHecho()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        Assert.Equal(0, arbol.Correr(ConBase()).Exit);
+        Assert.Equal(0, h.Ejecutar(
+            $"sudo sed -i 's|^renew_hook = .*|renew_hook = /usr/local/sbin/otro-hook.sh|' /etc/letsencrypt/renewal/{Dominio}.conf").ExitCode);
+
+        var r = arbol.Correr(ConBase("--verificar"));
+
+        Assert.True(r.Exit == 5, r.Todo);
+        Assert.Matches(@"\(\s*4/10\) certificado TLS \.+ PENDIENTE", r.Stdout);
+    }
+
+    [Fact]
+    public void Tls_PemConModoDistinto_SeCorrigeCorriendoElHook_SinReEmitir()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        Assert.Equal(0, arbol.Correr(ConBase()).Exit);
+        Assert.Equal(0, h.Ejecutar("sudo chmod 644 /var/lib/stockapp/tls/privkey.pem").ExitCode);
+        Assert.Matches(@"\(\s*4/10\) certificado TLS \.+ PENDIENTE", arbol.Correr(ConBase("--verificar")).Stdout);
+
+        var r = arbol.Correr(ConBase());
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*4/10\) certificado TLS \.+ OK", r.Stdout);
+        Assert.Equal(1, Cuantas(h.RastroHost(), "certbot certonly"));
+        Assert.Equal("stockapp:stockapp 600", h.Ejecutar("sudo stat -c '%U:%G %a' /var/lib/stockapp/tls/privkey.pem").Salida.Trim());
+    }
+
+    // ---------- Paso 9: renovación (solo con --probar-renovacion) ----------
+
+    private const string Marcador = "stockapp-deploy/.preparacion/renovacion-probada";
+
+    [Fact]
+    public void Renovacion_SinFlag_NuncaForceRenewal()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+
+        var r = arbol.Correr(ConBase());
+        var verificar = arbol.Correr(ConBase("--verificar"));
+
+        Assert.True(r.Exit == 0, r.Todo);
+        Assert.Matches(@"\(\s*9/10\) renovación del certificado \.+ OMITIDO.*\(sin --probar-renovacion\)", r.Stdout);
+        Assert.True(verificar.Exit == 0, verificar.Todo);   // el 9 no decide el exit de --verificar
+        Assert.Matches(@"\(\s*9/10\) renovación del certificado \.+ OMITIDO", verificar.Stdout);
+        Assert.DoesNotContain("--force-renewal", h.RastroHost());
+        Assert.DoesNotContain("--force-renewal", h.Rastro());
+        Assert.DoesNotContain("--force-renewal", r.Stdout + r.Stderr);
+        Assert.NotEqual(0, h.Ejecutar($"test -e ~/{Marcador}").ExitCode);
+    }
+
+    [Fact]
+    public void Renovacion_ConFlag_UnaSolaVez()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        PlantarApiActiva(h);
+
+        var primera = arbol.Correr(ConBase("--probar-renovacion"));
+
+        Assert.True(primera.Exit == 0, primera.Todo);
+        Assert.Matches(@"\(\s*9/10\) renovación del certificado \.+ OK", primera.Stdout);
+        Assert.Equal(1, Cuantas(h.RastroHost(), "--force-renewal"));
+        Assert.Contains($"certbot renew --force-renewal --cert-name {Dominio}", h.RastroHost());
+        var (exit, contenido) = h.Ejecutar($"cat ~/{Marcador}");
+        Assert.True(exit == 0, contenido);
+        Assert.Matches(@"^\d{4}-\d{2}-\d{2}", contenido.Trim());
+        Assert.Equal($"{HostSimulado.Usuario} 700",
+            h.Ejecutar("stat -c '%U %a' ~/stockapp-deploy/.preparacion").Salida.Trim());
+
+        var segunda = arbol.Correr(ConBase("--probar-renovacion"));
+
+        Assert.True(segunda.Exit == 0, segunda.Todo);
+        Assert.Matches(@"\(\s*9/10\) renovación del certificado \.+ YA ESTABA", segunda.Stdout);
+        Assert.Equal(1, Cuantas(h.RastroHost(), "--force-renewal"));
+    }
+
+    [Fact]
+    public void Renovacion_VerificaArranquePosterior()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        PlantarApiActiva(h);
+        var arranquesAntes = Cuantas(h.RastroHost(), "systemctl restart stockapp-api");
+
+        var r = arbol.Correr(ConBase("--probar-renovacion"));
+
+        // El hook (que corre dentro de `certbot renew`) reinició la API después de renovar, y
+        // el paso lo comprobó mirando el journal además del is-active.
+        Assert.True(r.Exit == 0, r.Todo);
+        var l = LineasHost(h);
+        var iRenew = Array.FindIndex(l, x => x.StartsWith("certbot renew"));
+        var iRestart = Array.FindIndex(l, iRenew + 1, x => x.StartsWith("systemctl restart stockapp-api"));
+        Assert.True(iRenew >= 0 && iRestart > iRenew, string.Join('\n', l));
+        Assert.True(Cuantas(h.RastroHost(), "systemctl restart stockapp-api") > arranquesAntes);
+        Assert.Contains(l, x => x.StartsWith("journalctl") && x.Contains("stockapp-api"));
+    }
+
+    [Fact]
+    public void Renovacion_SinArranquePosterior_FallaYNoDejaMarcador()
+    {
+        using var h = CrearHost();
+        using var arbol = new Arbol(h);
+        PlantarApiActiva(h);
+        // Un hook que copia pero NO reinicia: la API sigue `active` (del arranque viejo), pero no
+        // hubo un arranque posterior a la renovación.
+        var ruta = Path.Combine(arbol.Raiz, "deploy", "tls", "stockapp-tls-deploy-hook.sh");
+        File.WriteAllText(ruta, File.ReadAllText(ruta).Replace("systemctl restart stockapp-api", "true"));
+
+        var r = arbol.Correr(ConBase("--probar-renovacion"));
+
+        Assert.True(r.Exit == 5, r.Todo);
+        Assert.Matches(@"\(\s*9/10\) renovación del certificado \.+ FALLÓ", r.Stdout);
+        Assert.Equal("active", h.Ejecutar("systemctl is-active stockapp-api").Salida.Trim());
+        Assert.NotEqual(0, h.Ejecutar($"test -e ~/{Marcador}").ExitCode);
+    }
+
     // ---------- Lock ----------
 
     [Fact]

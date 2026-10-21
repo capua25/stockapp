@@ -162,6 +162,12 @@ correr_paso() {
     orq_paso "$n" "$PASOS_TOTAL" "$nombre"
     PASO_DETALLE=""
 
+    # El paso 9 gasta cupo de Let's Encrypt: solo con el flag explícito. Sin él, nunca se renueva.
+    if [[ "$n" -eq 9 && "$PROBAR_RENOVACION" -eq 0 ]]; then
+        orq_fin_paso OMITIDO "sin --probar-renovacion"
+        return 0
+    fi
+
     "paso${n}_hecho" || rc=$?
     case "$rc" in
         0)
@@ -709,15 +715,226 @@ paso3_aplicar() {
 }
 
 # ---------------------------------------------------------------------------------------
+# Paso 4: TLS (certbot + deploy-hook)
+# ---------------------------------------------------------------------------------------
+
+# Donde vive el hook en el servidor: es el `renew_hook` que certbot guarda en el .conf del dominio.
+TLS_HOOK="/usr/local/sbin/stockapp-tls-deploy-hook.sh"
+TLS_HOOK_LOCAL="$REPO_ROOT/deploy/tls/stockapp-tls-deploy-hook.sh"
+# Resultado de paso4_hecho: hecho | sin-cert | sin-pem.
+P4_ESTADO=""
+
+# Corre como root con el dominio como argumento y viaja por stdin de ssh.
+#   sin-cert  falta live/<dominio>, el certificado vence en menos de 30 días o el renew_hook
+#             del .conf no es el hook
+#   sin-pem   el certificado está bien pero los PEM de /var/lib/stockapp/tls no son
+#             stockapp:stockapp 0600
+PASO4_LEER='
+set -u
+d="$1"
+hook="'"$TLS_HOOK"'"
+le=/etc/letsencrypt
+cert=1
+[ -f "$le/live/$d/fullchain.pem" ] || cert=0
+if [ "$cert" = 1 ]; then
+    openssl x509 -checkend 2592000 -noout -in "$le/live/$d/fullchain.pem" >/dev/null 2>&1 || cert=0
+fi
+if [ "$cert" = 1 ]; then
+    [ "$(sed -n "s/^renew_hook = //p" "$le/renewal/$d.conf" 2>/dev/null | head -n 1)" = "$hook" ] || cert=0
+fi
+if [ "$cert" = 0 ]; then echo sin-cert; exit 0; fi
+pem=1
+for f in fullchain.pem privkey.pem; do
+    [ "$(stat -c "%U:%G %a" -- "/var/lib/stockapp/tls/$f" 2>/dev/null)" = "stockapp:stockapp 600" ] || pem=0
+done
+if [ "$pem" = 1 ]; then echo hecho; else echo sin-pem; fi
+'
+
+paso4_hecho() {
+    orq_ssh NUEVO "sudo -n bash -s -- ${NUEVO_API_HOSTNAME}" "$PASO4_LEER"
+    if [[ "$ORQ_RC" -ne 0 ]]; then
+        PASO_DETALLE="${ORQ_STDERR}"
+        return 8
+    fi
+    case "$ORQ_SALIDA" in
+        hecho) P4_ESTADO="$ORQ_SALIDA"; return 0 ;;
+        sin-cert|sin-pem) P4_ESTADO="$ORQ_SALIDA"; return 1 ;;
+        *)
+            PASO_DETALLE="respuesta ilegible del servidor."
+            return 8
+            ;;
+    esac
+}
+
+# paso4_hook_a_mano: el hook corre con RENEWED_LINEAGE como lo haría certbot. Su exit no cuenta
+# (el `systemctl restart stockapp-api` falla mientras la API no existe): cuenta el resultado.
+paso4_hook_a_mano() {
+    orq_ssh NUEVO "sudo -n env RENEWED_LINEAGE=/etc/letsencrypt/live/${NUEVO_API_HOSTNAME} ${TLS_HOOK}"
+    if [[ "$ORQ_RC" -eq 255 ]]; then
+        volcar_error
+        return 8
+    fi
+    return 0
+}
+
+# Aplicar: certbot, el hook y el estado en el que quedó la emisión. P4_ESTADO viene de la lectura
+# que correr_paso hizo justo antes.
+paso4_aplicar() {
+    local rc=0 certbot_rc=""
+
+    if [[ "$P4_ESTADO" != "sin-pem" ]]; then
+        orq_ssh NUEVO "sudo -n apt-get update && sudo -n env DEBIAN_FRONTEND=noninteractive apt-get install -y certbot"
+        if [[ "$ORQ_RC" -ne 0 ]]; then
+            volcar_error
+            if [[ "$ORQ_RC" -eq 255 ]]; then
+                return 8
+            fi
+            PASO_DETALLE="apt-get install certbot salió con $ORQ_RC."
+            return 1
+        fi
+    fi
+
+    # El hook: scp al staging del usuario (el paso 2 creó ~/stockapp-deploy) e install root:root 0755.
+    scp -P "$NUEVO_VPS_SSH_PORT" -o BatchMode=yes -q "$TLS_HOOK_LOCAL" \
+        "${NUEVO_VPS_USER}@${NUEVO_VPS_HOST}:stockapp-deploy/stockapp-tls-deploy-hook.sh" \
+        9>&- </dev/null 2>/dev/null || rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+        if [[ "$rc" -eq 255 ]]; then
+            return 8
+        fi
+        PASO_DETALLE="scp del hook salió con $rc."
+        return 1
+    fi
+    orq_ssh NUEVO 'sudo -n install -m 0755 -o root -g root "$HOME/stockapp-deploy/stockapp-tls-deploy-hook.sh" '"${TLS_HOOK}"
+    if [[ "$ORQ_RC" -ne 0 ]]; then
+        volcar_error
+        if [[ "$ORQ_RC" -eq 255 ]]; then
+            return 8
+        fi
+        PASO_DETALLE="no pude instalar el hook en ${TLS_HOOK} (salió con $ORQ_RC)."
+        return 1
+    fi
+
+    if [[ "$P4_ESTADO" == "sin-cert" ]]; then
+        # Sin mirar el exit de certbot: en la primera emisión la API todavía no existe, el
+        # `systemctl restart` del hook falla y certbot sale distinto de cero aunque emitió.
+        # Con -n y una cuenta ACME nueva certbot necesita --register-unsafely-without-email.
+        orq_ssh NUEVO "sudo -n certbot certonly --standalone -n --agree-tos --register-unsafely-without-email -d ${NUEVO_API_HOSTNAME} --deploy-hook ${TLS_HOOK}"
+        certbot_rc="$ORQ_RC"
+        if [[ "$certbot_rc" -eq 255 ]]; then
+            volcar_error
+            return 8
+        fi
+        if [[ "$certbot_rc" -ne 0 ]]; then
+            volcar_error
+        fi
+        rc=0
+        paso4_hecho || rc=$?
+        case "$rc" in
+            0) return 0 ;;
+            1) ;;
+            *) return 8 ;;
+        esac
+        if [[ "$P4_ESTADO" == "sin-cert" ]]; then
+            PASO_DETALLE="certbot salió con ${certbot_rc} y no quedó un certificado vigente con el hook registrado."
+            return 1
+        fi
+    fi
+
+    # El certificado existe y los PEM no (o no son los esperados): se corre el hook a mano.
+    paso4_hook_a_mano || return $?
+}
+
+# ---------------------------------------------------------------------------------------
+# Paso 9: prueba de la renovación (solo con --probar-renovacion, una única vez)
+# ---------------------------------------------------------------------------------------
+
+# Cuántos arranques de stockapp-api registra el journal. Un arranque posterior a la renovación
+# es un recuento mayor, sin depender de relojes (el del servidor y el del journal).
+PASO9_ARRANQUES='
+set -u
+out="$(journalctl -u stockapp-api.service --no-pager -o cat)" || exit 3
+printf "%s\n" "$out" | awk "/^Started /{n++} END{print n+0}"
+'
+
+# paso9_arranques: deja P9_ARRANQUES (número). rc 0 / 8.
+paso9_arranques() {
+    orq_ssh NUEVO "sudo -n bash -s" "$PASO9_ARRANQUES"
+    if [[ "$ORQ_RC" -ne 0 || ! "$ORQ_SALIDA" =~ ^[0-9]+$ ]]; then
+        PASO_DETALLE="no pude contar los arranques de stockapp-api en el journal (salió con $ORQ_RC). ${ORQ_STDERR}"
+        return 8
+    fi
+    P9_ARRANQUES="$ORQ_SALIDA"
+}
+
+# El marcador es lo único que no se puede observar: que la renovación ya se probó.
+paso9_hecho() {
+    orq_ssh NUEVO 'test -f "$HOME/stockapp-deploy/.preparacion/renovacion-probada"'
+    case "$ORQ_RC" in
+        0) return 0 ;;
+        1) return 1 ;;
+        *)
+            PASO_DETALLE="no pude consultar el marcador de la renovación (salió con $ORQ_RC). ${ORQ_STDERR}"
+            return 8
+            ;;
+    esac
+}
+
+paso9_aplicar() {
+    local antes renew_rc
+
+    paso9_arranques || return $?
+    antes="$P9_ARRANQUES"
+
+    # Forzada: gasta cupo de Let's Encrypt. El exit no decide; decide lo que se observa después.
+    orq_ssh NUEVO "sudo -n certbot renew --force-renewal --cert-name ${NUEVO_API_HOSTNAME}"
+    renew_rc="$ORQ_RC"
+    if [[ "$renew_rc" -eq 255 ]]; then
+        volcar_error
+        return 8
+    fi
+    if [[ "$renew_rc" -ne 0 ]]; then
+        volcar_error
+    fi
+
+    orq_ssh NUEVO "systemctl is-active stockapp-api"
+    if [[ "$ORQ_RC" -eq 255 ]]; then
+        PASO_DETALLE="${ORQ_STDERR}"
+        return 8
+    fi
+    if [[ "$ORQ_SALIDA" != "active" ]]; then
+        PASO_DETALLE="después de renovar (certbot salió con ${renew_rc}) stockapp-api no está active (dice '${ORQ_SALIDA}')."
+        return 1
+    fi
+    paso9_arranques || return $?
+    if [[ "$P9_ARRANQUES" -le "$antes" ]]; then
+        PASO_DETALLE="certbot salió con ${renew_rc} y el journal no registra un arranque de stockapp-api posterior a la renovación (el hook no reinició la API)."
+        return 1
+    fi
+
+    orq_ssh NUEVO 'umask 077 && install -d -m 700 "$HOME/stockapp-deploy/.preparacion" && date -u +%Y-%m-%dT%H:%M:%SZ > "$HOME/stockapp-deploy/.preparacion/renovacion-probada"'
+    if [[ "$ORQ_RC" -ne 0 ]]; then
+        volcar_error
+        if [[ "$ORQ_RC" -eq 255 ]]; then
+            return 8
+        fi
+        PASO_DETALLE="la renovación se probó pero no pude escribir el marcador (salió con $ORQ_RC)."
+        return 1
+    fi
+}
+
+# ---------------------------------------------------------------------------------------
 # Programa principal
 # ---------------------------------------------------------------------------------------
 
 # Cada paso es el par pasoN_hecho / pasoN_aplicar; se registra acá con su nombre.
-PASOS=(1 2 3)
+PASOS=(1 2 3 4 9)
 declare -A PASOS_NOMBRE=(
     [1]="Docker"
     [2]="usuario y directorios"
     [3]="firewall"
+    [4]="certificado TLS"
+    [9]="renovación del certificado"
 )
 
 main() {
