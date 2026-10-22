@@ -88,7 +88,8 @@
 #      ausente o repetido
 #   8  no se pudo consultar o crear (docker con error, Postgres o una API que no arranca, una
 #      API que no se pudo detener)
-#   9  alcance: al limpiar, la lista de contenedores no es la de antes de preparar
+#   9  alcance: al limpiar, la lista de contenedores no es la de antes de preparar (sin contar
+#      los de Testcontainers, label org.testcontainers=true: los de la suite de tests)
 #   volcar, restaurar y migrar devuelven el código del script que corren.
 # =======================================================================================
 
@@ -334,9 +335,13 @@ contiene() {
     return 1
 }
 
+# contenedores_ps: los contenedores corriendo, ordenados, SIN los de Testcontainers (label
+# org.testcontainers=true): el ryuk y el fixture de otra corrida de la suite de tests aparecen y
+# desaparecen solos (el fixture, con un nombre aleatorio) y no son nada que el ensayo pueda haber
+# tocado. Todo otro contenedor que aparezca o desaparezca sigue contando.
 contenedores_ps() {
-    lista_docker "los contenedores corriendo (docker ps)" docker ps --format '{{.Names}}'
-    printf '%s\n' "$LISTA" | LC_ALL=C sort
+    lista_docker "los contenedores corriendo (docker ps)" docker ps --format '{{.Names}}\t{{.Label "org.testcontainers"}}'
+    printf '%s\n' "$LISTA" | awk -F'\t' '$2 != "true" { print $1 }' | LC_ALL=C sort
 }
 
 esperar_postgres() {

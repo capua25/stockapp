@@ -461,8 +461,7 @@ public class EnsayoLocalTests : IDisposable
         var resultado = await ejecutor.EjecutarAsync(_fixture.ConnectionString, dump, CancellationToken.None);
         Assert.True(resultado.Exitoso, $"pg_dump falló: {resultado.MensajeError}");
 
-        var psAntes = Bash("docker ps --format '{{.Names}}' | LC_ALL=C sort");
-        Assert.True(psAntes.ExitCode == 0, Diag(psAntes));
+        var psAntes = ContenedoresCorriendo();
         try
         {
             var preparar = Bash($"\"{Script}\" preparar \"{dump}\" --trabajo \"{trabajo}\" " +
@@ -492,7 +491,7 @@ public class EnsayoLocalTests : IDisposable
             Assert.True(contenedores.ExitCode == 0 && volumenes.ExitCode == 0, Diag(contenedores) + Diag(volumenes));
             Assert.DoesNotContain(sufijo, contenedores.Stdout);
             Assert.DoesNotContain(sufijo, volumenes.Stdout);
-            Assert.Equal(psAntes.Stdout, Bash("docker ps --format '{{.Names}}' | LC_ALL=C sort").Stdout);
+            Assert.Equal(psAntes, ContenedoresCorriendo());
         }
         finally
         {
@@ -742,6 +741,14 @@ public class EnsayoLocalTests : IDisposable
 
     private static string[] TodosLosContenedores() => Lineas("docker ps -a --format '{{.Names}}'");
 
+    /// <summary>
+    /// Los contenedores corriendo, sin los de Testcontainers (label org.testcontainers=true, R55): el
+    /// mismo criterio que la comparación de limpiar. El ryuk y el fixture de otra corrida de la suite
+    /// aparecen y desaparecen solos; todo otro contenedor cuenta.
+    /// </summary>
+    private static string[] ContenedoresCorriendo() =>
+        Lineas("docker ps --format '{{.Names}}\\t{{.Label \"org.testcontainers\"}}' | awk -F'\\t' '$2 != \"true\" { print $1 }'");
+
     private static string EstadoDe(string contenedor) =>
         Bash($"docker inspect -f '{{{{.Id}}}} {{{{.State.Status}}}} {{{{.State.StartedAt}}}}' {contenedor} 2>/dev/null || echo ausente").Stdout.Trim();
 
@@ -835,7 +842,7 @@ public class EnsayoLocalTests : IDisposable
         var sufijo = Guid.NewGuid().ToString("N")[..8];
         var trabajo = Path.Combine(DirectorioNuevo("ensayo-mig-"), "trabajo");
         var home = DirectorioNuevo("ensayo-mig-home-");
-        var psAntes = Lineas("docker ps --format '{{.Names}}'");
+        var psAntes = ContenedoresCorriendo();
         var pids = new List<int>();
         try
         {
@@ -851,7 +858,7 @@ public class EnsayoLocalTests : IDisposable
             Assert.All(pids, p => Assert.False(Vivo(p), $"la API con PID {p} sigue viva"));
             Assert.DoesNotContain(TodosLosContenedores(), n => n.EndsWith("-" + sufijo));
             Assert.DoesNotContain(Lineas("docker volume ls --format '{{.Name}}'"), n => n.EndsWith("_" + sufijo));
-            Assert.Equal(psAntes, Lineas("docker ps --format '{{.Names}}'"));
+            Assert.Equal(psAntes, ContenedoresCorriendo());
         }
         finally
         {
@@ -1139,6 +1146,48 @@ public class EnsayoLocalTests : IDisposable
     }
 
     /// <summary>
+    /// R55: la comparación de limpiar no cuenta los contenedores de Testcontainers (label
+    /// org.testcontainers=true): el ryuk y el fixture de OTRA corrida de la suite aparecen y
+    /// desaparecen solos, y el fixture tiene un nombre aleatorio. Cualquier otro contenedor que
+    /// aparezca o desaparezca entre preparar y limpiar sigue dando 9. Un dotnet del test hace que
+    /// preparar-migracion aborte justo después de guardar la lista (sin APIs ni Postgres).
+    /// </summary>
+    [Theory]
+    [InlineData(true, "desaparece", 0)]
+    [InlineData(true, "aparece", 0)]
+    [InlineData(false, "desaparece", 9)]
+    [InlineData(false, "aparece", 9)]
+    public void Limpiar_SoloLosContenedoresDeTestcontainersQuedanFueraDeLaComparacion(bool conLabel, string cambio, int exitEsperado)
+    {
+        var sufijo = Guid.NewGuid().ToString("N")[..8];
+        var trabajo = Path.Combine(DirectorioNuevo("ensayo-r55-"), "trabajo");
+        var home = DirectorioNuevo("ensayo-r55-home-");
+        var bin = DirectorioNuevo("ensayo-r55-bin-");
+        BashLimpio.EscribirEjecutable(Path.Combine(bin, "dotnet"), "#!/usr/bin/env bash\nexit 1\n");
+        var ajeno = $"stockapp-ensayo-ajeno-{sufijo}";
+        var crear = $"docker run -d --name {ajeno} {(conLabel ? "--label org.testcontainers=true " : "")}alpine sleep 300 >/dev/null";
+        try
+        {
+            if (cambio == "desaparece") Assert.True(Bash(crear).ExitCode == 0, "no se pudo crear " + ajeno);
+            var preparar = BashLimpio.Ejecutar($"export PATH=\"{bin}:$PATH\"\n" +
+                $"\"{Script}\" preparar-migracion --trabajo \"{trabajo}\" --sufijo {sufijo} " +
+                $"--puerto-viejo {PuertoLibre()} --puerto-nuevo {PuertoLibre()}", home);
+            Assert.True(preparar.ExitCode == 8, "preparar-migracion (dotnet del test que falla): " + Diag(preparar));
+            if (cambio == "desaparece") Assert.True(Bash($"docker rm -f {ajeno} >/dev/null").ExitCode == 0);
+            else Assert.True(Bash(crear).ExitCode == 0, "no se pudo crear " + ajeno);
+
+            var r = BashLimpio.Ejecutar($"\"{Script}\" limpiar --trabajo \"{trabajo}\"", home);
+
+            Assert.True(r.ExitCode == exitEsperado, Diag(r));
+            if (exitEsperado == 9) Assert.Contains(ajeno, r.Stderr);
+        }
+        finally
+        {
+            Bash($"docker rm -f {ajeno} 2>/dev/null; true");
+        }
+    }
+
+    /// <summary>
     /// Con dos hosts, el sudo falso deja un rastro ordenado de lo que corre como root en cada host
     /// simulado (&lt;trabajo&gt;/sudo.rastro, "&lt;host&gt; &lt;comando&gt;"): es lo que permite
     /// afirmar el ORDEN de la vuelta atrás en el viejo y que el nuevo se detuvo antes. Sin
@@ -1200,7 +1249,7 @@ public class EnsayoLocalTests : IDisposable
         var sufijo = Guid.NewGuid().ToString("N")[..8];
         var a = new Arnes(Path.Combine(DirectorioNuevo("ensayo-e2e-"), "trabajo"), sufijo,
             DirectorioNuevo("ensayo-e2e-home-"), DirectorioNuevo("ensayo-e2e-bin-"),
-            Lineas("docker ps --format '{{.Names}}'"));
+            ContenedoresCorriendo());
         var docker = Bash("command -v docker").Stdout.Trim();
         Assert.StartsWith("/", docker);
         BashLimpio.EscribirEjecutable(Path.Combine(a.Bin, "docker"),
@@ -1253,9 +1302,95 @@ public class EnsayoLocalTests : IDisposable
             .Select(l => l.Split('='))
             .ToDictionary(p => p[0], p => long.Parse(p[1]));
 
-    /// <summary>Huella del contenido completo de "Categorias" (cada fila, en orden de Id).</summary>
-    private static string HuellaCategorias(string contenedor) =>
-        Psql(contenedor, "SELECT md5(coalesce(string_agg(format('%s|%s|%s', \"Id\", \"Nombre\", \"Activo\"), E'\\n' ORDER BY \"Id\"), '')) FROM \"Categorias\";");
+    /// <summary>
+    /// Las tablas que la verificación (V8 hace un backup) puede hacer crecer en el nuevo: su huella se
+    /// toma solo hasta el último Id del viejo, así las filas que ya existían se comparan por contenido
+    /// y una pérdida no queda compensada por las filas nuevas.
+    /// </summary>
+    private static readonly string[] TablasQueCrecen = ["LogsAuditoria", "CorridasBackup"];
+
+    /// <summary>El último Id del viejo en cada tabla de <see cref="TablasQueCrecen"/>.</summary>
+    private static Dictionary<string, long> Topes(string contenedor) =>
+        TablasQueCrecen.ToDictionary(t => t, t => long.Parse(Psql(contenedor, $"SELECT coalesce(max(\"Id\"), 0) FROM \"{t}\";")));
+
+    /// <summary>
+    /// Huella del CONTENIDO de cada tabla de public: md5 de todas sus filas (como texto, bytea
+    /// incluido), en un orden estable. "Usuarios" sin UltimoAcceso (lo cambia un login); las tablas
+    /// que crecen, hasta <paramref name="topes"/>.
+    /// </summary>
+    private static Dictionary<string, string> Huellas(string contenedor, IEnumerable<string> tablas, Dictionary<string, long> topes)
+    {
+        var sql = string.Join("\n", tablas.Select(t =>
+        {
+            var origen = t switch
+            {
+                "Usuarios" => "SELECT \"Id\", \"NombreUsuario\", \"NombreCompleto\", \"HashContrasena\", \"Rol\", \"Activo\", \"FechaAlta\" FROM \"Usuarios\"",
+                _ when topes.TryGetValue(t, out var tope) => $"SELECT * FROM \"{t}\" WHERE \"Id\" <= {tope}",
+                _ => $"SELECT * FROM \"{t}\"",
+            };
+            return $"SELECT '{t}=' || md5(coalesce(string_agg(x::text, E'\\n' ORDER BY x::text), '')) FROM ({origen}) x;";
+        }));
+        return Psql(contenedor, sql).Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(l => l.Split('=', 2))
+            .ToDictionary(p => p[0], p => p[1]);
+    }
+
+    /// <summary>
+    /// Datos de negocio reales en el viejo, con sus FK: un usuario con permisos, unidad, proveedor,
+    /// rubro y fuente; un producto con stock y dos movimientos ligados a un gasto; el gasto con un
+    /// adjunto de 1,6 MB de bytea aleatorio (va por TOAST); una tarea; y tres filas de auditoría.
+    /// Devuelve el nombre del registro marcado en "Categorias".
+    /// </summary>
+    private static string SembrarViejo(Arnes a)
+    {
+        var s = a.Sufijo;
+        Psql(a.Viejo, $$"""
+            BEGIN;
+            INSERT INTO "UnidadesMedida" ("Nombre", "Abreviatura") VALUES ('Unidad {{s}}', 'u');
+            INSERT INTO "Proveedores" ("Nombre", "Telefono") VALUES ('Proveedor {{s}}', '099 123 456');
+            INSERT INTO "RubrosGasto" ("Codigo", "Nombre") VALUES (101, 'Rubro {{s}}');
+            INSERT INTO "FuentesFinanciamiento" ("Nombre", "Activo") VALUES ('Fuente {{s}}', true);
+            INSERT INTO "Usuarios" ("NombreUsuario", "NombreCompleto", "HashContrasena", "Rol", "FechaAlta")
+                VALUES ('operador{{s}}', 'Operador del ensayo', 'hash-de-ensayo', 1, '2026-10-01T12:00:00Z');
+            INSERT INTO "PermisosUsuario" ("UsuarioId", "Permiso")
+                SELECT "Id", p FROM "Usuarios", unnest(ARRAY['GestionarStock', 'GestionarGastos']) p WHERE "NombreUsuario" = 'operador{{s}}';
+            INSERT INTO "Productos" ("Codigo", "Nombre", "UnidadMedidaId", "ProveedorId", "PrecioCosto", "StockActual", "StockMinimo", "FechaAlta")
+                SELECT 'P-{{s}}', 'Producto {{s}}', u."Id", p."Id", 3.75, 87.5, 10, '2026-10-01T12:00:00Z'
+                FROM "UnidadesMedida" u, "Proveedores" p WHERE u."Nombre" = 'Unidad {{s}}' AND p."Nombre" = 'Proveedor {{s}}';
+            INSERT INTO "Gastos" ("ProveedorId", "NumeroFactura", "Detalle", "Fecha", "MontoTotal", "FuenteFinanciamientoId", "RubroGastoId", "CondicionPago")
+                SELECT p."Id", 'F-{{s}}', 'Gasto {{s}}', '2026-10-02T12:00:00Z', 1234.56, f."Id", r."Id", 0
+                FROM "Proveedores" p, "FuentesFinanciamiento" f, "RubrosGasto" r
+                WHERE p."Nombre" = 'Proveedor {{s}}' AND f."Nombre" = 'Fuente {{s}}' AND r."Nombre" = 'Rubro {{s}}';
+            INSERT INTO "MovimientosStock" ("ProductoId", "UsuarioId", "Tipo", "Cantidad", "PrecioUnitario", "Fecha", "Motivo", "Comentario", "GastoId")
+                SELECT pr."Id", u."Id", v.t, v.c, 3.75, '2026-10-02T13:00:00Z', 0, 'movimiento {{s}}', g."Id"
+                FROM "Productos" pr, "Usuarios" u, "Gastos" g, (VALUES (0, 100.0), (1, 12.5)) v(t, c)
+                WHERE pr."Codigo" = 'P-{{s}}' AND u."NombreUsuario" = 'admin' AND g."NumeroFactura" = 'F-{{s}}';
+            WITH contenido AS (
+                SELECT decode(string_agg(md5(random()::text || i), '' ORDER BY i), 'hex') AS b FROM generate_series(1, 100000) i
+            ), adjunto AS (
+                INSERT INTO "Adjuntos" ("NombreArchivo", "ContentType", "TamanoBytes", "GastoId", "FechaAltaUtc")
+                SELECT 'factura-{{s}}.pdf', 'application/pdf', length(c.b), g."Id", '2026-10-02T14:00:00Z'
+                FROM contenido c, "Gastos" g WHERE g."NumeroFactura" = 'F-{{s}}'
+                RETURNING "Id"
+            )
+            INSERT INTO "AdjuntosContenido" ("Id", "Contenido") SELECT a."Id", c.b FROM adjunto a, contenido c;
+            INSERT INTO "Tareas" ("Titulo", "Descripcion", "Estado", "Prioridad", "CreadaPorUsuarioId", "FechaCreacion", "FechaLimite")
+                SELECT 'Tarea {{s}}', 'Revisar el stock del ensayo', 0, 2, "Id", '2026-10-03T12:00:00Z', '2026-11-01T12:00:00Z'
+                FROM "Usuarios" WHERE "NombreUsuario" = 'admin';
+            INSERT INTO "LogsAuditoria" ("UsuarioId", "Fecha", "Accion", "Entidad", "EntidadId", "Detalle")
+                SELECT u."Id", '2026-10-02T13:00:00Z', v.a, v.e, 1, 'auditoría {{s}} ' || v.e
+                FROM "Usuarios" u, (VALUES (0, 'Producto'), (1, 'Gasto'), (0, 'Tarea')) v(a, e) WHERE u."NombreUsuario" = 'admin';
+            COMMIT;
+            """);
+        var marca = "marca" + s;
+        Marcar(a.Viejo, marca);
+        return marca;
+    }
+
+    /// <summary>sha256 y largo del adjunto sembrado, leídos de la base (vacío si no está).</summary>
+    private static string Adjunto(string contenedor, string sufijo) =>
+        Psql(contenedor, "SELECT encode(sha256(c.\"Contenido\"), 'hex') || '|' || length(c.\"Contenido\") || '|' || a.\"TamanoBytes\" " +
+            $"FROM \"Adjuntos\" a JOIN \"AdjuntosContenido\" c USING (\"Id\") WHERE a.\"NombreArchivo\" = 'factura-{sufijo}.pdf';");
 
     /// <summary>Un registro concreto que solo existe en la base donde el test lo escribió.</summary>
     private static string Marcar(string contenedor, string nombre) =>
@@ -1265,25 +1400,38 @@ public class EnsayoLocalTests : IDisposable
         Psql(contenedor, $"SELECT format('%s|%s|%s', \"Id\", \"Nombre\", \"Activo\") FROM \"Categorias\" WHERE \"Nombre\" = '{nombre}';");
 
     /// <summary>
-    /// Las dos bases con los mismos datos: el mismo conjunto de tablas, la misma cantidad de filas en
-    /// cada una (LogsAuditoria y CorridasBackup del nuevo pueden haber crecido con la verificación:
-    /// V8 hace un backup), el mismo contenido de Categorias y el registro concreto del test en las dos.
+    /// Las dos bases con los mismos datos (los sembrados por <see cref="SembrarViejo"/>):
+    /// <list type="bullet">
+    /// <item>el mismo conjunto de tablas y la misma cantidad de filas en cada una (las de
+    /// <see cref="TablasQueCrecen"/> pueden tener más en el nuevo);</item>
+    /// <item>el mismo CONTENIDO en cada tabla (<see cref="Huellas"/>): en las que crecen, todas las filas
+    /// del viejo, por Id, iguales en el nuevo; en "Usuarios", todo salvo UltimoAcceso;</item>
+    /// <item>el adjunto con el mismo sha256 y largo, y el registro marcado igual en las dos.</item>
+    /// </list>
     /// </summary>
     private static void AfirmarMismosDatos(Arnes a, string marca, string contexto)
     {
         var viejo = Conteos(a.Viejo);
         var nuevo = Conteos(a.Nuevo);
-        Assert.True(viejo["Usuarios"] >= 1 && viejo["Categorias"] >= 1 && viejo["CorridasBackup"] >= 1,
-            $"{contexto}: el viejo no tiene los datos que el arnés siembra");
+        foreach (var (tabla, minimo) in new[] { ("Usuarios", 2), ("PermisosUsuario", 2), ("Productos", 1), ("MovimientosStock", 2),
+                     ("Gastos", 1), ("Adjuntos", 1), ("AdjuntosContenido", 1), ("Tareas", 1), ("LogsAuditoria", 3), ("CorridasBackup", 1), ("Categorias", 1) })
+            Assert.True(viejo[tabla] >= minimo, $"{contexto}: el viejo tiene {viejo[tabla]} filas en \"{tabla}\" y el test sembró al menos {minimo}");
         Assert.Equal(viejo.Keys.Order(), nuevo.Keys.Order());
         foreach (var (tabla, n) in viejo)
         {
-            if (tabla is "LogsAuditoria" or "CorridasBackup")
+            if (TablasQueCrecen.Contains(tabla))
                 Assert.True(nuevo[tabla] >= n, $"{contexto}: \"{tabla}\" tiene {n} filas en el viejo y {nuevo[tabla]} en el nuevo");
             else
                 Assert.True(nuevo[tabla] == n, $"{contexto}: \"{tabla}\" tiene {n} filas en el viejo y {nuevo[tabla]} en el nuevo");
         }
-        Assert.Equal(HuellaCategorias(a.Viejo), HuellaCategorias(a.Nuevo));
+        var topes = Topes(a.Viejo);
+        var huellasViejo = Huellas(a.Viejo, viejo.Keys, topes);
+        var huellasNuevo = Huellas(a.Nuevo, viejo.Keys, topes);
+        var distintas = viejo.Keys.Where(t => huellasViejo[t] != huellasNuevo[t]).ToArray();
+        Assert.True(distintas.Length == 0, $"{contexto}: el contenido difiere entre el viejo y el nuevo en: {string.Join(", ", distintas)}");
+        var adjunto = Adjunto(a.Viejo, a.Sufijo);
+        Assert.Matches(@"^[0-9a-f]{64}\|1600000\|1600000$", adjunto);
+        Assert.True(Adjunto(a.Nuevo, a.Sufijo) == adjunto, $"{contexto}: el adjunto del viejo ({adjunto}) no está igual en el nuevo");
         var fila = FilaDe(a.Viejo, marca);
         Assert.Matches($@"^\d+\|{marca}\|t$", fila);
         Assert.True(FilaDe(a.Nuevo, marca) == fila, $"{contexto}: el registro '{marca}' del viejo ({fila}) no está igual en el nuevo");
@@ -1339,18 +1487,25 @@ public class EnsayoLocalTests : IDisposable
         return File.Exists(archivo) ? File.ReadAllLines(archivo) : [];
     }
 
-    /// <summary>PIDs de toda API publicada de ESTE arnés que siga viva (también las de arranques anteriores).</summary>
-    private static int[] ApisVivas(Arnes a)
+    /// <summary>
+    /// PIDs de toda API publicada de ESTE arnés que siga viva (también las de arranques anteriores), o
+    /// null si ps falló. Sin asserts: lo usa también la limpieza de respaldo.
+    /// </summary>
+    private static int[]? PidsDeApis(Arnes a)
     {
         var dll = $"{a.Trabajo}/api/StockApp.Api.dll";
         var r = Bash("ps -eo pid=,args=");
-        Assert.True(r.ExitCode == 0, Diag(r));
+        if (r.ExitCode != 0) return null;
         return r.Stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries)
             .Select(l => l.Trim())
             .Where(l => l.Contains(dll))
-            .Select(l => int.Parse(l.Split(' ', 2)[0]))
+            .Select(l => int.TryParse(l.Split(' ', 2)[0], out var p) ? p : 0)
+            .Where(p => p > 0)
             .ToArray();
     }
+
+    private static int[] ApisVivas(Arnes a) =>
+        PidsDeApis(a) ?? throw new InvalidOperationException("ps -eo pid=,args= falló: no se puede saber si quedaron APIs vivas");
 
     /// <summary>limpiar, y la máquina como estaba: docker ps igual, ninguna API viva, nada del sufijo, HOME del test vacío.</summary>
     private static void AfirmarTerminaLimpio(Arnes a)
@@ -1358,7 +1513,7 @@ public class EnsayoLocalTests : IDisposable
         var limpiar = BashLimpio.Ejecutar($"export PATH=\"{a.Bin}:$PATH\"\n\"{Script}\" limpiar --trabajo \"{a.Trabajo}\"", a.Home);
         Assert.True(limpiar.ExitCode == 0, "limpiar: " + Diag(limpiar));
         Assert.Empty(ApisVivas(a));
-        Assert.Equal(a.PsAntes, Lineas("docker ps --format '{{.Names}}'"));
+        Assert.Equal(a.PsAntes, ContenedoresCorriendo());
         Assert.DoesNotContain(TodosLosContenedores(), n => n.EndsWith("-" + a.Sufijo));
         Assert.DoesNotContain(Lineas("docker volume ls --format '{{.Name}}'"), n => n.EndsWith("_" + a.Sufijo));
         Assert.False(File.Exists(Path.Combine(a.Bin, "toco-stockapp-pg")),
@@ -1366,16 +1521,31 @@ public class EnsayoLocalTests : IDisposable
         Assert.Empty(Directory.EnumerateFileSystemEntries(a.Home));
     }
 
-    /// <summary>Pase lo que pase: las APIs del arnés por PID exacto (su grupo: PID == PGID), limpiar y los nombres exactos.</summary>
+    /// <summary>
+    /// Pase lo que pase: las APIs del arnés por PID exacto (su grupo: PID == PGID), limpiar (con el
+    /// docker del test al frente, dentro del guardián de stockapp-pg) y los nombres exactos. Cada paso
+    /// es best-effort y ninguno saltea a los siguientes ni tapa el error del test: acá no hay asserts.
+    /// </summary>
     private static void LimpiarDeRespaldo(Arnes a)
     {
-        foreach (var p in ApisVivas(a))
-            Bash($"kill -KILL -- -{p} 2>/dev/null || kill -KILL {p}");
-        MatarApisDeRespaldo(a.Trabajo);
-        if (File.Exists(Path.Combine(a.Trabajo, "config")))
-            BashLimpio.Ejecutar($"\"{Script}\" limpiar --trabajo \"{a.Trabajo}\"", a.Home);
-        Bash($"docker rm -f -v {a.Nuevo} {a.Viejo} 2>/dev/null; " +
-             $"docker volume rm stockapp_ensayo_origen_pgdata_{a.Sufijo} stockapp_ensayo_pgdata_{a.Sufijo} 2>/dev/null; true");
+        static void Intentar(Action paso)
+        {
+            try { paso(); }
+            catch (Exception) { /* limpieza de respaldo: el error que importa es el del test */ }
+        }
+        Intentar(() =>
+        {
+            foreach (var p in PidsDeApis(a) ?? [])
+                Bash($"kill -KILL -- -{p} 2>/dev/null || kill -KILL {p}");
+        });
+        Intentar(() => MatarApisDeRespaldo(a.Trabajo));
+        Intentar(() =>
+        {
+            if (File.Exists(Path.Combine(a.Trabajo, "config")))
+                BashLimpio.Ejecutar($"export PATH=\"{a.Bin}:$PATH\"\n\"{Script}\" limpiar --trabajo \"{a.Trabajo}\"", a.Home);
+        });
+        Intentar(() => Bash($"docker rm -f -v {a.Nuevo} {a.Viejo} 2>/dev/null; " +
+             $"docker volume rm stockapp_ensayo_origen_pgdata_{a.Sufijo} stockapp_ensayo_pgdata_{a.Sufijo} 2>/dev/null; true"));
     }
 
     /// <summary>--ensayo: GO, el nuevo con los datos del viejo y el viejo sirviendo exactamente como antes.</summary>
@@ -1386,8 +1556,7 @@ public class EnsayoLocalTests : IDisposable
         try
         {
             Preparar(a);
-            var marca = "marca" + a.Sufijo;
-            Marcar(a.Viejo, marca);
+            var marca = SembrarViejo(a);
 
             var r = Migrar(a, "--ensayo");
 
@@ -1416,8 +1585,7 @@ public class EnsayoLocalTests : IDisposable
         try
         {
             Preparar(a);
-            var marca = "marca" + a.Sufijo;
-            Marcar(a.Viejo, marca);
+            var marca = SembrarViejo(a);
 
             var r = Migrar(a, "", "CONGELAR\n");
 
@@ -1428,6 +1596,65 @@ public class EnsayoLocalTests : IDisposable
             Assert.NotNull(Clave(corte, "congelado_utc"));
             AfirmarViejoCongelado(a);
             Assert.True(PuertoAtiende(Puerto(a, HostNuevo)), "la API nueva no quedó arriba");
+            AfirmarTerminaLimpio(a);
+        }
+        finally
+        {
+            LimpiarDeRespaldo(a);
+        }
+    }
+
+    /// <summary>
+    /// Después de un corte, la contraseña del admin (la credencial real de V5/V8) y la de Postgres no
+    /// aparecen en el rastro del sudo ni en NINGÚN archivo del trabajo del arnés, salvo en los que las
+    /// guardan a propósito: admin-password y pg-password del arnés, el api.env de cada host (la cadena
+    /// de conexión y, en el viejo, la contraseña de bootstrap) y el .env del servidor nuevo. Tampoco en
+    /// la salida de migrar.
+    /// </summary>
+    [Fact]
+    public void Migrar_Corte_SecretosNoQuedanEnElRastroNiEnElTrabajo()
+    {
+        var a = NuevoArnes();
+        try
+        {
+            Preparar(a);
+            SembrarViejo(a);
+
+            var r = Migrar(a, "", "CONGELAR\n");
+
+            Assert.True(r.ExitCode == 0, "corte: " + Diag(r));
+            var secretos = new[] { "admin-password", "pg-password" }
+                .Select(n => (Nombre: n, Valor: File.ReadAllText(Path.Combine(a.Trabajo, n)).Trim()))
+                .ToArray();
+            Assert.All(secretos, x => Assert.True(x.Valor.Length >= 20, $"{x.Nombre} del arnés es demasiado corto para buscarlo"));
+            var guardados = new[]
+            {
+                Path.Combine(a.Trabajo, "admin-password"),
+                Path.Combine(a.Trabajo, "pg-password"),
+                Path.Combine(a.Raiz(HostViejo), "etc", "stockapp-api", "api.env"),
+                Path.Combine(a.Raiz(HostNuevo), "etc", "stockapp-api", "api.env"),
+                Path.Combine(DirHost(a.Trabajo, HostNuevo), "home", "stockapp-deploy", ".env"),
+            };
+            var rastro = Path.Combine(a.Trabajo, "sudo.rastro");
+            Assert.True(File.Exists(rastro) && RastroSudo(a).Length > 0, "el corte no dejó rastro del sudo");
+            // Solo archivos regulares: el trabajo tiene también el symlink del mask y los sockets de
+            // diagnóstico de dotnet (en el /tmp de cada host simulado).
+            var listado = Bash($"find \"{a.Trabajo}\" -type f -print");
+            Assert.True(listado.ExitCode == 0, Diag(listado));
+            var archivos = listado.Stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Where(f => !guardados.Contains(f))
+                .ToArray();
+            Assert.Contains(rastro, archivos);
+            Assert.Contains(archivos, f => f.EndsWith("registro.log"));
+            foreach (var f in archivos)
+            {
+                var bytes = File.ReadAllBytes(f);
+                foreach (var (nombre, valor) in secretos)
+                    Assert.True(bytes.AsSpan().IndexOf(System.Text.Encoding.UTF8.GetBytes(valor)) < 0,
+                        $"el valor de {nombre} aparece en {f}");
+            }
+            foreach (var (nombre, valor) in secretos)
+                Assert.DoesNotContain(valor, r.Stdout + r.Stderr);
             AfirmarTerminaLimpio(a);
         }
         finally
@@ -1448,10 +1675,9 @@ public class EnsayoLocalTests : IDisposable
         try
         {
             Preparar(a);
-            var marca = "marca" + a.Sufijo;
-            Marcar(a.Viejo, marca);
+            var marca = SembrarViejo(a);
             var conteosViejo = Conteos(a.Viejo);
-            var huellaViejo = HuellaCategorias(a.Viejo);
+            var huellasViejo = Huellas(a.Viejo, conteosViejo.Keys, []);
             var corte = Migrar(a, "", "CONGELAR\n");
             Assert.True(corte.ExitCode == 0, "corte: " + Diag(corte));
             AfirmarViejoCongelado(a);
@@ -1468,7 +1694,7 @@ public class EnsayoLocalTests : IDisposable
             Assert.Equal("REVERTIDO", Clave(Corrida(a, "revertir"), "resultado"));
             // El viejo vuelve con lo que tenía: nada se perdió ni se agregó en la ida y vuelta.
             Assert.Equal(conteosViejo, Conteos(a.Viejo));
-            Assert.Equal(huellaViejo, HuellaCategorias(a.Viejo));
+            Assert.Equal(huellasViejo, Huellas(a.Viejo, conteosViejo.Keys, []));
             Assert.Matches($@"^\d+\|{marca}\|t$", FilaDe(a.Viejo, marca));
             AfirmarTerminaLimpio(a);
         }
@@ -1537,8 +1763,7 @@ public class EnsayoLocalTests : IDisposable
         try
         {
             Preparar(a);
-            var marca = "marca" + a.Sufijo;
-            Marcar(a.Viejo, marca);
+            var marca = SembrarViejo(a);
 
             var corte = Migrar(a, "", "CONGELAR\n", $"STOCKAPP_ENSAYO_FALLAR_EN={paso} ");
 
@@ -1578,8 +1803,7 @@ public class EnsayoLocalTests : IDisposable
         try
         {
             Preparar(a);
-            var marca = "marca" + a.Sufijo;
-            Marcar(a.Viejo, marca);
+            var marca = SembrarViejo(a);
             File.WriteAllText(Path.Combine(a.Bin, "truncar-traida"), "");
 
             var corte = Migrar(a, "", "CONGELAR\n");
@@ -1628,10 +1852,14 @@ public class EnsayoLocalTests : IDisposable
         try
         {
             Preparar(a);
-            var antes = "antes" + a.Sufijo;
-            Marcar(a.Viejo, antes);
+            var antes = SembrarViejo(a);
             var ensayo = Migrar(a, "--ensayo");
             Assert.True(ensayo.ExitCode == 0, "--ensayo: " + Diag(ensayo));
+            // El viejo tal como quedó en el volcado del ensayo (nadie escribe en él entre el volcado y acá).
+            var conteosDelDump = Conteos(a.Viejo);
+            var topesDelDump = Topes(a.Viejo);
+            var huellasDelDump = Huellas(a.Viejo, conteosDelDump.Keys, topesDelDump);
+            var adjuntoDelDump = Adjunto(a.Viejo, a.Sufijo);
             var volcado = Path.Combine(Corrida(a, "ensayo"), "volcado");
             var dump = Directory.GetFiles(volcado, "volcado-*.dump").Single();
             var manifiesto = Directory.GetFiles(volcado, "volcado-*.manifiesto").Single();
@@ -1661,8 +1889,14 @@ public class EnsayoLocalTests : IDisposable
             Assert.Equal("", FilaDe(a.Nuevo, enElNuevo));
             var conteosNuevo = Conteos(a.Nuevo);
             Assert.Equal(conteosViejo["Categorias"] - 1, conteosNuevo["Categorias"]);
-            Assert.Equal(conteosViejo["Usuarios"], conteosNuevo["Usuarios"]);
-            Assert.Equal(conteosViejo["__EFMigrationsHistory"], conteosNuevo["__EFMigrationsHistory"]);
+            // El nuevo tiene EXACTAMENTE el contenido del dump del ensayo, tabla por tabla.
+            var huellasNuevo = Huellas(a.Nuevo, conteosDelDump.Keys, topesDelDump);
+            var distintas = conteosDelDump.Keys.Where(t => huellasDelDump[t] != huellasNuevo[t]).ToArray();
+            Assert.True(distintas.Length == 0, $"el contenido del nuevo difiere del dump del ensayo en: {string.Join(", ", distintas)}");
+            foreach (var (tabla, n) in conteosDelDump.Where(kv => !TablasQueCrecen.Contains(kv.Key)))
+                Assert.True(conteosNuevo[tabla] == n, $"\"{tabla}\": {n} filas en el dump y {conteosNuevo[tabla]} en el nuevo");
+            Assert.Matches(@"^[0-9a-f]{64}\|1600000\|1600000$", adjuntoDelDump);
+            Assert.Equal(adjuntoDelDump, Adjunto(a.Nuevo, a.Sufijo));
             AfirmarTerminaLimpio(a);
         }
         finally
@@ -1684,8 +1918,7 @@ public class EnsayoLocalTests : IDisposable
         try
         {
             Preparar(a);
-            var marca = "marca" + a.Sufijo;
-            Marcar(a.Viejo, marca);
+            var marca = SembrarViejo(a);
             var ensayo = Migrar(a, "--ensayo");
             Assert.True(ensayo.ExitCode == 0, "--ensayo: " + Diag(ensayo));
             var corte = Migrar(a, "", "CONGELAR\n");
