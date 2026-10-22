@@ -4055,7 +4055,7 @@ public class MigrarVpsTests : IDisposable
         Assert.Equal("resultado=GO", File.ReadAllLines(Path.Combine(archivo, "estado")).Last());
         Assert.Contains("archivo_corte=" + archivo, File.ReadAllText(Path.Combine(archivo, "estado")));
         var registro = File.ReadAllText(Path.Combine(archivo, "registro.log"));
-        Assert.Contains("migrar-vps: --post-corte", registro);
+        Assert.Contains("== --post-corte", registro);
         Assert.Contains("borrado: ~/stockapp-deploy/migracion/", registro);
         Assert.Equal("600", Permisos(Path.Combine(archivo, "registro.log")));
         Assert.Equal("600", Permisos(Path.Combine(archivo, "estado")));
@@ -4112,10 +4112,14 @@ public class MigrarVpsTests : IDisposable
         var bajado = Path.Combine(base_, "pre-limpieza");
         foreach (var d in new[] { corteManual, inversa, bajado }) Directory.CreateDirectory(d);
         File.WriteAllText(Path.Combine(bajado, NombreBackup), "PGDMP");
+        // R52: el migracion-<fecha>/ del runbook manual puede tener el dump de un corte manual sin archivar.
+        var migracionManual = Path.Combine(base_, "migracion-20250105");
+        Directory.CreateDirectory(migracionManual);
+        File.WriteAllText(Path.Combine(migracionManual, "volcado-20250105T090000Z.dump"), "PGDMP");
         var otroCorte = PlantarCorrida("corte-20250103T090000Z",
             "modo=corte\ninicio_utc=2025-01-03T09:00:00Z\ncongelado_utc=2025-01-03T09:05:00Z\nresultado=GO\n");
         // Y lo que sí es de la migración, por patrón exacto (runbook manual).
-        var manuales = new[] { "ensayo-20250104", "migracion-20250105" }.Select(n => Path.Combine(base_, n)).ToArray();
+        var manuales = new[] { "ensayo-20250104" }.Select(n => Path.Combine(base_, n)).ToArray();
         foreach (var d in manuales) Directory.CreateDirectory(d);
         var archivosManuales = new[] { "contenedores-viejo-20250105.txt", "v10-viejo.txt", "token" }.Select(n => Path.Combine(base_, n)).ToArray();
         foreach (var f in archivosManuales) File.WriteAllText(f, "x\n");
@@ -4124,7 +4128,7 @@ public class MigrarVpsTests : IDisposable
 
         Assert.True(r.Exit == 0, r.Todo);
         var preguntas = PreguntasDeBorrado(r.Salida);
-        foreach (var peligroso in new[] { corteManual, inversa, bajado, otroCorte, corte })
+        foreach (var peligroso in new[] { corteManual, inversa, bajado, migracionManual, otroCorte, corte })
         {
             Assert.True(Directory.Exists(peligroso), $"{peligroso}\n{r.Todo}");
             Assert.DoesNotContain(preguntas, l => l.Contains(peligroso));
@@ -4132,6 +4136,7 @@ public class MigrarVpsTests : IDisposable
         Assert.Contains($"se conserva (nunca se ofrece: archivo de un corte o volcado inverso): {corteManual}", r.Salida);
         Assert.Contains($"se conserva (nunca se ofrece: archivo de un corte o volcado inverso): {inversa}", r.Salida);
         Assert.Contains($"se conserva (no es de esta migración): {bajado}", r.Salida);
+        Assert.Contains($"se conserva (puede tener el dump de un corte manual sin archivar): {migracionManual}", r.Salida);
         Assert.Contains($"se conserva (nunca se ofrece: una corrida de corte): {otroCorte}", r.Salida);
         foreach (var m in manuales) Assert.False(Directory.Exists(m), $"{m}\n{r.Todo}");
         foreach (var f in archivosManuales) Assert.False(File.Exists(f), $"{f}\n{r.Todo}");

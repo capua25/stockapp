@@ -81,8 +81,8 @@
 #                   manifiesto. Después ofrece borrar, uno por uno, con su ruta, su tamaño y la palabra
 #                   BORRAR cada vez, por LISTA BLANCA: los directorios de ~/stockapp-deploy/migracion/ del
 #                   nuevo (si ya no existe, lo dice y sigue), las corridas de ensayo terminadas y lo que deja
-#                   el runbook manual (ensayo-<fecha>/, ensayo-e2-<fecha>/, migracion-<fecha>/,
-#                   contenedores-viejo-<fecha>.txt, v10-viejo.txt, token). NUNCA ofrece corte-* (de ningún
+#                   el runbook manual (ensayo-<fecha>/, ensayo-e2-<fecha>/, contenedores-viejo-<fecha>.txt,
+#                   v10-viejo.txt, token). NUNCA ofrece migracion-<fecha>/, corte-* (de ningún
 #                   formato), inversa-*, una corrida de corte (tampoco esta) ni lo que no sea de la
 #                   migración: se lista como "se conserva". Por último IMPRIME (no ejecuta) la referencia para
 #                   desmantelar el viejo. Re-correrlo da YA ESTABA en el archivo. Códigos: 0 hecho, 2 uso, 3
@@ -3752,8 +3752,8 @@ post_corte_archivar() {
 }
 
 # Los candidatos locales, por LISTA BLANCA (R48): las corridas de ensayo terminadas y lo que deja el runbook
-# manual, por patrón exacto (ensayo-<fecha>/, ensayo-e2-<fecha>/, migracion-<fecha>/,
-# contenedores-viejo-<fecha>.txt, v10-viejo.txt, token). NUNCA se ofrece: el archivo de un corte (corte-*,
+# manual, por patrón exacto (ensayo-<fecha>/, ensayo-e2-<fecha>/, contenedores-viejo-<fecha>.txt,
+# v10-viejo.txt, token; migracion-<fecha>/ no, ver R52 abajo). NUNCA se ofrece: el archivo de un corte (corte-*,
 # de cualquier formato: el de este script o el corte-%Y%m%d del runbook manual), un volcado inverso
 # (inversa-*), una corrida de corte (ni esta, que se copió al archivo, ni otra con su volcado sin archivar),
 # ni lo que no sea de la migración (las salidas de bajar-backup-vps.sh son la última copia fuera del
@@ -3776,7 +3776,13 @@ candidatos_locales() {
             conservar "nunca se ofrece: archivo de un corte o volcado inverso" "$e"
             continue
         fi
-        if [[ -d "$e" && ! -L "$e" && "$nombre" =~ ^(ensayo|ensayo-e2|migracion)-${FECHA_RUNBOOK}$ ]] ||
+        # R52: migracion-<fecha>/ del runbook manual NO: puede tener el dump de un corte manual sin
+        # archivar, la única copia fuera del servidor.
+        if [[ "$nombre" =~ ^migracion-${FECHA_RUNBOOK}$ ]]; then
+            conservar "puede tener el dump de un corte manual sin archivar" "$e"
+            continue
+        fi
+        if [[ -d "$e" && ! -L "$e" && "$nombre" =~ ^(ensayo|ensayo-e2)-${FECHA_RUNBOOK}$ ]] ||
             [[ -f "$e" && ! -L "$e" && ( "$nombre" =~ ^contenedores-viejo-${FECHA_RUNBOOK}\.txt$ || "$nombre" == "v10-viejo.txt" || "$nombre" == "token" ) ]]; then
             CANDIDATOS_LOCALES+=("$e")
             continue
