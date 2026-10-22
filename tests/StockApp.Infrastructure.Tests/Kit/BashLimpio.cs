@@ -25,12 +25,19 @@ internal static class BashLimpio
     public static string Orquestacion => Path.Combine(RaizRepo(), "deploy", "lib", "orquestacion.sh");
 
     public static (int ExitCode, string Stdout, string Stderr) Ejecutar(string script, string? home = null) =>
-        EjecutorBash.Ejecutar(
-            "exec </dev/null\n" +
-            "unset STOCKAPP_ENV_LOCAL REPO_ROOT\n" +
-            "for v in $(compgen -v VPS_) $(compgen -v ENSAYO_) $(compgen -v STOCKAPP_ENSAYO_) $(compgen -v ORQ_) $(compgen -v VIEJO_) $(compgen -v NUEVO_); do unset \"$v\"; done\n" +
-            (home is null ? "" : $"export HOME='{home}'\n") +
-            script);
+        EjecutorBash.Ejecutar(Limpio(script, home));
+
+    /// <summary>
+    /// El texto que corre <see cref="Ejecutar"/>: la higiene de entorno delante de
+    /// <paramref name="script"/>. Para quien necesita lanzar el proceso por su cuenta (por ejemplo,
+    /// para mandarle una señal a su PID).
+    /// </summary>
+    public static string Limpio(string script, string? home = null) =>
+        "exec </dev/null\n" +
+        "unset STOCKAPP_ENV_LOCAL REPO_ROOT\n" +
+        "for v in $(compgen -v VPS_) $(compgen -v ENSAYO_) $(compgen -v STOCKAPP_ENSAYO_) $(compgen -v ORQ_) $(compgen -v VIEJO_) $(compgen -v NUEVO_); do unset \"$v\"; done\n" +
+        (home is null ? "" : $"export HOME='{home}'\n") +
+        script;
 
     public static void EscribirEjecutable(string ruta, string contenido)
     {

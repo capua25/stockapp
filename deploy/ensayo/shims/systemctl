@@ -150,6 +150,9 @@ lanzar() {
         # Ningún descriptor heredado salvo 0-2, que se reemplazan abajo: si la API se quedara con el
         # pipe de quien captura la salida, esa captura no terminaría nunca; con el fd del lock, el
         # lock de la migración quedaría tomado mientras viva la API.
+        # El PID se escribe desde acá, antes de lanzar: si quien llama muere entre el '&' y su propia
+        # escritura, la API igual queda con pidfile y limpiar la encuentra.
+        echo "$BASHPID" > "$PIDFILE"
         for fd in /proc/self/fd/*; do
             fd="${fd##*/}"
             if [[ "$fd" =~ ^[0-9]+$ && "$fd" -gt 2 ]]; then

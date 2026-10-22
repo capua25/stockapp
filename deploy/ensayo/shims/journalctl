@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# =======================================================================================
+# deploy/ensayo/shims/journalctl -- journalctl FALSO del ensayo local: el journal de
+# stockapp-api de un host simulado es el log de su API ($ENSAYO_ESTADO/api.log).
+# =======================================================================================
+#
+# El ssh falso lo pone al frente del PATH, y el sudo falso lo alcanza ('sudo -n journalctl ...').
+# Sin él, migrar-vps.sh (V2 y el diagnóstico de un fallo) leería el journal REAL de esta máquina,
+# que no tiene la unit y responde "-- No entries --" como si fuera el del VPS nuevo.
+#
+# Solo simula lo que usa migrar-vps.sh, y solo para la unit stockapp-api (otra unit sale con 1 sin
+# leer nada):
+#   -u stockapp-api[.service]   obligatorio
+#   -n <N>                      las últimas N líneas
+#   --since '<fecha>'           las líneas con hora >= <fecha> (cualquier forma que entienda
+#                               'date -d'). La hora de cada línea es la del comienzo de la línea
+#                               (la plantilla de Serilog de la API: 'AAAA-MM-DD HH:MM:SS.fff ±HH:MM');
+#                               una línea sin hora (el detalle de una excepción) va con la anterior.
+#   --no-pager, -o <formato>    se aceptan; la salida es siempre el texto del log, sin el prefijo
+#                               de fecha, host y PID que agrega el journalctl real.
+# Como el real con una unit sin entradas: si no hay api.log, imprime "-- No entries --" y sale 0.
+# =======================================================================================
+
+set -euo pipefail
+
+if [[ -z "${ENSAYO_ESTADO:-}" || ! -d "${ENSAYO_ESTADO}" ]]; then
+    echo "ensayo: journalctl necesita ENSAYO_ESTADO (directorio del estado simulado)" >&2
+    exit 1
+fi
+
+unidad=""
+ultimas=""
+desde=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -u | -n | --since | -o)
+            if [[ $# -lt 2 ]]; then
+                echo "ensayo: falta el valor de $1" >&2
+                exit 1
+            fi
+            case "$1" in
+                -u) unidad="$2" ;;
+                -n) ultimas="$2" ;;
+                --since) desde="$2" ;;
+            esac
+            shift 2
+            ;;
+        --no-pager) shift ;;
+        *)
+            echo "ensayo: opción de journalctl no simulada: $1" >&2
+            exit 1
+            ;;
+    esac
+done
+
+if [[ "${unidad%.service}" != "stockapp-api" ]]; then
+    echo "ensayo: solo se simula el journal de stockapp-api (pidió '${unidad}')" >&2
+    exit 1
+fi
+if [[ -n "$ultimas" && ! "$ultimas" =~ ^[0-9]+$ ]]; then
+    echo "ensayo: -n '${ultimas}' no es un número" >&2
+    exit 1
+fi
+desde_s=""
+if [[ -n "$desde" ]]; then
+    desde_s="$(date -d "$desde" +%s)" || { echo "ensayo: --since '${desde}' no es una fecha" >&2; exit 1; }
+fi
+
+LOG="${ENSAYO_ESTADO}/api.log"
+if [[ ! -s "$LOG" ]]; then
+    echo "-- No entries --"
+    exit 0
+fi
+
+lineas=()
+# Con --since, lo que esté antes de la primera línea con hora no se puede fechar: no entra.
+incluir=1
+[[ -z "$desde_s" ]] || incluir=0
+while IFS= read -r linea || [[ -n "$linea" ]]; do
+    if [[ -n "$desde_s" ]]; then
+        if [[ "$linea" =~ ^([0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2})(\.[0-9]+)?\ ([+-][0-9]{2}:[0-9]{2})\  ]]; then
+            hora="$(date -d "${BASH_REMATCH[1]} ${BASH_REMATCH[3]}" +%s)" || hora=""
+            if [[ -n "$hora" && "$hora" -ge "$desde_s" ]]; then incluir=1; else incluir=0; fi
+        fi
+        [[ "$incluir" -eq 1 ]] || continue
+    fi
+    lineas+=("$linea")
+done < "$LOG"
+
+if [[ ${#lineas[@]} -eq 0 ]]; then
+    echo "-- No entries --"
+    exit 0
+fi
+inicio=0
+if [[ -n "$ultimas" && "$ultimas" -lt ${#lineas[@]} ]]; then
+    inicio=$(( ${#lineas[@]} - ultimas ))
+fi
+printf '%s\n' "${lineas[@]:inicio}"

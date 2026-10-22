@@ -817,6 +817,7 @@ public class EnsayoLocalTests : IDisposable
         }
         finally
         {
+            MatarApisDeRespaldo(trabajo);
             BashLimpio.Ejecutar($"\"{Script}\" limpiar --trabajo \"{trabajo}\"", home);
             Bash($"docker rm -f -v stockapp-ensayo-pg-{sufijo} stockapp-ensayo-origen-pg-{sufijo} 2>/dev/null; " +
                  $"docker volume rm stockapp_ensayo_origen_pgdata_{sufijo} stockapp_ensayo_pgdata_{sufijo} 2>/dev/null; true");
@@ -860,6 +861,179 @@ public class EnsayoLocalTests : IDisposable
             Bash($"docker rm -f -v stockapp-ensayo-pg-{sufijo} stockapp-ensayo-origen-pg-{sufijo} 2>/dev/null; " +
                  $"docker volume rm stockapp_ensayo_origen_pgdata_{sufijo} stockapp_ensayo_pgdata_{sufijo} 2>/dev/null; true");
         }
+    }
+
+    /// <summary>
+    /// Respaldo de limpiar: si quedó alguna API del ensayo viva (limpiar falló o no llegó a correr),
+    /// se mata su grupo por el PID exacto de su api.pid.
+    /// </summary>
+    private static void MatarApisDeRespaldo(string trabajo)
+    {
+        foreach (var h in new[] { HostViejo, HostNuevo })
+            if (Directory.Exists(trabajo) && PidDe(trabajo, h) is { } p && Vivo(p)) Bash($"kill -KILL -- -{p}");
+    }
+
+    private static bool PuertoAtiende(int puerto) =>
+        Bash($"curl -s -o /dev/null --max-time 5 http://127.0.0.1:{puerto}/").ExitCode == 0;
+
+    /// <summary>
+    /// Ctrl-C (INT) o un TERM en pleno preparar-migracion, con las dos APIs ya lanzadas: el trap
+    /// las detiene y borra los contenedores, igual que un fallo. Sin los traps de señal, el trap
+    /// EXIT ve $?=0 y deja todo vivo (las APIs corren con setsid: la terminal no las alcanza).
+    /// Sincronización sin esperas: un curl del test en el PATH se detiene en la consulta del feed
+    /// del nuevo (cuando las dos APIs ya atienden) y avisa por un fifo; el test manda la señal al
+    /// PID exacto y recién después lo deja seguir. Las lecturas y escrituras de los fifos van con
+    /// timeout acotado.
+    /// </summary>
+    [Theory]
+    [InlineData("INT", 130)]
+    [InlineData("TERM", 143)]
+    public void PrepararMigracion_InterrumpidoPorSenal_NoDejaApisNiContenedores(string senal, int exitEsperado)
+    {
+        var sufijo = Guid.NewGuid().ToString("N")[..8];
+        var trabajo = Path.Combine(DirectorioNuevo("ensayo-mig-"), "trabajo");
+        var home = DirectorioNuevo("ensayo-mig-home-");
+        var bin = DirectorioNuevo("ensayo-mig-bin-");
+        var listo = Path.Combine(bin, "listo.fifo");
+        var seguir = Path.Combine(bin, "seguir.fifo");
+        var curlReal = Bash("command -v curl").Stdout.Trim();
+        Assert.True(Bash($"mkfifo \"{listo}\" \"{seguir}\"").ExitCode == 0);
+        BashLimpio.EscribirEjecutable(Path.Combine(bin, "curl"),
+            "#!/usr/bin/env bash\n" +
+            "for a in \"$@\"; do\n" +
+            "  if [[ \"$a\" == */updates/releases.win.json ]]; then\n" +
+            $"    timeout 300 bash -c 'echo listo > \"$1\"' _ \"{listo}\"\n" +
+            $"    timeout 300 bash -c 'read -r _ < \"$1\"' _ \"{seguir}\"\n" +
+            "  fi\n" +
+            "done\n" +
+            $"exec \"{curlReal}\" \"$@\"\n");
+        var (puertoViejo, puertoNuevo) = (PuertoLibre(), PuertoLibre());
+        using var proceso = new System.Diagnostics.Process
+        {
+            StartInfo = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "bash",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            },
+        };
+        proceso.StartInfo.ArgumentList.Add("-c");
+        // exec: el PID del proceso ES el del script, así la señal le llega a él y a nadie más.
+        proceso.StartInfo.ArgumentList.Add(BashLimpio.Limpio(
+            $"export NUGET_PACKAGES=\"{CacheNuget}\" PATH=\"{bin}:$PATH\"\n" +
+            $"exec \"{Script}\" preparar-migracion --trabajo \"{trabajo}\" --sufijo {sufijo} " +
+            $"--puerto-viejo {puertoViejo} --puerto-nuevo {puertoNuevo}", home));
+        var pids = new List<int>();
+        try
+        {
+            proceso.Start();
+            var salida = proceso.StandardOutput.ReadToEndAsync();
+            var errores = proceso.StandardError.ReadToEndAsync();
+
+            var aviso = Bash($"timeout 300 cat \"{listo}\"");
+            Assert.True(aviso.ExitCode == 0 && aviso.Stdout.Trim() == "listo", "el script no llegó al feed del nuevo: " + Diag(aviso));
+            foreach (var h in new[] { HostViejo, HostNuevo })
+                pids.Add(PidDe(trabajo, h) ?? throw new InvalidOperationException($"{h} sin api.pid"));
+            Assert.All(pids, p => Assert.True(Vivo(p)));
+
+            Assert.True(Bash($"kill -{senal} {proceso.Id}").ExitCode == 0);
+            Assert.True(Bash($"timeout 30 bash -c 'echo seguir > \"$1\"' _ \"{seguir}\"").ExitCode == 0);
+            Assert.True(proceso.WaitForExit(180_000), "preparar-migracion no terminó después de la señal");
+            Task.WaitAll(salida, errores);
+            var r = (proceso.ExitCode, salida.Result, errores.Result);
+
+            Assert.True(r.ExitCode == exitEsperado, Diag(r));
+            Assert.All(pids, p => Assert.False(Vivo(p), $"la API con PID {p} sigue viva: " + Diag(r)));
+            Assert.False(PuertoAtiende(puertoViejo), $"algo sigue atendiendo en {puertoViejo}");
+            Assert.False(PuertoAtiende(puertoNuevo), $"algo sigue atendiendo en {puertoNuevo}");
+            Assert.DoesNotContain(TodosLosContenedores(), n => n.EndsWith("-" + sufijo));
+            Assert.DoesNotContain(Lineas("docker volume ls --format '{{.Name}}'"), n => n.EndsWith("_" + sufijo));
+        }
+        finally
+        {
+            // Destrabar el curl del test si quedó esperando, y nada vivo pase lo que pase.
+            Bash($"timeout 2 cat \"{listo}\" >/dev/null 2>&1; timeout 2 bash -c 'echo x > \"$1\"' _ \"{seguir}\" 2>/dev/null; true");
+            if (!proceso.HasExited) Bash($"kill -KILL {proceso.Id}");
+            foreach (var p in pids)
+                if (Vivo(p)) Bash($"kill -KILL -- -{p}");
+            MatarApisDeRespaldo(trabajo);
+            Bash($"docker rm -f -v stockapp-ensayo-pg-{sufijo} stockapp-ensayo-origen-pg-{sufijo} 2>/dev/null; " +
+                 $"docker volume rm stockapp_ensayo_origen_pgdata_{sufijo} stockapp_ensayo_pgdata_{sufijo} 2>/dev/null; true");
+        }
+    }
+
+    /// <summary>
+    /// dotnet publish corre con HOME y TMPDIR dentro del trabajo, pero el lock de NuGet tiene que
+    /// seguir en su lugar real (R54): la caché de paquetes es la compartida, y un restore
+    /// concurrente (un IDE, otro worktree) se excluye por ese lock. Un dotnet del test registra el
+    /// entorno y falla, así preparar-migracion aborta antes de crear contenedores.
+    /// </summary>
+    [Fact]
+    public void PrepararMigracion_PublishConElLockDeNugetReal()
+    {
+        var sufijo = Guid.NewGuid().ToString("N")[..8];
+        var trabajo = Path.Combine(DirectorioNuevo("ensayo-mig-"), "trabajo");
+        var home = DirectorioNuevo("ensayo-mig-home-");
+        var bin = DirectorioNuevo("ensayo-mig-bin-");
+        var visto = Path.Combine(bin, "entorno-de-dotnet.txt");
+        BashLimpio.EscribirEjecutable(Path.Combine(bin, "dotnet"),
+            $"#!/usr/bin/env bash\nenv > \"{visto}\"\nexit 1\n");
+        var usuario = Bash("id -un").Stdout.Trim();
+        try
+        {
+            var r = BashLimpio.Ejecutar($"unset NUGET_SCRATCH; export TMPDIR=/tmp NUGET_PACKAGES=\"{CacheNuget}\" PATH=\"{bin}:$PATH\"\n" +
+                $"\"{Script}\" preparar-migracion --trabajo \"{trabajo}\" --sufijo {sufijo} " +
+                $"--puerto-viejo {PuertoLibre()} --puerto-nuevo {PuertoLibre()}", home);
+
+            Assert.True(r.ExitCode == 8, Diag(r));
+            var entorno = File.ReadAllLines(visto);
+            Assert.Contains($"NUGET_SCRATCH=/tmp/NuGetScratch{usuario}", entorno);
+            Assert.Contains($"NUGET_PACKAGES={CacheNuget}", entorno);
+            Assert.Contains($"HOME={trabajo}/dotnet-cli", entorno);
+            Assert.Contains($"TMPDIR={trabajo}/tmp", entorno);
+            Assert.DoesNotContain(TodosLosContenedores(), n => n.EndsWith("-" + sufijo));
+        }
+        finally
+        {
+            Bash($"docker rm -f -v stockapp-ensayo-pg-{sufijo} stockapp-ensayo-origen-pg-{sufijo} 2>/dev/null; " +
+                 $"docker volume rm stockapp_ensayo_origen_pgdata_{sufijo} stockapp_ensayo_pgdata_{sufijo} 2>/dev/null; true");
+        }
+    }
+
+    /// <summary>
+    /// El journal de stockapp-api de cada host simulado es el api.log de su API (R53): V2 y el
+    /// diagnóstico de migrar-vps.sh, con los comandos tal cual los manda, leen ESE log y no el
+    /// journal real de esta máquina ("-- No entries --"). --since filtra por la hora de cada línea
+    /// (la plantilla de Serilog de la API empieza con ella).
+    /// </summary>
+    [Fact]
+    public void ShimJournalctl_LeeElApiLogDelHost()
+    {
+        var trabajo = DosHosts();
+        File.WriteAllText(Path.Combine(DirHost(trabajo, HostNuevo), "estado", "api.log"),
+            "2026-10-22 01:40:00.000 +00:00 [WRN] antes del arranque\n" +
+            "2026-10-22 01:46:41.123 -03:00 [ERR] Falló algo del nuevo\n" +
+            "System.Exception: el detalle de la excepción\n" +
+            "2026-10-22 04:47:00.000 +00:00 [WRN] una advertencia después\n");
+        File.WriteAllText(Path.Combine(DirHost(trabajo, HostViejo), "estado", "api.log"),
+            "2026-10-22 05:00:00.000 +00:00 [ERR] del VIEJO\n");
+        var ssh = $"export ENSAYO_TRABAJO=\"{trabajo}\"\n\"{Shim("ssh")}\" -p 22 -o BatchMode=yes ensayo@{HostNuevo} ";
+
+        var desde = Bash(ssh + "\"sudo -n journalctl -u stockapp-api --since '2026-10-22 04:46:40 UTC' --no-pager -o cat\"");
+        var ultimas = Bash(ssh + "\"sudo -n journalctl -u stockapp-api -n 2 --no-pager\"");
+        var otra = Bash(ssh + "\"sudo -n journalctl -u otra-app --no-pager\"");
+
+        Assert.True(desde.ExitCode == 0, Diag(desde));
+        Assert.Equal(
+            "2026-10-22 01:46:41.123 -03:00 [ERR] Falló algo del nuevo\n" +
+            "System.Exception: el detalle de la excepción\n" +
+            "2026-10-22 04:47:00.000 +00:00 [WRN] una advertencia después", desde.Stdout);
+        Assert.DoesNotContain("No entries", desde.Stdout);
+        Assert.True(ultimas.ExitCode == 0, Diag(ultimas));
+        Assert.Equal("System.Exception: el detalle de la excepción\n2026-10-22 04:47:00.000 +00:00 [WRN] una advertencia después", ultimas.Stdout);
+        Assert.True(otra.ExitCode != 0, Diag(otra));
+        Assert.Equal("", otra.Stdout);
     }
 
     /// <summary>

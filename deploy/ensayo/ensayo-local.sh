@@ -142,6 +142,11 @@ al_salir() {
     exit "$rc"
 }
 trap al_salir EXIT
+# Ctrl-C, TERM o HUP salen con su código: sin esto el trap EXIT ve $?=0 y un preparar
+# interrumpido no borra nada (las APIs, con setsid, tampoco mueren con la terminal).
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 
 # ---------------------------------------------------------------------------------------
 # Argumentos
@@ -645,11 +650,16 @@ preparar_migracion() {
     # de la caché de NuGet de siempre, solo lectura en la práctica (si no, publicar los volvería a
     # bajar).
     # TMPDIR también: el SDK deja directorios temporales propios en /tmp.
+    # El lock entre procesos de NuGet vive en $TMPDIR/NuGetScratch<usuario>: con el TMPDIR del
+    # trabajo, este publish dejaría de excluirse con un restore concurrente (un IDE, otro worktree)
+    # sobre la MISMA caché de paquetes. NUGET_SCRATCH lo deja en su lugar real.
     local cache_nuget="${NUGET_PACKAGES:-${HOME}/.nuget/packages}"
+    local scratch_nuget="${NUGET_SCRATCH:-${TMPDIR:-/tmp}/NuGetScratch$(id -un)}"
     mkdir -p "${TRABAJO}/dotnet-cli" "${TRABAJO}/tmp"
     HOME="${TRABAJO}/dotnet-cli" DOTNET_CLI_HOME="${TRABAJO}/dotnet-cli" TMPDIR="${TRABAJO}/tmp" \
         DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1 \
         NUGET_PACKAGES="$cache_nuget" \
+        NUGET_SCRATCH="$scratch_nuget" \
         dotnet publish "${REPO_ROOT}/src/StockApp.Api/StockApp.Api.csproj" -c Release -o "${TRABAJO}/api" \
         -nodeReuse:false -p:UseSharedCompilation=false > "${TRABAJO}/publicar.log" 2>&1 \
         || { tail -n 30 "${TRABAJO}/publicar.log" >&2; fallo_preparar 8 "dotnet publish de la API falló (log: ${TRABAJO}/publicar.log)."; }
