@@ -248,8 +248,14 @@ solo**: hace falta que alguien contacte al proveedor.
    `--recrear-base` hace falta porque la instalación del paso 1 ya dejó la base creada y
    sembrada; antes de borrarla el script guarda un dump de seguridad en `~/restauracion` y
    no arranca la API. Con exit 0, el siguiente paso es `sudo systemctl start stockapp-api`.
-   Los códigos de salida y qué hacer con cada uno están en `deploy/MIGRACION-VPS.md` (paso C5),
-   el mismo procedimiento que se usa para mudar los datos a un servidor nuevo.
+   Los códigos de salida de `restaurar-backup.sh` están en su encabezado.
+
+   Si lo que se perdió es **el VPS** (el servidor con dominio y TLS que se opera por SSH desde la
+   máquina del proveedor, no el servidor del kit), no se restaura a mano en el servidor: se prepara el
+   VPS nuevo con `deploy/preparar-vps-nuevo.sh` y se le carga el backup con
+   `deploy/migrar-vps.sh --desde-backup <dump>`, que hace la restauración, el arranque de la API y las
+   verificaciones. Los comandos, los códigos de salida y el límite (se recupera hasta el último backup
+   que esté fuera del servidor muerto) están en la sección 8 de `deploy/MIGRACION-VPS.md`.
 
 ### El costo real de este escenario, sin adornos
 

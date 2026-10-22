@@ -320,99 +320,329 @@ public class MigracionVpsSincroniaTests
         Assert.Equal(restaurar, volcado);
     }
 
+
+
     // ---------- Runbook y documentación ----------
 
-    private static readonly string[] IdsDelRunbook =
+    /// <summary>
+    /// Los títulos de las 10 secciones de spec 6.7, en orden. El encabezado es `## N. Título`; el
+    /// título del documento real puede seguir con ": ..." después de estas palabras.
+    /// </summary>
+    private static readonly string[] TitulosDeLasSecciones =
     [
-        "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "E1", "E2",
-        "C0", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10",
-        "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10", "R-A", "R-B",
+        "Qué es esto", "Prerrequisitos de Martin", "Preparar el VPS nuevo", "Ensayo", "Día D",
+        "Si algo sale mal", "R-B", "Desastre", "D+14", "Tiempos y E1",
     ];
 
-    public static TheoryData<string> CasosIdsDelRunbook()
+    public static TheoryData<int> CasosSecciones()
     {
-        var datos = new TheoryData<string>();
-        foreach (var id in IdsDelRunbook) datos.Add(id);
+        var datos = new TheoryData<int>();
+        for (var n = 1; n <= TitulosDeLasSecciones.Length; n++) datos.Add(n);
         return datos;
     }
 
-    /// <summary>
-    /// Cada paso de la spec tiene que aparecer como encabezado o como casilla (`- [ ] **C5.**`):
-    /// un paso que no está en el runbook es un paso que el operador se saltea el día del corte.
-    /// </summary>
-    [Theory]
-    [MemberData(nameof(CasosIdsDelRunbook))]
-    public void Runbook_CubreCadaPasoDeLaSpec(string id)
+    /// <summary>La sección <paramref name="n"/> del runbook, de su encabezado `## n.` al siguiente `## m.`.</summary>
+    private static string Seccion(string texto, int n)
+    {
+        var m = Regex.Match(texto, $@"(?ms)^## {n}\. .*?(?=^## \d+\. |\z)");
+        Assert.True(m.Success, $"{Runbook} no tiene la sección '## {n}. ...'.");
+        return m.Value;
+    }
+
+    private static string RunbookSinSeccion(int n)
     {
         var texto = Texto(Runbook);
+        return texto.Replace(Seccion(texto, n), "");
+    }
 
-        var patron = $@"^(#{{1,4}}\s+|- \[ \]\s+)\**{Regex.Escape(id)}(?![0-9A-Za-z])";
-        Assert.True(Regex.IsMatch(texto, patron, RegexOptions.Multiline),
-            $"{Runbook} no tiene un encabezado o una casilla para '{id}'.");
+    [Fact]
+    public void Runbook_TieneLasDiezSeccionesEnOrden()
+    {
+        var encabezados = Regex.Matches(Texto(Runbook), @"(?m)^## (\d+)\. (.+?)\s*$");
+
+        Assert.Equal(Enumerable.Range(1, TitulosDeLasSecciones.Length).Select(n => n.ToString()),
+            encabezados.Select(m => m.Groups[1].Value));
+        for (var i = 0; i < TitulosDeLasSecciones.Length; i++)
+            Assert.StartsWith(TitulosDeLasSecciones[i], encabezados[i].Groups[2].Value);
+    }
+
+    /// <summary>
+    /// Cada sección de la spec tiene que estar y no estar vacía: una sección que desaparece es un paso
+    /// que el operador se saltea el día del corte.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(CasosSecciones))]
+    public void Runbook_CadaSeccionTieneContenido(int n)
+    {
+        var cuerpo = Seccion(Texto(Runbook), n).Split('\n').Skip(1);
+        Assert.True(cuerpo.Count(l => l.Trim().Length > 0) >= 3, $"la sección {n} del runbook está casi vacía.");
+    }
+
+    /// <summary>
+    /// Los dos ids que sobreviven del runbook manual (R-B y E1) siguen siendo encabezados: el código
+    /// de migrar-vps.sh apunta a "la sección R-B de deploy/MIGRACION-VPS.md".
+    /// </summary>
+    [Theory]
+    [InlineData("R-B")]
+    [InlineData("E1")]
+    public void Runbook_ConservaLosIdsQueElCodigoCita(string id)
+    {
+        var patron = $@"^#{{1,4}}\s+(?:\d+\.\s+)?.*(?<![0-9A-Za-z-]){Regex.Escape(id)}(?![0-9A-Za-z])";
+        Assert.True(Regex.IsMatch(Texto(Runbook), patron, RegexOptions.Multiline),
+            $"{Runbook} no tiene un encabezado con '{id}'.");
     }
 
     [Theory]
-    [InlineData("deploy/restaurar-backup.sh")]
-    [InlineData("deploy/volcado-final-vps.sh")]
-    [InlineData("deploy/bajar-backup-vps.sh")]
-    [InlineData("deploy/ensayo/ensayo-local.sh")]
-    [InlineData("--verificar-post-arranque")]
-    [InlineData("--recrear-base stockapp")]
-    [InlineData("--dir-seguridad ~/stockapp-deploy/migracion")]
+    [InlineData("STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/preparar-vps-nuevo.sh --version 0.5.3")]
+    [InlineData("--probar-renovacion")]
+    [InlineData("deploy/migrar-vps.sh --ensayo")]
+    [InlineData("CONGELAR")]
+    [InlineData("--continuar")]
+    [InlineData("--revertir")]
+    [InlineData("--desde-backup")]
+    [InlineData("--post-corte")]
+    [InlineData("scripts/gui-verificacion")]
+    [InlineData("SmartScreen")]
+    [InlineData("14 días")]
     [InlineData("STOCKAPP_ENV_LOCAL")]
-    [InlineData("systemctl mask stockapp-api")]
-    [InlineData("certbot renew --force-renewal")]
-    [InlineData("sudo install -m 0755 deploy/tls/stockapp-tls-deploy-hook.sh /usr/local/sbin/")]
-    [InlineData("--ensayo")]
-    [InlineData("build/publicar-release.sh 0.5.3")]
-    [InlineData("deploy/deploy-vps.sh 0.5.3 --sin-backup")]
+    [InlineData("VPS_HOST")]
+    [InlineData("VPS_USER")]
+    [InlineData("VPS_SSH_PORT")]
+    [InlineData("VPS_ADMIN_USER")]
+    [InlineData("VPS_ADMIN_PASSWORD")]
+    [InlineData("deploy/.env.vps-nuevo")]
+    [InlineData("~/stockapp-deploy/.env")]
     public void Runbook_MencionaElComandoExacto(string fragmento)
     {
         Assert.Contains(fragmento, Texto(Runbook));
     }
 
     /// <summary>
-    /// Lo que se arrastra de las reviews de las Tasks 6 a 8: si el runbook no lo dice, el
-    /// operador lo descubre el día del corte.
+    /// Lo que arrastran las rulings y las reviews de las Tasks 3 a 14: si el runbook no lo dice, el
+    /// operador lo descubre el día del corte. Cada fragmento nombra el hallazgo que custodia.
     /// </summary>
     [Theory]
-    [InlineData("stockapp-api.service.congelado")]       // el congelamiento mueve la unit
-    [InlineData("systemctl daemon-reload")]
-    [InlineData("systemctl -q mask stockapp-api")]
-    [InlineData("systemctl is-enabled stockapp-api")]     // tiene que dar masked
-    [InlineData("systemctl unmask stockapp-api")]         // R-A
-    [InlineData("FragmentPath")]
+    [InlineData("--register-unsafely-without-email")]                 // R25: la cuenta ACME nace sin email
+    [InlineData("sudo certbot update_account -m <mail>")]             // R25: cómo se agrega después, sin reemitir
+    [InlineData("certbot reconfigure")]                               // R28: cert vigente con otro hook
+    [InlineData("300 s")]                                             // R35: tolerancia de A11
+    [InlineData("desde el panel del proveedor")]                      // R46: nuevo inalcanzable
+    [InlineData("STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/preparar-vps-nuevo.sh --version 0.5.3 --verificar")]  // R47
+    [InlineData("cupo de Let's Encrypt")]                             // T6: re-correr --probar-renovacion gasta cupo
+    [InlineData("es un archivo LOCAL")]                               // T12: --env-viejo de --desde-backup
+    [InlineData("pisa")]                                              // el .env del operador pisa al entorno
     [InlineData("Licencia__Habilitado=false")]
     [InlineData("LICENCIA_CLAVE_PUBLICA_BASE64")]
-    [InlineData("SmartScreen")]
-    [InlineData("14 días")]
-    [InlineData("8080")]
-    [InlineData("rm -rf <trabajo>")]                       // limpieza explícita de datos reales
-    [InlineData("exit 9")]                                  // EnsayoCompleto con otro proceso de test
-    [InlineData("ReconciliarDumpHuerfanosAsync")]          // por qué se limpian los dumps del ensayo
-    [InlineData("VPS_ADMIN_PASSWORD")]
-    [InlineData("pisa")]                                    // el .env pisa al entorno
-    [InlineData("Lo que Martin tiene que cargar")]
-    [InlineData("## Tiempos")]
-    [InlineData("deploy/.env.vps-nuevo")]
-    [InlineData("~/stockapp-deploy/.env")]
-    [InlineData("migracion/corte-<fecha>/")]              // el corte no comparte directorio con E2
-    [InlineData("exactamente el `<ts>` que imprimió C3")]
-    [InlineData("fecha_utc")]
-    [InlineData("-exec mv -t ~/stockapp-deploy/migracion/ensayo-e2-<fecha>/")]  // C2.b aparta los volcados de E2
-    [InlineData("sudo install -d -o stockapp -g stockapp -m 750 /var/lib/stockapp/.local /var/lib/stockapp/.local/share /var/lib/stockapp/.local/share/StockApp")]
-    [InlineData("PW=\"$PW\" jq -n --arg u '<usuario-real>' '{nombreUsuario:$u,contrasena:env.PW}'")]
-    [InlineData("sudo systemctl stop stockapp-api` (si C7")]  // R-A: primero se detiene el nuevo
-    [InlineData("Borrar, solo con la confirmación de Martin")]                      // post-corte: copias de producción
-    [InlineData("~/stockapp-backups-vps/ensayo-e2-<fecha>/")]
-    [InlineData("mv volcado-<ts>.dump volcado-<ts>.manifiesto ~/stockapp-backups-vps/corte-<fecha>/")]  // D+14: el dump final se archiva, no se borra
-    [InlineData("sha256sum -c /tmp/sha-corte-<fecha>.txt")]
-    [InlineData("omandos se corren desde la raíz del repo")]
-    [InlineData("contenedores-viejo-<fecha>.txt")]         // C2.c guarda, V10 compara
-    [InlineData("no renueves certificados ni reinicies el VPS nuevo")]
+    [InlineData("overrides-api-env.txt")]
+    [InlineData("STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/deploy-vps.sh 0.5.3 --sin-backup")]  // los overrides llegan a api.env con install.sh
+    [InlineData("sudo grep -c '^<NOMBRE-DEL-OVERRIDE>=' /etc/stockapp-api/api.env")]
+    [InlineData("Más información")]                                   // SmartScreen
+    [InlineData("no es fail-closed")]                                 // capturar.sh con WSLg caído
+    [InlineData("~/stockapp-backups-vps/corridas/corte-<ts>")]
+    [InlineData("~/stockapp-backups-vps/corte-<ts>/")]                // D+14: el dump del corte se ARCHIVA
+    [InlineData("--aun-con-escrituras")]
+    [InlineData("--reintentar-restauracion")]
+    [InlineData("systemctl unmask stockapp-api")]                     // R-A a mano, si --revertir no puede correr
+    [InlineData("stockapp-api.service.congelado")]
+    [InlineData("stockapp-ufw-reversa")]                              // firewall: reversa automática
     public void Runbook_ReflejaLosHallazgosDeLasReviews(string fragmento)
     {
         Assert.Contains(fragmento, Texto(Runbook));
+    }
+
+    /// <summary>
+    /// Spec 8.3: lo que los fakes del arnés no pueden probar y hay que mirar la primera vez contra los
+    /// servidores reales. Vive en la sección del ensayo, donde el operador lo va a ver.
+    /// </summary>
+    [Theory]
+    [InlineData("dry-run")]                // certbot reconfigure contra staging
+    [InlineData("daemon-reload")]          // antes del start al devolver la unit
+    [InlineData("stockapp-ufw-reversa")]   // systemd borra el timer transitorio
+    [InlineData("SHA256")]                 // el feed de Velopack
+    [InlineData("sin email")]              // el texto real de certbot
+    [InlineData("docker ps")]              // el del VPS compartido, real
+    public void Runbook_Ensayo_ListaLoQueLosFakesNoCubren(string fragmento)
+    {
+        var s4 = Seccion(Texto(Runbook), 4);
+        var i = s4.IndexOf("Qué mirar la primera vez", StringComparison.Ordinal);
+        Assert.True(i >= 0, "la sección 4 no tiene 'Qué mirar la primera vez'.");
+        Assert.Contains(fragmento, s4[i..]);
+    }
+
+    /// <summary>
+    /// Para cada script, la tabla de la sección 6 tiene las MISMAS filas (código y texto) que la del
+    /// encabezado del script, más una columna de qué hacer: el operador lee la tabla del runbook con
+    /// producción caída, y una fila que difiere del código es una fila falsa.
+    /// </summary>
+    [Theory]
+    [InlineData(Preparar, "preparar-vps-nuevo.sh")]
+    [InlineData(Migrar, "migrar-vps.sh")]
+    public void Runbook_TablaDeCodigosDeLosOrquestadores(string script, string nombre)
+    {
+        var esperado = TablaDeCodigos(Texto(script).Split('\n').Select(l => l.TrimEnd('\r')))
+            .Select(l => Regex.Match(l, @"^#   (\d)  (.+)$"))
+            .Where(m => m.Success)
+            .Select(m => (Codigo: m.Groups[1].Value, Texto: m.Groups[2].Value))
+            .ToList();
+        Assert.True(esperado.Count >= 7, $"no encontré la tabla de códigos de {script}.");
+
+        var sub = Regex.Match(Seccion(Texto(Runbook), 6),
+            $@"(?ms)^### `?{Regex.Escape(nombre)}`?.*?(?=^### |\z)");
+        Assert.True(sub.Success, $"la sección 6 no tiene el subtítulo '### {nombre}'.");
+        var filas = Regex.Matches(sub.Value, @"(?m)^\| (\d) \| (.+?) \| (.+?) \|\s*$")
+            .Select(m => (Codigo: m.Groups[1].Value, Texto: m.Groups[2].Value, Accion: m.Groups[3].Value))
+            .ToList();
+
+        Assert.Equal(esperado.Select(e => e.Codigo), filas.Select(f => f.Codigo));
+        Assert.Equal(esperado.Select(e => e.Texto), filas.Select(f => f.Texto));
+        Assert.All(filas, f => Assert.False(string.IsNullOrWhiteSpace(f.Accion), $"código {f.Codigo} sin 'qué hacer'."));
+    }
+
+    /// <summary>
+    /// Todo `--flag` de un comando de migrar-vps.sh o de preparar-vps-nuevo.sh que el runbook pone en
+    /// un bloque de código existe en ese script: un flag mal escrito se descubre con producción caída.
+    /// </summary>
+    [Fact]
+    public void Runbook_LosFlagsDeLosComandosExistenEnLosScripts()
+    {
+        var scripts = new[] { Migrar, Preparar };
+        var textos = scripts.ToDictionary(s => s, Texto);
+        var enBloque = false;
+        var revisados = 0;
+        foreach (var linea in Texto(Runbook).Split('\n'))
+        {
+            if (linea.TrimStart().StartsWith("```", StringComparison.Ordinal))
+            {
+                enBloque = !enBloque;
+                continue;
+            }
+
+            if (!enBloque) continue;
+            foreach (var s in scripts.Where(s => linea.Contains(s)))
+            {
+                foreach (Match f in Regex.Matches(linea, @"(?<![A-Za-z0-9-])--[a-z][a-z-]*"))
+                {
+                    revisados++;
+                    Assert.True(Regex.IsMatch(textos[s], $@"(?<![A-Za-z0-9-]){Regex.Escape(f.Value)}(?![A-Za-z0-9-])"),
+                        $"el runbook usa '{f.Value}' con {s} y el script no lo conoce: {linea.Trim()}");
+                }
+            }
+        }
+
+        Assert.True(revisados >= 8, $"solo revisé {revisados} flags: ¿se rompió el formato de los bloques de código?");
+    }
+
+    [Fact]
+    public void Runbook_EnsayoDelCorteYRevertirAntesDelDiaD()
+    {
+        var s4 = Seccion(Texto(Runbook), 4);
+
+        Assert.Contains("deploy/migrar-vps.sh --ensayo", s4);
+        Assert.Matches(@"(?is)ensayo del corte completo.{0,800}deploy/migrar-vps\.sh --revertir", s4);
+        Assert.Matches(@"(?i)antes del día D", s4);
+    }
+
+    [Fact]
+    public void Runbook_OffSiteEsElProximoProyecto()
+    {
+        // Sin saltos de línea: el texto del runbook se re-envuelve y la frase no puede depender de dónde corta.
+        var s8 = Regex.Replace(Seccion(Texto(Runbook), 8), @"\s+", " ");
+
+        Assert.Contains("el backup off-site programado es el próximo proyecto", s8);
+        Assert.Contains("último dump que esté fuera del servidor", s8);
+    }
+
+    [Fact]
+    public void Runbook_DesastreEsPrepararMasDesdeBackup()
+    {
+        var s8 = Seccion(Texto(Runbook), 8);
+
+        Assert.Contains("deploy/preparar-vps-nuevo.sh --version 0.5.3", s8);
+        Assert.Contains("deploy/migrar-vps.sh --desde-backup", s8);
+        Assert.Contains("RESTAURAR", s8);
+        Assert.Contains("--env-viejo", s8);
+    }
+
+    /// <summary>R48 a R52: lo que ofrece y lo que conserva --post-corte, y que el dump del corte se ARCHIVA.</summary>
+    [Fact]
+    public void Runbook_PostCorteArchivaElDumpYNoBorraLoQueNoEsDeLaMigracion()
+    {
+        var s9 = Seccion(Texto(Runbook), 9);
+
+        Assert.Contains("deploy/migrar-vps.sh --post-corte", s9);
+        Assert.Contains("14 días", s9);
+        Assert.Contains("--antes-de-plazo", s9);
+        Assert.Contains("BORRAR", s9);
+        Assert.Matches(@"(?i)archiva", s9);
+        Assert.Contains("se conserva", s9);
+        Assert.Contains("migracion-<fecha>", s9);                 // R52
+        Assert.Matches(@"(?is)la corrida del corte.{0,200}(no se borra|nunca)", s9);   // R49
+        Assert.DoesNotMatch(@"(?m)^\s*rm\s", s9);                 // nada de rm copiable en el cierre
+    }
+
+    /// <summary>R47 y R46: qué se hace después de un --revertir, y qué cuando el VPS nuevo no contesta.</summary>
+    [Fact]
+    public void Runbook_RevertirExplicaLaVerificacionPosteriorYElNuevoInalcanzable()
+    {
+        var s6 = Seccion(Texto(Runbook), 6);
+
+        Assert.Contains("deploy/migrar-vps.sh --revertir", s6);
+        Assert.Contains("REVERTIR", s6);
+        Assert.Contains("STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/preparar-vps-nuevo.sh --version 0.5.3 --verificar", s6);
+        Assert.Matches(@"(?is)paso 10.{0,400}sale (con )?5|sale (con )?5.{0,400}paso 10", s6);
+        Assert.Contains("desde el panel del proveedor", s6);
+        Assert.Contains("R-B", s6);
+    }
+
+    /// <summary>
+    /// Lo que era prosa manual (el congelamiento, la restauración, el volcado) ahora es código de
+    /// migrar-vps.sh: el runbook ya no lo copia. Única excepción, la sección 7 (R-B), que la spec manda
+    /// conservar tal cual: la migración inversa se hace a mano con las mismas piezas (R18).
+    /// </summary>
+    [Fact]
+    public void Runbook_SinComandosManualesDeCorte()
+    {
+        var texto = RunbookSinSeccion(7);
+
+        Assert.DoesNotContain("systemctl -q mask", texto);
+        Assert.DoesNotContain("restaurar-backup.sh", texto);
+        Assert.DoesNotContain("volcado-final-vps.sh", texto);
+        Assert.DoesNotContain("/tmp/", texto);
+    }
+
+    /// <summary>R-B se conserva con su texto (spec 6.7.7), más una nota fuera del bloque sobre lo que cambió de nombre.</summary>
+    [Theory]
+    [InlineData("STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/volcado-final-vps.sh --salida ~/stockapp-backups-vps/inversa-<fecha>/")]
+    [InlineData("`restaurar-backup.sh … --recrear-base stockapp` en el viejo")]
+    [InlineData("El viejo sigue detenido y enmascarado")]
+    [InlineData("C4 = paso 8 de `migrar-vps.sh`")]
+    public void Runbook_RB_ConservaSuTexto(string fragmento)
+    {
+        Assert.Contains(fragmento, Seccion(Texto(Runbook), 7));
+    }
+
+    [Fact]
+    public void Runbook_Tiempos_ConservaLaTablaYElResultadoDeE1()
+    {
+        var s10 = Seccion(Texto(Runbook), 10);
+
+        Assert.Contains("| Paso | E1 (local) |", s10);
+        Assert.Contains("**Resultado de E1 (2026-10-20): OK.**", s10);
+        Assert.Contains("31 tablas, 150 filas, 25 migraciones", s10);
+    }
+
+    /// <summary>
+    /// Minor de T12: el login de V5 y V8 usa VPS_ADMIN_USER (obligatorio, no cae a BOOTSTRAP_ADMIN_USER)
+    /// y la plantilla del .env del operador no lo documentaba.
+    /// </summary>
+    [Fact]
+    public void EnvExample_DocumentaVpsAdminUser()
+    {
+        var texto = Texto("deploy/.env.example");
+
+        Assert.Contains("VPS_ADMIN_USER", texto);
+        Assert.Contains("VPS_ADMIN_PASSWORD", texto);
+        Assert.Contains("GestionarDiagnostico", texto);
     }
 
     [Fact]
@@ -452,13 +682,18 @@ public class MigracionVpsSincroniaTests
         Assert.DoesNotContain("pkill", texto);
     }
 
+    /// <summary>
+    /// A14: deploy-vps.sh nunca se corre contra el VPS viejo (compartido; sin --sin-backup deja el
+    /// backup en el directorio temporal del host). Se conserva el regex; ya no se exige la palabra "/tmp",
+    /// porque la sección 7 es la única que puede traerla (R18).
+    /// </summary>
     [Fact]
     public void Runbook_AdviertePorQueDeployVpsNoSeCorreContraElViejo()
     {
         var texto = Texto(Runbook);
 
-        Assert.Contains("/tmp", texto);
         Assert.Matches(@"(?is)deploy-vps\.sh.{0,600}NUNCA.{0,100}VPS viejo", texto);
+        Assert.Matches(@"(?is)directorio temporal del host", texto);
     }
 
     private static string Seccion8DeDeploy()
@@ -482,7 +717,21 @@ public class MigracionVpsSincroniaTests
     }
 
     [Fact]
-    public void Procedimientos_Paso7ApuntaARestaurarBackup()
+    public void Deploy_Seccion8DocumentaLosDosOrquestadores()
+    {
+        var seccion = Seccion8DeDeploy();
+
+        Assert.Contains("deploy/preparar-vps-nuevo.sh", seccion);
+        Assert.Contains("deploy/migrar-vps.sh", seccion);
+    }
+
+    /// <summary>
+    /// El paso 7 del Procedimiento 3 (se perdió la base) sigue restaurando con restaurar-backup.sh en el
+    /// servidor del kit, y ahora apunta además al camino del VPS: preparar + --desde-backup. Ya no cita el
+    /// "paso C5" del runbook manual, que dejó de existir.
+    /// </summary>
+    [Fact]
+    public void Procedimientos_RecuperacionApuntaADesdeBackup()
     {
         var texto = Texto("deploy/PROCEDIMIENTOS.md");
         var inicio = texto.IndexOf("### Los pasos, en orden", StringComparison.Ordinal);
@@ -496,7 +745,10 @@ public class MigracionVpsSincroniaTests
         Assert.Contains("deploy/restaurar-backup.sh", paso7.Value);
         Assert.Contains("--recrear-base", paso7.Value);
         Assert.Contains("--env /etc/stockapp/.env", paso7.Value);
+        Assert.Contains("deploy/preparar-vps-nuevo.sh", paso7.Value);
+        Assert.Contains("deploy/migrar-vps.sh --desde-backup", paso7.Value);
         Assert.Contains("MIGRACION-VPS.md", paso7.Value);
+        Assert.DoesNotContain("paso C5", paso7.Value);
         Assert.DoesNotContain("siguiendo el respaldo bajado en el Procedimiento 1, con\n   ayuda del proveedor", paso7.Value);
     }
 }

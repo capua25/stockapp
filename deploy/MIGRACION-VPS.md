@@ -1,704 +1,325 @@
-# Migración de los datos de producción al VPS nuevo
+# Migración de VPS: runbook
 
-Runbook operativo: de "VPS nuevo en blanco" a "el municipio trabajando sobre el servidor nuevo
-con todos sus datos". Diseño y razones: `docs/superpowers/specs/2026-10-20-migracion-vps-design.md`.
-Estilo de `deploy/DEPLOY.md`: cada paso tiene su casilla, el comando exacto, el resultado
-esperado y qué hacer si no coincide.
+Dos comandos hacen el trabajo. Este documento dice **cuándo** correr cada uno, **qué mirar** y **qué
+hacer con cada código de salida**. El detalle de cada paso vive en el código (el encabezado de
+`deploy/preparar-vps-nuevo.sh` y el de `deploy/migrar-vps.sh`) y el diseño, en
+`docs/superpowers/specs/2026-10-20-migracion-vps-automatizada-design.md`. El runbook manual anterior
+(P1 a P10, E2, C0 a C10, V1 a V10) queda en el historial de git.
 
-**Estado:** E1 (ensayo local) lo corre un agente y deja sus tiempos abajo. E2 (ensayo general en
-el VPS nuevo) y el corte quedan **pendientes**: necesitan el VPS nuevo, el dominio y la fecha.
+**Estado:** el ensayo de punta a punta contra los servidores reales y el corte están **pendientes**:
+necesitan el VPS nuevo, el dominio y la fecha. El único ensayo hecho es E1 (sección 10).
 
-**Todos los comandos se corren desde la raíz del repo** (las rutas de `STOCKAPP_ENV_LOCAL=deploy/...` y
-`deploy/*.sh` son relativas al directorio actual).
+## 1. Qué es esto
 
-Marcadores usados en este documento: `<dominio-nuevo>`, `<ip-nueva>`, `<puerto-nuevo>` (SSH del
-VPS nuevo), `<usuario>` (usuario SSH del VPS nuevo), `<fecha>` (AAAAMMDD) y `<ts>` (el timestamp
-UTC que lleva el nombre del volcado). Ningún valor real vive en el repo.
+- `deploy/preparar-vps-nuevo.sh` deja el VPS nuevo listo: Docker, usuario `stockapp`, firewall, TLS,
+  `.env` del servidor, Postgres vacío, primer deploy y feed de actualizaciones. Es idempotente:
+  re-correrlo continúa donde quedó.
+- `deploy/migrar-vps.sh` hace todo lo demás, según el modo: `--ensayo`, el corte (sin flags),
+  `--continuar`, `--revertir`, `--desde-backup` y `--post-corte`.
+- **Todos los comandos se corren desde la raíz del repo y en una terminal de verdad**: las palabras
+  de confirmación (`CONGELAR`, `REVERTIR`, `RESTAURAR`, `BORRAR`) se leen de la terminal, y sin terminal
+  el script sale con 3.
+- Solo una corrida a la vez: los dos scripts toman un lock en `~/stockapp-backups-vps/.migracion.lock`
+  (si está tomado, salen con 3).
 
-## Reglas que valen en TODO el documento
+Reglas que valen en TODO el documento:
 
-- El VPS viejo es **compartido con otra aplicación**. Sobre él solo se corren los scripts de
-  este runbook, que operan por nombre sobre `stockapp-api`, `stockapp-pg` y `/var/lib/stockapp`.
-  Nada global de Docker, de systemd ni de certbot, y el proxy de la otra app no se toca.
-- **`deploy/deploy-vps.sh` sin `--sin-backup` deja el backup en el `/tmp` del host** (un lugar
-  legible por los demás usuarios del servidor compartido). Por eso, en la migración, **NUNCA se
-  corre `deploy-vps.sh` contra el VPS viejo**. Contra el VPS nuevo se usa siempre con
-  `--sin-backup` (en E2 y en C7 no hay nada que respaldar).
+- El VPS viejo es **compartido con otra aplicación**. Sobre él solo corren los scripts de este runbook,
+  que operan por nombre sobre `stockapp-api`, `stockapp-pg` y `/var/lib/stockapp`. Nada global de
+  Docker, de systemd ni de certbot, y el proxy de la otra app no se toca.
+- `deploy/deploy-vps.sh`: **NUNCA** se corre contra el VPS viejo. Sin `--sin-backup` deja el backup en el
+  directorio temporal del host, legible por los demás usuarios del servidor compartido. Contra el VPS
+  nuevo solo se usa con `--sin-backup`, y solo en el caso de la sección 4 (cargar overrides).
 - Los dumps de producción contienen todo, incluidos los hashes de contraseñas. Viven en
   `~/stockapp-backups-vps/` (700, fuera del repo) y nunca se commitean.
-- Cada comando de abajo que apunta a un servidor lo decide el `.env` del operador. Con dos VPS en
-  juego, **mirá siempre qué archivo estás cargando** (ver la tabla siguiente).
-
-### Los tres archivos `.env` (no son el mismo)
+- Con dos VPS en juego, **mirá siempre qué archivo estás cargando**:
 
 | Archivo | Dónde | Para qué | Cómo se elige |
 |---|---|---|---|
 | `deploy/.env` | máquina del operador | apunta al VPS **viejo** (y al de testing en el ensayo) | es el default de los scripts |
 | `deploy/.env.vps-nuevo` | máquina del operador | apunta al VPS **nuevo** (`deploy/.env*` está ignorado por git) | `STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo <script>` |
-| `~/stockapp-deploy/.env` | servidor nuevo (600) | configura el servicio real: lo lee `install.sh` y `docker compose` | es el que usa `restaurar-backup.sh` por defecto |
+| `~/stockapp-deploy/.env` | servidor nuevo (600) | configura el servicio real: lo lee `install.sh` y `docker compose` | lo genera `preparar-vps-nuevo.sh` en el servidor |
 
 El `.env` del operador se carga con `source` **después** del entorno: si define `VPS_HOST`, **pisa**
 al `VPS_HOST` que exportaste. No alcanza con exportar variables para cambiar de VPS: hay que usar
-`STOCKAPP_ENV_LOCAL`. Si la variable apunta a un archivo que no existe, los scripts abortan antes
-de abrir ninguna conexión.
+`STOCKAPP_ENV_LOCAL`. Si la variable apunta a un archivo que no existe, los scripts abortan antes de
+abrir ninguna conexión. `preparar-vps-nuevo.sh` exige `STOCKAPP_ENV_LOCAL` y se niega (9) si resuelve
+al mismo servidor que `deploy/.env`.
 
-## Lo que Martin tiene que cargar
+Marcadores usados en este documento: `<dominio-nuevo>`, `<ip-nueva>`, `<puerto-nuevo>` (SSH del VPS
+nuevo), `<usuario>` (usuario SSH del VPS nuevo), `<fecha>` (AAAAMMDD) y `<ts>` (el timestamp UTC que
+lleva el nombre de la corrida). Ningún valor real vive en el repo.
+
+## 2. Prerrequisitos de Martin
 
 Ningún agente escribe estos archivos: son tuyos. Solo nombres de variables, nunca valores en el repo.
 
-- **En `deploy/.env` (el existente; lo usan el ensayo E1 y el corte contra el VPS viejo):**
-  - `VPS_HOST`, `VPS_USER`, `VPS_SSH_PORT` (sin default a propósito: si faltan, los scripts abortan);
-  - `API_SCHEME`, `API_HOSTNAME`, `API_PORT` (para que los curl remotos hablen con el esquema y el
-    puerto reales de ese VPS);
-  - `VPS_ADMIN_PASSWORD` (y `VPS_ADMIN_USER` si no es el de `BOOTSTRAP_ADMIN_USER`) de un usuario
-    con el permiso `GestionarDiagnostico`. Alternativa: un `BOOTSTRAP_PASSWORD` que **todavía** sea
-    válido, pero en una instalación viva casi seguro ya se cambió.
-  - La contraseña puede ir en el `.env` **o** como variable de entorno del comando puntual
-    (`VPS_ADMIN_PASSWORD=… deploy/bajar-backup-vps.sh …`, sin `export`). Ojo: si el `.env` define la
-    clave, **pisa** a la del entorno.
-- **En `deploy/.env.vps-nuevo` (nuevo, ver P7):** `VPS_HOST`, `VPS_USER`, `VPS_SSH_PORT`,
-  `POSTGRES_USER`, `POSTGRES_DB`, `API_SCHEME`, `API_HOSTNAME`, `API_PORT` y, si hace falta,
-  `VPS_ADMIN_USER` / `VPS_ADMIN_PASSWORD`.
-- **En `~/stockapp-deploy/.env` del servidor nuevo (ver P6):** `POSTGRES_USER`, `POSTGRES_PASSWORD`,
-  `POSTGRES_DB`, `JWT_SECRET`, `BOOTSTRAP_ADMIN_USER`, `BOOTSTRAP_PASSWORD`,
-  `LICENCIA_CLAVE_PUBLICA_BASE64`, `API_BIND`, `API_SCHEME`, `API_PORT`, `API_HOSTNAME`,
-  `Kestrel__Certificates__Default__Path`, `Kestrel__Certificates__Default__KeyPath`,
-  `Licencia__Habilitado` y `RateLimiting__Login__PermitLimit`, más los overrides que liste
-  `overrides-api-env.txt`.
-
-## Tiempos
-
-Los llena E1 (lo corre un agente) y E2 los completa. El corte real usa los de E2 para dimensionar
-la ventana.
-
-| Paso | E1 (local) | E2 (VPS nuevo) | Corte real |
-|---|---|---|---|
-| Bajar el backup real (`bajar-backup-vps.sh`) | 13 s (dump de 95 KB; el `--id` del historial, 11 s) | n/a | n/a |
-| `ensayo-local.sh preparar` | 5 s | n/a | n/a |
-| Volcado (`ensayo-local.sh volcar` / `volcado-final-vps.sh`, C3) | 2 s | _pendiente_ | _pendiente_ |
-| `restaurar-backup.sh` (C5) | 14 s sobre la base vacía; 5 s con `--recrear-base` | _pendiente_ | _pendiente_ |
-| Arranque de la API contra la base restaurada (C7) | 28 s hasta `GET /` OK (incluye restore y build de `dotnet run` con un `HOME` vacío) | _pendiente_ | _pendiente_ |
-| Verificación (C8, V1 a V10) | menos de 10 s (V4, V5, V8 y `/updates`; `--verificar-post-arranque`, 0,4 s) | _pendiente_ | _pendiente_ |
-| Ventana total con el VPS viejo sin API (C3 a C9) | n/a | _pendiente_ | _pendiente_ |
-
-**Resultado de E1 (2026-10-20): OK.** Backup real de testing (31 tablas, 150 filas, 25 migraciones,
-última `20260910225922_AgregaIndiceFuncionalNombreCatalogos`): `preparar`, `volcar` y `restaurar` con
-exit 0, conteos idénticos al manifiesto, secuencias y catálogos OK; segundo `restaurar` sin
-`--recrear-base` → 3, con `--recrear-base` → 0 y dump de seguridad. API local: `GET /` OK, sin
-excepciones de migración, V4 `activada: true`, V5 login real con token, V8 historial servido (200) y
-`POST /backups` → 202 con una corrida `Exitosa` en 1 s, `/updates` sirve el feed,
-`--verificar-post-arranque` exit 0 (`CorridasBackup` 11 → 11: el catch-up y el `POST` sumaron dos
-corridas y la retención borró dos). Limpieza: cero contenedores, volúmenes y redes `stockapp-ensayo-*`,
-`docker ps` igual al del inicio. **E2 y el corte quedan PENDIENTES**: necesitan el VPS nuevo, el
-dominio y la fecha.
-
----
-
-# Preparación (días antes)
-
-Nada de esto toca el VPS viejo.
-
-### P1. VPS nuevo
-
-- [ ] **P1.** Ubuntu 24.04 LTS (`install.sh` instala `postgresql-client-16` por apt; en 22.04 no está).
-  Usuario SSH con clave, `sudo` sin contraseña y, desde P4, miembro del grupo `docker`.
+- [ ] **VPS nuevo, dedicado.** Ubuntu 24.04 LTS, usuario SSH con clave y `sudo` sin contraseña.
+  Preparar se niega (9) si hay contenedores ajenos a StockApp o el puerto 80 ocupado.
 
 ```bash
 ssh -p <puerto-nuevo> -o BatchMode=yes <usuario>@<ip-nueva> 'sudo -n true && echo OK'
 ```
 
-Esperado: `OK`. Si pide contraseña o falla: arreglar el `sudoers` o la clave antes de seguir; todos
-los scripts asumen `sudo -n`. Anotá el puerto SSH: va en `VPS_SSH_PORT`.
-
-### P2. DNS
-
-- [ ] **P2.** Registro `A` de `<dominio-nuevo>` → `<ip-nueva>`, TTL 300 s, creado **días antes**.
+Esperado: `OK`. Si pide contraseña o falla, arreglá el `sudoers` o la clave antes de seguir.
+- [ ] **Firewall del proveedor.** Si el panel del proveedor tiene un firewall propio, abrí ahí el puerto
+  SSH, el 80 (HTTP-01 de Let's Encrypt, al emitir y al renovar) y el 8080 (la API). Preparar maneja el
+  `ufw` del servidor, no el del panel.
+- [ ] **DNS.** Registro `A` de `<dominio-nuevo>` → `<ip-nueva>`, TTL 300 s, creado **días antes**.
 
 ```bash
 dig +short <dominio-nuevo>
 ```
 
-Esperado: exactamente `<ip-nueva>`. Si no: esperar la propagación o revisar el panel DNS; sin esto
-Let's Encrypt (P5) no puede emitir.
+Esperado: exactamente `<ip-nueva>`. Preparar lo comprueba antes de pedir el certificado (sale 3 si no
+coincide) para no gastar intentos de Let's Encrypt.
+- [ ] **`deploy/.env`** (el VPS viejo; lo usan el ensayo y el corte). Variables: `VPS_HOST`, `VPS_USER`,
+  `VPS_SSH_PORT` (sin default a propósito: si faltan, los scripts abortan), `API_SCHEME`, `API_HOSTNAME`,
+  `API_PORT`, `LICENCIA_CLAVE_PUBLICA_BASE64` (preparar la copia al servidor nuevo; solo la lee) y
+  `VPS_ADMIN_USER` + `VPS_ADMIN_PASSWORD`: un usuario **real** de los datos, con el permiso
+  `GestionarDiagnostico` (V5 y V8 hacen login con él y piden `/backups`). `VPS_ADMIN_USER` es
+  obligatorio y no cae a `BOOTSTRAP_ADMIN_USER`. La contraseña puede ir en el `.env`, en el entorno del
+  comando puntual (`VPS_ADMIN_PASSWORD=… deploy/migrar-vps.sh`, sin `export`) o, si no está en
+  ninguno, se pide por terminal sin eco. Ojo: si el `.env` define la clave, **pisa** a la del entorno.
+- [ ] **`deploy/.env.vps-nuevo`** completo, con `chmod 600`: `VPS_HOST` (la IP nueva), `VPS_USER`,
+  `VPS_SSH_PORT`, `API_SCHEME=https`, `API_HOSTNAME=<dominio-nuevo>` y `API_PORT=8080`. El resto del
+  `.env` del servidor (secretos nuevos, `Licencia__Habilitado=false`, rutas del certificado) lo genera
+  preparar en el servidor.
+- [ ] **`releases/win`** con la versión 0.5.3 publicada y el `Setup.exe` de la **misma** versión
+  (`build/pack-win.ps1`, ver `build/README-empaquetado.md`). Preparar sale 3 si falta la versión.
+- [ ] **Los valores de los overrides.** Sus **nombres** los lista el primer `--ensayo` (sección 4); los
+  valores están en el `api.env` del VPS viejo y los cargás vos, a mano.
 
-### P3. Firewall (`ufw`) del VPS nuevo
+## 3. Preparar el VPS nuevo
 
-- [ ] **P3.** El SSH se habilita **antes** de `ufw enable`, o te quedás afuera.
-
-```bash
-sudo ufw allow <puerto-nuevo>/tcp
-sudo ufw allow 80/tcp      # HTTP-01 de Let's Encrypt, al emitir y al renovar
-sudo ufw allow 8080/tcp    # la API
-sudo ufw enable
-sudo ufw status numbered
-```
-
-Esperado: las tres reglas (y sus pares IPv6). Es el modo "expuesto" de `DEPLOY.md` (sección
-"Firewall"), con `API_BIND=0.0.0.0`.
-
-### P4. Docker
-
-- [ ] **P4.** No se usa `deploy/kit/01-bootstrap.sh`: es el bootstrap del kit LAN (interactivo, sin TLS,
-  pensado para trabajar offline). El VPS sigue el layout de `DEPLOY.md` sección 2:
-  compose y `.env` en `~/stockapp-deploy/`.
-
-```bash
-sudo apt-get update
-sudo apt-get install -y docker.io docker-compose-v2
-sudo usermod -aG docker <usuario>
-mkdir -p ~/stockapp-deploy
-```
-
-Cerrá la sesión SSH y volvé a entrar (el grupo recién se aplica en la sesión nueva). Verificación:
-`docker ps` sin `sudo` → tabla vacía, sin error de permisos.
-
-### P5. TLS (Let's Encrypt, HTTP-01 `--standalone`)
-
-- [ ] **P5.a** Instalar el deploy-hook versionado (`deploy/tls/stockapp-tls-deploy-hook.sh`, ya viene en
-  el repo; no hace falta traerlo de ningún servidor). Desde tu checkout:
+Preparar no toca el VPS viejo. Primera corrida:
 
 ```bash
-ssh -p <puerto-nuevo> <usuario>@<ip-nueva> 'mkdir -p ~/stockapp-deploy/deploy/tls'
-scp -P <puerto-nuevo> deploy/tls/stockapp-tls-deploy-hook.sh <usuario>@<ip-nueva>:~/stockapp-deploy/deploy/tls/
-# en el servidor nuevo:
-cd ~/stockapp-deploy
-sudo install -m 0755 deploy/tls/stockapp-tls-deploy-hook.sh /usr/local/sbin/
+STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/preparar-vps-nuevo.sh --version 0.5.3
 ```
 
-Esperado: `ls -l /usr/local/sbin/stockapp-tls-deploy-hook.sh` → `-rwxr-xr-x root root`.
+Esperado: exit 0 y `preparar: el VPS quedó listo.`, con cada uno de los 10 pasos en `OK`. Después de
+la salida hay una lista de lo que queda **pendiente para vos**: los overrides, la renovación del
+certificado y el `Setup.exe`. Si falla un paso, mirá la tabla de códigos de la sección 6 y re-corré: lo
+hecho queda hecho.
 
-- [ ] **P5.b** Crear el usuario `stockapp` **antes** de emitir: el hook hace `chown stockapp:stockapp`.
-  Es el mismo comando que `install.sh`, que después lo detecta existente y no lo recrea.
+Segunda corrida, para comprobar la idempotencia (todo tiene que dar `YA ESTABA`):
 
 ```bash
-sudo useradd --system --create-home --home-dir /var/lib/stockapp --shell /usr/sbin/nologin stockapp
-id stockapp
+STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/preparar-vps-nuevo.sh --version 0.5.3
 ```
 
-Orden obligatorio: con `API_SCHEME=https`, `install.sh` aborta si los PEM no existen.
-
-- [ ] **P5.c** Emitir el certificado y registrar el hook (queda como `renew_hook` de **este** certificado):
+Para revisar un VPS preparado semanas atrás, sin aplicar nada (solo lectura; cada paso dice `HECHO` o
+`PENDIENTE`):
 
 ```bash
-sudo apt-get install -y certbot
-sudo certbot certonly --standalone -d <dominio-nuevo> --deploy-hook /usr/local/sbin/stockapp-tls-deploy-hook.sh
-sudo ls -l /var/lib/stockapp/tls/
+STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/preparar-vps-nuevo.sh --version 0.5.3 --verificar
 ```
 
-Esperado: `fullchain.pem` y `privkey.pem`, ambos `stockapp stockapp` con modo `-rw-------`. En esta
-primera emisión la API todavía no existe: el hook copia los PEM y su `systemctl restart stockapp-api`
-falla (la unit no está instalada), así que certbot puede avisar que el hook devolvió error. Es
-esperado; lo que importa es que los PEM estén copiados. Si no están: el certificado quedó emitido en
-`/etc/letsencrypt/live/<dominio-nuevo>/`; corré el hook a mano con
-`sudo RENEWED_LINEAGE=/etc/letsencrypt/live/<dominio-nuevo> /usr/local/sbin/stockapp-tls-deploy-hook.sh`
-(sale con 2 si falta algún PEM, sin copiar ni reiniciar nada).
-
-- [ ] **P5.d** (se hace **después de E2**, cuando la API ya existe) Probar la renovación **de verdad**.
-  `certbot renew --dry-run` **no ejecuta los hooks**, así que no prueba nada del hook:
+Probar la renovación del certificado, **una vez y a mano**. Corre `certbot renew --force-renewal` de
+verdad (`--dry-run` no ejecuta los hooks, así que no probaría el hook), y verifica que la API reinicie:
 
 ```bash
-sudo certbot renew --force-renewal --cert-name <dominio-nuevo>
-systemctl is-active stockapp-api
+STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/preparar-vps-nuevo.sh --version 0.5.3 --probar-renovacion
 ```
 
-Esperado: `active`, y `sudo journalctl -u stockapp-api -n 20 --no-pager` muestra un arranque nuevo.
-Gasta cupo de emisión: no repetirlo sin necesidad. Alternativa DNS-01 (si el proveedor no deja abrir
-el 80, o para emitir antes de que el DNS apunte a la IP nueva): requiere plugin del proveedor DNS o un
-TXT manual, y la renovación manual no es automática; por eso queda solo como alternativa.
+Gasta cupo de Let's Encrypt: si la verificación posterior falla, **no** repitas el comando a ciegas
+(cada corrida es otra renovación forzada); mirá `sudo journalctl -u stockapp-api -n 50 --no-pager` en el
+VPS nuevo primero. Una vez probada, el script lo anota en el servidor y no vuelve a hacerlo.
 
-### P6. `.env` del servidor nuevo (`~/stockapp-deploy/.env`, 600)
+Qué hay que saber de lo que hace:
 
-- [ ] **P6.** A partir de `deploy/.env.example`. En el servidor:
+- **Firewall.** Habilita `ufw` con el SSH primero y arma antes una reversa automática (`stockapp-ufw-reversa`,
+  120 s) que lo deshace si el re-chequeo de acceso con una conexión nueva no llega. Nunca resetea ni
+  borra reglas. No ve el firewall del panel del proveedor.
+- **Certificado.** HTTP-01 `--standalone` por el puerto 80, emitido con `--register-unsafely-without-email`:
+  una cuenta ACME nueva no puede emitir en modo no interactivo sin ese flag. Consecuencia: la cuenta no
+  tiene contacto de recuperación. Se agrega después, sin reemitir, con
+  `sudo certbot update_account -m <mail>` en el VPS nuevo. Si el certificado ya existe con otro
+  `renew_hook`, lo re-registra con `certbot reconfigure`, que hace un dry-run contra staging de Let's
+  Encrypt. Si el proveedor no deja abrir el puerto 80, este camino no sirve tal cual: DNS-01 necesita
+  el plugin de tu proveedor DNS o un TXT manual, y la renovación deja de ser automática.
+- **`.env` del servidor.** Se genera **en el servidor** (`~/stockapp-deploy/.env`, 600), con secretos
+  nuevos que nunca pasan por tu máquina, `LICENCIA_CLAVE_PUBLICA_BASE64` copiada de `deploy/.env` y
+  `Licencia__Habilitado=false`. Si ya existe, **no se reescribe jamás**: si le falta una clave o un
+  valor fijo no coincide, el paso falla y te dice solo los nombres. `BOOTSTRAP_PASSWORD` es aleatoria y
+  solo sirve hasta el primer restore; hasta el primer ensayo la API queda expuesta en el 8080 con un
+  admin sembrado, con el rate limit del login en 10.
+- **Primer deploy.** Solo si la unit no existe. Con la API instalada, preparar **nunca** vuelve a
+  desplegar: después del corte este VPS es producción, y un deploy sin backup no se hace por accidente.
+
+## 4. Ensayo
+
+**4.1. Ensayo automático.** Detiene la API del viejo (testing) alrededor de un minuto y la vuelve a
+arrancar sola: avisá a quien lo use. No pide confirmación.
 
 ```bash
-install -m 600 /dev/null ~/stockapp-deploy/.env
-# generá los secretos NUEVOS (no se reutilizan los del VPS viejo):
-openssl rand -base64 24    # POSTGRES_PASSWORD
-openssl rand -base64 48    # JWT_SECRET
+deploy/migrar-vps.sh --ensayo
 ```
 
-Contenido (editá `~/stockapp-deploy/.env` con tu editor):
+Esperado: exit 0, resultado GO técnico, el viejo `active`. Al final imprime la **tabla de tiempos** (para
+pegar en la sección 10) y los **nombres de los overrides** que faltan en el `.env` del servidor nuevo
+(salen de `overrides-api-env.txt` del volcado de la corrida). Los códigos de salida: sección 6.
 
-| Variable | Valor |
-|---|---|
-| `POSTGRES_USER` / `POSTGRES_DB` | `stockapp` / `stockapp` |
-| `POSTGRES_PASSWORD`, `JWT_SECRET` | **nuevos** (los comandos de arriba) |
-| `BOOTSTRAP_ADMIN_USER`, `BOOTSTRAP_PASSWORD` | los exige `install.sh`; con la base restaurada se **ignoran** (el seed no hace nada si ya hay usuarios) |
-| `LICENCIA_CLAVE_PUBLICA_BASE64` | el **mismo** valor que `deploy/.env`: el reset de admin firmado sigue usando esa clave, y con ella la clave privada de `~/stockapp-claves` sigue sirviendo |
-| `API_BIND`, `API_SCHEME`, `API_PORT`, `API_HOSTNAME` | `0.0.0.0`, `https`, `8080`, `<dominio-nuevo>` |
-| `Kestrel__Certificates__Default__Path` / `…__KeyPath` | `/var/lib/stockapp/tls/fullchain.pem` / `/var/lib/stockapp/tls/privkey.pem` |
-| `Licencia__Habilitado` | `false` (el licenciamiento queda apagado en el VPS nuevo) |
-| `RateLimiting__Login__PermitLimit` | `10` (lo recomendado para el modo expuesto) |
-| overrides | los **nombres** que liste `overrides-api-env.txt` del volcado (ver C3): se recrean a mano, con su valor |
-
-Esperado: `stat -c '%a' ~/stockapp-deploy/.env` → `600`, y ningún valor que empiece con `CAMBIAR`.
-
-### P7. `.env` del operador para el VPS nuevo (`deploy/.env.vps-nuevo`)
-
-- [ ] **P7.** En tu máquina, a partir de la lista de "Lo que Martin tiene que cargar". `chmod 600`.
-
-```bash
-( set -a; source deploy/.env.vps-nuevo; set +a
-  ssh -p "$VPS_SSH_PORT" -o BatchMode=yes "${VPS_USER}@${VPS_HOST}" 'sudo -n true && echo OK' )
-```
-
-Esperado: `OK`. Si dice que falta una variable o responde el VPS equivocado, el archivo está mal.
-
-### P8. Postgres del VPS nuevo
-
-- [ ] **P8.** Copiar el compose y el `.env` del servidor (P6) y levantar el contenedor:
-
-```bash
-scp -P <puerto-nuevo> deploy/docker-compose.postgres.yml <usuario>@<ip-nueva>:~/stockapp-deploy/
-# en el servidor nuevo:
-cd ~/stockapp-deploy
-docker compose --env-file .env -f docker-compose.postgres.yml up -d
-docker compose --env-file .env -f docker-compose.postgres.yml ps
-docker exec stockapp-pg psql -U stockapp -d stockapp -c '\dt'
-```
-
-Esperado: `healthy`, y `Did not find any relations.` (la imagen crea `POSTGRES_DB` vacía). Con tablas ya
-creadas: algo arrancó la API contra esta base; no sigas, revisalo.
-
-### P9. Ensayo general
-
-- [ ] **P9.** Correr **E2** (más abajo). Deja la API 0.5.3 instalada, TLS andando, el feed 0.5.3 publicado
-  y el hook probado (P5.d).
-
-### P10. Instalador de las PCs
-
-- [ ] **P10.** El `Setup.exe` de la **misma** 0.5.3 que se publica en el feed (`build/pack-win.ps1`, ver
-  `build/README-empaquetado.md`). Las PCs se instalan **a la vez** que la migración, con el
-  Configurador apuntando a `https://<dominio-nuevo>:8080`. El `Setup.exe` no está firmado:
-  Windows va a mostrar el aviso de **SmartScreen** ("Windows protegió su PC"); se avisa de antemano
-  a quien instale y se sigue con "Más información" → "Ejecutar de todas formas".
-
----
-
-# Ensayos
-
-### E1. Ensayo local con un backup real (solo lectura sobre el VPS actual)
-
-Lo corre un agente; **no detiene** el servidor actual: solo lee (login, `GET /backups` y la descarga
-del contenido por el stdout de ssh). El VPS viejo se simula en tu máquina con contenedores propios
-`stockapp-ensayo-*`. Nunca se toca el `stockapp-pg` de desarrollo.
-
-- [ ] **E1.1** Carpeta de trabajo, fuera del repo y fuera de `/mnt`:
-
-```bash
-TRABAJO=~/stockapp-backups-vps/ensayo-$(date -u +%Y%m%d)
-mkdir -p -m 700 "$TRABAJO"
-docker ps --format '{{.Names}}' > "$TRABAJO/docker-ps-inicio.txt"
-```
-
-Esa foto se toma con la máquina quieta: justo después de un `dotnet test` suele quedar unos segundos
-un `testcontainers-ryuk-*` que desaparece solo, y su ausencia posterior da `exit 9` en `volcar` o
-`limpiar` (pasó en el primer intento de E1).
-
-- [ ] **E1.2** Backup real, solo lectura (la tabla de corridas se imprime antes de elegir):
-
-```bash
-STOCKAPP_ENV_LOCAL=deploy/.env deploy/bajar-backup-vps.sh --salida "$TRABAJO/real"
-STOCKAPP_ENV_LOCAL=deploy/.env deploy/bajar-backup-vps.sh --salida "$TRABAJO/historial" --id <id-anterior>
-```
-
-Esperado: exit 0 y un `backup_*.dump` ≥ 1024 bytes. Exit 3 por login rechazado: la credencial de
-"Lo que Martin tiene que cargar" no sirve; el agente se detiene y te avisa.
-
-- [ ] **E1.3** Volcado y restauración sobre contenedores descartables:
-
-```bash
-deploy/ensayo/ensayo-local.sh preparar "$TRABAJO/real/backup_<…>.dump" --trabajo "$TRABAJO/e1" --historial "$TRABAJO/historial/backup_<…>.dump"
-deploy/ensayo/ensayo-local.sh volcar --trabajo "$TRABAJO/e1"
-deploy/ensayo/ensayo-local.sh restaurar --trabajo "$TRABAJO/e1"
-```
-
-Esperado: los tres con exit 0, `estado/stockapp-api.habilitado` = `masked` y conteos idénticos al
-manifiesto. Un segundo `restaurar` sin `--recrear-base` sale con 3 (base no vacía); con
-`--recrear-base` sale con 0 y deja un `pre-recrear-stockapp-*.dump` en `$TRABAJO/e1/seguridad`.
-
-- [ ] **E1.4** API 0.5.3 local contra la base restaurada (puerto 5199), historial extraído (C6 local):
-
-```bash
-mkdir -p "$TRABAJO/e1/home-api/.local/share/StockApp" "$TRABAJO/e1/updates"
-printf '{"Assets":[]}\n' > "$TRABAJO/e1/updates/releases.ensayo.json"
-tar -C "$TRABAJO/e1/home-api/.local/share/StockApp" -xpf "$TRABAJO/e1/salida/backups-historial.tar"
-HOME="$TRABAJO/e1/home-api" ASPNETCORE_URLS=http://127.0.0.1:5199 \
-ConnectionStrings__Default="Host=127.0.0.1;Port=5434;Database=stockapp;Username=stockapp;Password=$(cat "$TRABAJO/e1/pg-password")" \
-Licencia__Habilitado=false Jwt__Secret="$(openssl rand -base64 48)" Bootstrap__AdminUser=ensayo Bootstrap__Password=Ensayo12345 Actualizaciones__Directorio="$TRABAJO/e1/updates" \
-dotnet run --project src/StockApp.Api/StockApp.Api.csproj --no-launch-profile > "$TRABAJO/e1/api.log" 2>&1 &
-echo $! > "$TRABAJO/e1/api.pid"
-curl -fsS http://127.0.0.1:5199/
-curl -fsS http://127.0.0.1:5199/updates/releases.ensayo.json
-```
-
-Sin `Actualizaciones__Directorio` la API usa `/var/lib/stockapp/updates`, que en tu máquina no se
-puede crear: `/updates` queda en 404 y no prueba nada. Con el `HOME` descartable, `dotnet run` baja
-de nuevo todos los paquetes NuGet a `$TRABAJO/e1/home-api` (unos 330 MB, y el arranque tarda más):
-se borran con `$TRABAJO` en E1.7. Los logs de la API van a
-`$TRABAJO/e1/home-api/.local/share/StockApp/logs/`, no a `api.log`.
-
-Esperado (en menos de 120 s): `{"status":"ok","service":"StockApp.Api"}` y `api.log` sin excepciones de
-migración.
-
-- [ ] **E1.5** V4 a V8 contra esa API local, y `--verificar-post-arranque`:
-
-```bash
-deploy/restaurar-backup.sh "$TRABAJO/e1/salida/volcado-<ts>.dump" --manifiesto "$TRABAJO/e1/salida/volcado-<ts>.manifiesto" \
-  --contenedor stockapp-ensayo-pg --base stockapp --usuario stockapp --verificar-post-arranque
-```
-
-Esperado: exit 0 (`CorridasBackup` puede variar; `LogsAuditoria` ≥ manifiesto).
-
-- [ ] **E1.6** Limpieza verificada. La API se mata **por PID exacto** y se confirma:
-
-```bash
-kill "$(cat "$TRABAJO/e1/api.pid")"; ps -p "$(cat "$TRABAJO/e1/api.pid")"
-deploy/ensayo/ensayo-local.sh limpiar --trabajo "$TRABAJO/e1"
-docker ps --format '{{.Names}}' | diff - "$TRABAJO/docker-ps-inicio.txt" && echo IGUAL
-rm -f "$TRABAJO/e1/token"
-```
-
-Esperado: `ps` sin el proceso, `limpiar` con exit 0 y `IGUAL`. **Antes** del `kill`, anotá los hijos
-con `ps --ppid "$(cat "$TRABAJO/e1/api.pid")" -o pid=,comm=`: además de `StockApp.Api`, `dotnet run`
-deja dos nodos de MSBuild (`dotnet`, con `/nodeReuse:true`) que sobreviven al padre. Matalos a todos
-por esos PID exactos y confirmá con `ps -p <pid1>,<pid2>,…` que no queda ninguno.
-
-**Exit 9 y falsos rojos.** `volcar` y `limpiar` comparan la lista de `docker ps` del principio con la
-del final y la igualdad es estricta a propósito. Si **otro proceso** crea o borra contenedores mientras
-corren (otro `dotnet test`, un compose levantado en paralelo), la comparación da `exit 9` aunque el
-script no haya tocado nada ajeno. No es un fallo del script: repetí con la máquina quieta. Por la
-misma razón, los tests de Kit (`EnsayoCompleto_*`) se corren solos, no en paralelo con otra suite que
-use Docker.
-
-- [ ] **E1.7** **Borrar los datos reales del ensayo.** `$TRABAJO` queda con una COPIA de producción
-  (dumps, historial, `pg-password`, dumps de seguridad); `limpiar` no la borra a propósito. Primero
-  confirmá qué hay y cuánto pesa, y que los dumps que querés conservar ya están archivados en otro lado:
-
-```bash
-ls -la "$TRABAJO"; du -sh "$TRABAJO"
-```
-
-Solo si es lo que esperabas, y con la ruta escrita a mano (nunca con una variable vacía en el medio):
-
-```bash
-rm -rf <trabajo>
-```
-
-Donde `<trabajo>` es la ruta literal que te mostró el `ls`. Esperado: `ls <trabajo>` → `No such file or
-directory`.
-
-### E2. Ensayo general en el VPS nuevo
-
-Se hace después de P1 a P8. Es la secuencia completa del corte (C3 a C8) con estas diferencias, y **se
-cronometra cada paso** (tabla "Tiempos"):
-
-- [ ] **E2.1** `volcado-final-vps.sh --ensayo` contra el VPS viejo (usa `deploy/.env`). **Detiene testing
-  alrededor de un minuto**: el `trap` vuelve a arrancar la API al salir, pero solo si estaba activa al
-  empezar. Avisá a quien use testing.
-
-```bash
-unset STOCKAPP_ENV_LOCAL
-deploy/volcado-final-vps.sh --salida ~/stockapp-backups-vps/ensayo-e2-<fecha>/ --ensayo
-```
-
-Esperado: exit 0, y después `systemctl is-active stockapp-api` en el viejo → `active` (no enmascara).
-- [ ] **E2.2** C4 y C5 (copiar y restaurar). La base del VPS nuevo está vacía, así que alcanza sin `--recrear-base`. En E2 el directorio de destino
-  es `~/stockapp-deploy/migracion/ensayo-e2-<fecha>/` (en lugar de `corte-<fecha>/`).
-- [ ] **E2.3** C6 (historial). En un VPS en blanco `.local/share/StockApp` todavía no existe (lo crea
-  `install.sh` recién en E2.4), así que antes del `tar -C` del C6:
-
-```bash
-sudo install -d -o stockapp -g stockapp -m 750 /var/lib/stockapp/.local /var/lib/stockapp/.local/share /var/lib/stockapp/.local/share/StockApp
-```
-- [ ] **E2.4** En lugar de C7: el **primer** deploy contra el VPS nuevo. Su paso 2 necesita una API viva con
-  login y en un VPS en blanco no la hay, por eso `--sin-backup`:
+**4.2. Cargar los overrides.** Con los nombres que imprimió el ensayo, agregá cada `NOMBRE=valor` (el
+valor lo tomás del `api.env` del VPS viejo) al `~/stockapp-deploy/.env` del servidor nuevo. Eso no
+alcanza: `install.sh` es quien copia esas claves a `/etc/stockapp-api/api.env`, así que hay que
+reinstalar la misma versión:
 
 ```bash
 STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/deploy-vps.sh 0.5.3 --sin-backup
 ```
 
-El marcador del último deploy es **por host** (`deploy/dist/.ultimo-deploy-vps-commit-<host>`): el
-primer deploy a un host nuevo siempre copia `install.sh`. El marcador viejo sin sufijo se ignora.
-- [ ] **E2.5** El feed arranca con la 0.5.3:
-`STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo build/publicar-release.sh 0.5.3`
-- [ ] **E2.6** P5.d (`certbot renew --force-renewal --cert-name <dominio-nuevo>`) y verificar que la API
-  reinicia y sigue sirviendo con el certificado nuevo.
-- [ ] **E2.7** V1 a V9 completos, incluido el smoke de la GUI.
-- [ ] **E2.8** Anotar los tiempos. El VPS nuevo queda así hasta el corte, que repite C1 a C8 con `--recrear-base`.
-
----
-
-# Corte (día D)
-
-Los tiempos salen de E2. **Antes de cada comando de abajo, comprobá qué `.env` carga**: sin
-`STOCKAPP_ENV_LOCAL` es `deploy/.env`, o sea el VPS **viejo**.
-
-### C0. Confirmación
-
-- [ ] **C0.** Martin confirma la ventana, avisa que testing deja de existir en el servidor viejo y que
-  **no se hacen deploys** al VPS viejo durante el corte (y, recordatorio, `deploy-vps.sh` nunca se corre
-  contra él). Las PCs del municipio se instalan en esta misma ventana.
-
-### C1. VPS nuevo: detener la API que dejó E2
-
-- [ ] **C1.**
+Verificá cada override sin imprimir su valor (en el VPS nuevo):
 
 ```bash
-sudo systemctl stop stockapp-api
-systemctl is-active stockapp-api
+sudo grep -c '^<NOMBRE-DEL-OVERRIDE>=' /etc/stockapp-api/api.env
 ```
 
-Esperado: `inactive`. Si dice otra cosa, no sigas: una API viva escribiría sobre la base que vas a recrear.
+Esperado: `1`. Después repetí el `--ensayo` hasta que no liste overrides faltantes: el pre-vuelo del
+corte sale 3 si falta alguno.
 
-**Entre C1 y C7 no renueves certificados ni reinicies el VPS nuevo**: un `certbot renew` o un reboot
-arrancaría la API (el hook de TLS la reinicia; systemd la levanta) sobre una base a medio restaurar.
+**4.3. Tiempos.** Pegá la tabla del resumen en la sección 10. El corte real usa esos tiempos para
+dimensionar la ventana.
 
-### C2. VPS nuevo: limpiar los restos del ensayo
+**4.4. Smoke de la GUI (V9).** Lo hace un agente con el toolkit `scripts/gui-verificacion/`, sobre los
+datos del ensayo: el desktop 0.5.3 contra `https://<dominio-nuevo>:8080`, login, recorrer las grillas
+principales (productos, movimientos, gastos, tareas, documentos y auditoría) y abrir un adjunto. Junta
+capturas y **las mira**: `capturar.sh` no es fail-closed, y con WSLg caído captura el escritorio de
+Windows con exit 0. Resultado: OK o FALLA, con evidencia.
 
-- [ ] **C2.** Solo los `backup_*.dump` y `*.tmp` de la carpeta de backups, por patrón y dentro de esa ruta.
-  Por qué: `ReconciliarDumpHuerfanosAsync` adoptaría como corridas válidas los dumps del ensayo,
-  que no tienen fila en la base restaurada. El feed (`/var/lib/stockapp/updates/`) y los certificados no se tocan.
+**4.5. Ensayo del corte completo + `--revertir`, antes del día D.** Decidido por Martin: el día D no es la
+primera vez que se congela el viejo. Contra el VPS viejo real (testing), con el nuevo ya preparado y
+ensayado:
 
 ```bash
-sudo find /var/lib/stockapp/.local/share/StockApp/backups -maxdepth 1 -type f \( -name 'backup_*.dump' -o -name '*.tmp' \) -print
-# revisá la lista; si es lo esperado, el mismo comando con -delete en lugar de -print:
-sudo find /var/lib/stockapp/.local/share/StockApp/backups -maxdepth 1 -type f \( -name 'backup_*.dump' -o -name '*.tmp' \) -delete
+deploy/migrar-vps.sh
+deploy/migrar-vps.sh --revertir
 ```
 
-Esperado: la segunda corrida no imprime nada al repetir la primera.
+El primero pide `CONGELAR`; el segundo, `REVERTIR`. Es el mismo código del día D: el viejo queda sin API
+(congelado) mientras dura el corte. Esperado: el corte termina en GO técnico y `--revertir` deja el
+viejo `active`, con los mismos contenedores que antes, y el nuevo detenido. Después comprobá el nuevo con
+`--verificar` (sección 6, "Después de un `--revertir`"). El paso 11 de un corte posterior vuelve a habilitar
+y arrancar la API nueva.
 
-- [ ] **C2.b** Los volcados que dejó E2 en el servidor **no pueden quedar donde el corte los confunda**:
-  si el operador restaurara el par de E2 en C5, pasarían todos los chequeos (sha, conteos, V6, el smoke
-  de la GUI) y se perdería en silencio todo lo escrito entre E2 y el corte. Se apartan, no se borran
-  (el post-corte los elimina):
+**Qué mirar la primera vez** (lo que los fakes del arnés local no pueden probar; spec 8.3). Es la primera
+vez que estos scripts hablan con servidores reales:
+
+- [ ] `certbot reconfigure` hace un dry-run contra staging de Let's Encrypt: si el certificado ya existía con
+  otro hook y ese dry-run falla por red, el paso 4 de preparar falla; no es un problema del certificado.
+- [ ] El `daemon-reload` antes del `start` de la unit en `--revertir`: el `start` no debe avisar que la unit
+  cambió en disco (`systemctl status stockapp-api` en el viejo, sin ese aviso).
+- [ ] Que systemd borre el timer transitorio `stockapp-ufw-reversa` después de desarmarlo:
+  `systemctl list-timers --all` en el VPS nuevo no lo lista.
+- [ ] El SHA256 y el `Size` del feed de Velopack (`releases.win.json`): el pre-vuelo de preparar y V7 los
+  comprueban contra el `.nupkg` servido; si el feed y el archivo no coinciden, mirá cómo se publicó.
+- [ ] El texto real de certbot sin email: la primera emisión no puede quedar esperando un dato por teclado.
+- [ ] El `docker ps` real del VPS compartido: V10 (viejo `masked`/`inactive` e `IGUAL`) compara los
+  contenedores de la otra app también, y el arnés usa un `docker` de mentira.
+
+## 5. Día D
+
+Antes de empezar, Martin confirma la ventana, avisa que testing deja de existir en el servidor viejo y
+que **no se hacen deploys** al VPS viejo durante el corte. Las PCs del municipio se instalan en esta
+misma ventana. Mirá qué `.env` carga cada comando: sin `STOCKAPP_ENV_LOCAL` es `deploy/.env`, o sea el
+VPS **viejo**.
+
+1. **El corte.**
 
 ```bash
-mkdir -p -m 700 ~/stockapp-deploy/migracion/ensayo-e2-<fecha>
-find ~/stockapp-deploy/migracion -maxdepth 1 -type f \( -name 'volcado-*' -o -name 'backups-historial.tar' \) -exec mv -t ~/stockapp-deploy/migracion/ensayo-e2-<fecha>/ {} +
-ls ~/stockapp-deploy/migracion
+deploy/migrar-vps.sh
 ```
 
-Esperado: el `ls` no muestra ningún `volcado-*` (solo `ensayo-e2-<fecha>/` y lo que quede de `pre-recrear-*`).
+   El pre-vuelo es de solo lectura (config, identidad de los dos servidores, estado del viejo,
+   preparación del nuevo, overrides y la credencial de verificación, que se prueba contra la API vieja
+   **antes** de congelar). Después imprime los dos hosts, la versión instalada en el nuevo, cuánto duró
+   la indisponibilidad en el último ensayo y los comandos para volver atrás, y espera. Escribí exactamente
+   `CONGELAR`: ahí empieza la indisponibilidad del testing del viejo, y cada línea muestra cuánto lleva.
+   Cualquier otra cosa sale con 4 sin tocar nada.
+2. **Anotá la ruta de la corrida** que imprime (`~/stockapp-backups-vps/corridas/corte-<ts>`): la pedís
+   para `--continuar`, `--revertir` y `--post-corte`. El registro completo está en su `registro.log`.
+3. Esperado: exit 0, **GO técnico**, con la tabla de pasos y tiempos, la de verificaciones y las fechas del
+   corte y del fin del rollback. Quedan pendientes tres cosas que el script no hace.
+4. **V9, el smoke de la GUI**, por un agente, como en 4.4. **La decisión de GO es de Martin.**
+5. **Las PCs.** Se instalan con el `Setup.exe` 0.5.3 y el Configurador apunta a
+   `https://<dominio-nuevo>:8080`. El `Setup.exe` no está firmado: Windows muestra el aviso de
+   **SmartScreen** ("Windows protegió su PC"); se avisa de antemano y se sigue con "Más información" →
+   "Ejecutar de todas formas". **La primera escritura real en el VPS nuevo es el punto de no retorno
+   barato**: hasta ahí `--revertir` es limpio; después, lo único que queda es R-B (sección 7).
+6. **Anotá las fechas** que imprimió el resumen: corte `____-__-__`, fin del rollback `____-__-__`
+   (D + 14 días).
 
-- [ ] **C2.c** Máquina del operador, **antes de C3**: guardá la lista de contenedores del VPS viejo (solo
-  lectura, acotada: V10 la compara al final).
+Si en el log ves `AVISO: fecha_utc ... dentro de la tolerancia de 300 s`, el reloj de tu máquina saltó
+hacia atrás durante el volcado. Se acepta hasta 300 s y no es un error.
 
-```bash
-unset STOCKAPP_ENV_LOCAL     # el default es deploy/.env = el VPS VIEJO
-( set -a; source deploy/.env; set +a; set -o pipefail
-  ssh -p "$VPS_SSH_PORT" -o BatchMode=yes "${VPS_USER}@${VPS_HOST}" 'docker ps --format "{{.Names}}"' \
-    | LC_ALL=C sort > ~/stockapp-backups-vps/contenedores-viejo-<fecha>.txt ) && wc -l ~/stockapp-backups-vps/contenedores-viejo-<fecha>.txt
-```
+## 6. Si algo sale mal
 
-Esperado: un número de líneas > 0 (los de StockApp y los de la otra app). Un archivo vacío o un error
-de ssh es "no se pudo consultar", no "no hay contenedores": no sigas.
+Antes de cualquier otra cosa, **leé el resumen que imprimió el script**: dice en qué estado quedó el VPS
+viejo (congelado o sirviendo), qué hizo cada paso y el comando exacto para seguir o para volver atrás. No
+repitas un comando a ciegas, y guardá esa salida junto con el `registro.log` de la corrida.
 
-### C3. Máquina del operador, contra el VPS viejo: congelar y volcar
+### `preparar-vps-nuevo.sh`
 
-- [ ] **C3.** Congela la API, vuelca dentro del contenedor, arma el manifiesto y trae todo verificado.
-  **Sin `--ensayo`**: esta vez la API vieja queda detenida y enmascarada.
-
-```bash
-unset STOCKAPP_ENV_LOCAL     # el default es deploy/.env = el VPS VIEJO
-deploy/volcado-final-vps.sh --salida ~/stockapp-backups-vps/migracion-<fecha>/
-```
-
-Qué hace, en orden: relevamiento de solo lectura → `systemctl stop stockapp-api` → verifica que la
-unit sea `/etc/systemd/system/stockapp-api.service` (`FragmentPath`) → la mueve a
-`stockapp-api.service.congelado` → `systemctl daemon-reload` → `systemctl -q mask stockapp-api` (el
-`systemctl mask stockapp-api` a secas falla sobre una unit regular: "already exists") →
-`systemctl is-enabled stockapp-api` tiene que dar `masked` → sin conexiones a la base → `pg_dump`
-dentro del contenedor → manifiesto → traída por el stdout de ssh con sha256 verificado → historial de
-backups → nombres de los overrides de `api.env`. **Ningún dump toca el `/tmp` del host.**
-
-Esperado: exit 0 y, en `<salida>`, en modo 600: `volcado-<ts>.dump`, `volcado-<ts>.manifiesto`,
-`backups-historial.tar` y `overrides-api-env.txt` (solo nombres: son los que hay que recrear a mano en
-el `.env` del servidor nuevo, P6).
-
-| Exit | Significado | Qué hacer |
+| Código | Significado | Qué hacer |
 |---|---|---|
-| 2 | uso / argumentos | corregir el comando |
-| 3 | precondición (config, sudo, API sigue activa tras el stop, conexiones abiertas) | leer el mensaje; si ya se detuvo la API, ver R-A |
-| 4 | la traída no es válida (sha ≠, tamaño chico, tar ilegible); el archivo local se borró | repetir C3 (con la unit ya enmascarada no se mueve nada más) |
-| 8 | no se pudo consultar (ssh/systemctl/docker/psql); también la unit no está donde `install.sh` la deja | no insistir a ciegas: investigar |
-| 9 | `docker ps` final ≠ inicial | otro proceso tocó contenedores; revisar que no fue el script |
+| 0 | el VPS quedó listo (o ya lo estaba) | Nada. Para revisar un VPS ya preparado: `--verificar` (solo lectura). |
+| 2 | uso / argumentos | Corregir el comando (la forma exacta está en la sección 3). |
+| 3 | precondición (config, `sudo -n`, versión del SO, DNS, falta `releases/win`, lock): no se tocó nada | No se tocó nada. Leer el mensaje, arreglar la configuración, el DNS, el sistema operativo o `releases/win` (`build/pack-win.ps1`) y re-correr. |
+| 5 | falló un paso: lo hecho queda hecho y re-correr continúa | Re-correr el mismo comando: lo hecho da `YA ESTABA` y continúa en el paso que falló. Si repite en el mismo paso, leer su detalle antes de insistir. |
+| 6 | el re-chequeo de acceso después de `ufw enable` falló: la reversa automática deshace el firewall en N segundos; esperar y re-correr | No toques nada: la reversa automática (`stockapp-ufw-reversa`) deshace el firewall en 120 s. Esperá más de 2 minutos, comprobá que entrás por SSH y re-corré. Si el puerto de `VPS_SSH_PORT` no es el de sshd, corregilo antes. |
+| 8 | no se pudo consultar (ssh 255, salida ilegible) | Ssh caído o salida ilegible: **no es** "no hay". Comprobá el acceso (`sudo -n true`) y re-corré; no insistas a ciegas. |
+| 9 | alcance: el destino no parece un VPS dedicado (contenedores ajenos, puerto 80 ocupado) o es el VPS viejo | No sigas. Revisá que `deploy/.env.vps-nuevo` apunte al VPS nuevo y dedicado: hay contenedores ajenos, el puerto 80 está ocupado o es el VPS viejo. |
 
-**El script imprime en qué estado dejó la API y los comandos exactos para volver atrás (R-A)** en
-cada fallo posterior al `stop` y en el final feliz: guardá esa salida.
+### `migrar-vps.sh`
 
-### C4. Copiar al VPS nuevo
-
-- [ ] **C4.** El corte se copia a un directorio **nuevo y propio**, `~/stockapp-deploy/migracion/corte-<fecha>/`,
-  nunca al mismo lugar que E2 (ahí E2 usó `ensayo-e2-<fecha>/`). Usá el `<ts>` que **imprimió C3**.
-
-```bash
-ssh -p <puerto-nuevo> <usuario>@<ip-nueva> 'mkdir -m 700 -p ~/stockapp-deploy/migracion && mkdir -m 700 ~/stockapp-deploy/migracion/corte-<fecha>'
-scp -P <puerto-nuevo> ~/stockapp-backups-vps/migracion-<fecha>/volcado-<ts>.dump \
-  ~/stockapp-backups-vps/migracion-<fecha>/volcado-<ts>.manifiesto \
-  ~/stockapp-backups-vps/migracion-<fecha>/backups-historial.tar \
-  deploy/restaurar-backup.sh <usuario>@<ip-nueva>:~/stockapp-deploy/migracion/corte-<fecha>/
-ssh -p <puerto-nuevo> <usuario>@<ip-nueva> 'cd ~/stockapp-deploy/migracion/corte-<fecha> && chmod 600 volcado-* backups-historial.tar && chmod 755 restaurar-backup.sh'
-```
-
-Esperado: sin errores. `restaurar-backup.sh` es autocontenido (se copia solo, sin el repo) y verifica
-el sha256 y el tamaño contra el manifiesto **antes** de tocar nada.
-
-### C5. VPS nuevo: restaurar
-
-- [ ] **C5.** La base trae los datos del ensayo, así que `--recrear-base` toma primero un dump de
-  seguridad. Con la API detenida (C1):
-
-  Usá **exactamente el `<ts>` que imprimió C3** y comprobá antes que la `fecha_utc` del manifiesto es la
-  del corte (la de hoy, de unos minutos atrás), no la de E2:
-
-```bash
-cd ~/stockapp-deploy
-grep '^fecha_utc=' migracion/corte-<fecha>/volcado-<ts>.manifiesto
-./migracion/corte-<fecha>/restaurar-backup.sh migracion/corte-<fecha>/volcado-<ts>.dump --manifiesto migracion/corte-<fecha>/volcado-<ts>.manifiesto \
-  --recrear-base stockapp --dir-seguridad ~/stockapp-deploy/migracion
-```
-
-El script también imprime la `fecha_utc` del manifiesto en grande antes de restaurar: si no es la del corte, cortá ahí (Ctrl+C).
-
-Esperado: exit 0, el resumen con conteos idénticos al manifiesto, secuencias OK, sin duplicados, y
-"API NO arrancada". El script **nunca** arranca la API.
-
-| Exit | Qué pasó | Qué hacer |
+| Código | Significado | Qué hacer |
 |---|---|---|
-| 3 | precondición: API activa, contenedor fuera de patrón, base no vacía sin `--recrear-base`, conexiones abiertas | corregir y repetir |
-| 4 | dump inválido (sha, `--list`, tablas ≠ manifiesto) | volver a C3/C4: se trajo mal |
-| 5 | falló `pg_restore`: la base quedó **vacía** | repetir tal cual |
-| 6 / 7 | conteos, migración, secuencias o duplicados: la base **quedó restaurada** | no arrancar la API; investigar; repetir con `--recrear-base` (guarda otro dump de seguridad) |
-| 8 | no se pudo consultar | investigar, no asumir "vacío" |
-| 9 | falló el dump de seguridad: **no se borró nada** | investigar antes de reintentar |
+| 0 | GO técnico: todas las V automáticas OK. Quedan V9 y la decisión de Martin | Seguí con V9, la decisión de GO y las PCs (sección 5). Si fue `--ensayo`: sección 4. |
+| 2 | uso / argumentos | Corregir el comando. |
+| 3 | precondición del pre-vuelo (config, identidad, credencial, corrida sin terminar, lock): no se tocó nada | No se tocó nada. Leer el mensaje: config, machine-id, credencial rechazada, overrides que faltan (sección 4.2), lock tomado o una corrida sin terminar (`--continuar <corrida>` o `--revertir`). |
+| 4 | el operador no confirmó: no se tocó nada | No escribiste `CONGELAR`. No se tocó nada: re-correr cuando estés listo. |
+| 5 | falló un paso antes de congelar el viejo, que sigue intacto y sirviendo. Re-correr arranca una corrida nueva | El viejo sigue intacto y sirviendo (el resumen lo confirma). Corregir la causa y re-correr: arranca una corrida nueva. |
+| 6 | falló un paso después de congelar el viejo, que quedó congelado. El resumen dice el estado exacto y la salida: --continuar <corrida> o --revertir | El viejo quedó congelado. Corregir la causa y `deploy/migrar-vps.sh --continuar <corrida>`, o volver atrás con `deploy/migrar-vps.sh --revertir`. Ver "Seguir o volver atrás". |
+| 7 | NO-GO: falló el arranque de la API nueva (la corrida queda abierta: --continuar la retoma en el paso 11) o falló una V (resultado=NO-GO: --continuar repite la verificación). La API nueva queda como esté para diagnosticar (las PCs no están instaladas: nadie escribe). Se imprime --revertir | El resumen imprime `--revertir`. Arreglar y `--continuar <corrida>` repite la verificación, o `--revertir`. La API nueva queda como esté, para diagnosticar. |
+| 8 | no se pudo consultar | "No pude consultar" nunca es "cero" ni "vacío": investigá (ssh, docker, systemctl) antes de reintentar. Si el viejo ya estaba congelado, `--revertir`. |
+| 9 | alcance: la lista de contenedores del viejo cambió, o los dos .env son el mismo servidor | Alcance: no se ofrece `--continuar` hasta que un humano mire. Otro proceso tocó contenedores del viejo, o los dos `.env` apuntan al mismo servidor. |
 
-### C6. VPS nuevo: historial de backups
+### Seguir o volver atrás
 
-- [ ] **C6.**
-
-```bash
-sudo tar -C /var/lib/stockapp/.local/share/StockApp -xpf ~/stockapp-deploy/migracion/corte-<fecha>/backups-historial.tar
-sudo chown -R stockapp:stockapp /var/lib/stockapp/.local/share/StockApp/backups
-```
-
-Esperado: archivos 640 y carpeta 750 de `stockapp:stockapp`. Con `-p` se conservan los mtime, así que
-`ReconciliarDumpHuerfanosAsync` no los trata como recién creados (y de todos modos tienen fila en `CorridasBackup`).
-
-### C7. VPS nuevo: arrancar la API
-
-- [ ] **C7.** E2 ya instaló la 0.5.3:
-
-```bash
-sudo systemctl start stockapp-api
-sudo journalctl -u stockapp-api -n 50 --no-pager
-```
-
-Si desde E2 se instaló otra versión, en su lugar:
-`STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/deploy-vps.sh 0.5.3 --sin-backup` (su paso 1 repite el
-pre-vuelo sobre la base restaurada). La API migra hacia adelante si el binario es más nuevo que el dump.
-Esperado: `Application started`, sin excepciones de migración.
-
-### C8. Verificación
-
-- [ ] **C8.** V1 a V10, punto por punto (sección siguiente). Si alguno falla, **no se pasa a C9**.
-
-### C9. Go
-
-- [ ] **C9.** Las PCs se instalan con el `Setup.exe` 0.5.3 (aviso de SmartScreen: ver P10) y el
-  Configurador apunta a `https://<dominio-nuevo>:8080`. **La primera escritura real en el VPS nuevo es el
-  punto de no retorno barato**: hasta ahí R-A es limpio.
-
-### C10. Cierre
-
-- [ ] **C10.** Anotar acá la fecha del corte y la fecha de fin del rollback (D + 14 días):
-  corte `____-__-__`, fin del rollback `____-__-__`.
-
----
-
-# Verificación (C8)
-
-Cada punto con su comando. Un resultado vacío, o un error de conexión, es "no se pudo verificar", no "OK".
-
-- [ ] **V1.** `restaurar-backup.sh` salió con 0 en C5: sha OK, `--list` OK, conteos **idénticos** al manifiesto,
-  secuencias OK, sin duplicados.
-- [ ] **V2.** La API está viva, sin errores de arranque y migrada al menos hasta donde estaba el manifiesto:
+- **`deploy/migrar-vps.sh --continuar <corrida>`** retoma una corrida que falló **después** de congelar el
+  viejo, en el primer paso que no terminó (solo entre el 6 y el 12). El paso 6 vuelve a volcar en una
+  carpeta nueva. Si el restore salió con 6 o 7 (la base quedó restaurada pero no verifica), solo sigue con
+  `--continuar <corrida> --reintentar-restauracion`: lo decide un humano, y repite `--recrear-base` con otro
+  dump de seguridad. Una corrida que nunca congeló el viejo se cierra sola y hay que empezar otra. Tras
+  un NO-GO arreglado, repite la verificación y el resumen.
+- **`deploy/migrar-vps.sh --revertir`** (sin argumento toma la última corrida de corte; con
+  `~/stockapp-backups-vps/corridas/corte-<ts>`, esa) devuelve el servicio al VPS viejo: pide `REVERTIR`,
+  detiene **primero** la API nueva, y en el viejo desenmascara, devuelve la unit, hace `daemon-reload` y
+  arranca. Se niega (3) si `LogsAuditoria` del nuevo creció desde la verificación: hubo PCs trabajando, ya
+  no es la vuelta atrás limpia sino R-B (sección 7). `--aun-con-escrituras` muestra el delta y sigue a la
+  confirmación, sabiendo que lo escrito en el nuevo **no** vuelve al viejo. Es idempotente: re-correrlo da
+  `YA ESTABA` en cada paso. Códigos propios: 0 revertido; 2 uso; 3 precondición o escrituras reales; 4 sin
+  confirmar; 6 falló un paso de la vuelta (re-correr); 8 no pude consultar, o la unit no se puede devolver
+  sin pisar otra; 9 otros servidores que los de la corrida, o el `docker ps` del viejo cambió (la vuelta
+  atrás ya se hizo; el resumen separa los contenedores de StockApp de los ajenos).
+- **VPS nuevo inalcanzable.** `--revertir` sale 8 sin tocar el viejo, porque no puede garantizar que la
+  API nueva esté detenida (con dos APIs vivas, lo escrito en la nueva se perdería). Apagá el VPS nuevo
+  **desde el panel del proveedor** y devolvé el viejo con los comandos de abajo.
+- **Después de un `--revertir`, para comprobar que el nuevo sigue preparado**, usá `--verificar`, no
+  `preparar` completo:
 
 ```bash
-systemctl is-active stockapp-api
-sudo journalctl -u stockapp-api --since '10 min ago' --no-pager | grep -ciE 'error|exception|fail'
-docker exec stockapp-pg psql -U stockapp -d stockapp -At -c 'SELECT max("MigrationId") FROM "__EFMigrationsHistory"'
+STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/preparar-vps-nuevo.sh --version 0.5.3 --verificar
 ```
 
-Esperado: `active`, un conteo `0` (el `grep` sale con 1 cuando no encuentra nada: es lo normal) y una
-`MigrationId` ≥ la `ultima_migracion` del manifiesto.
-- [ ] **V3.** Desde la máquina del operador, **sin `-k`**:
-`curl -fsS https://<dominio-nuevo>:8080/` → `{"status":"ok","service":"StockApp.Api"}`, con certificado válido para el dominio nuevo.
-- [ ] **V4.** `curl -fsS https://<dominio-nuevo>:8080/licencia/estado` → `"activada":true` (`Licencia__Habilitado=false`).
-- [ ] **V5.** Login con un usuario **real** de los datos migrados. La contraseña se escribe en el momento
-  (no se guarda, no pasa por argv de ningún proceso: ni de `jq` ni de `curl`):
-
-```bash
-read -rs -p 'Contraseña: ' PW; echo
-PW="$PW" jq -n --arg u '<usuario-real>' '{nombreUsuario:$u,contrasena:env.PW}' \
-  | curl -fsS -X POST https://<dominio-nuevo>:8080/auth/login -H 'Content-Type: application/json' --data @- \
-  | jq -r .token > ~/stockapp-backups-vps/token; chmod 600 ~/stockapp-backups-vps/token; unset PW
-```
-
-Esperado: el archivo del token no está vacío. Al terminar: `rm -f ~/stockapp-backups-vps/token`.
-- [ ] **V6.** Conteos **después** del arranque contra el manifiesto: ninguna tabla puede tener menos filas, solo
-  pueden crecer `LogsAuditoria` y `__EFMigrationsHistory`, y `CorridasBackup` puede variar (la retención de
-  backups borra filas al arrancar; se informa el delta). `LogsAuditoria` tiene que ser ≥ el manifiesto:
-
-```bash
-cd ~/stockapp-deploy
-./migracion/corte-<fecha>/restaurar-backup.sh --verificar-post-arranque --manifiesto migracion/corte-<fecha>/volcado-<ts>.manifiesto
-```
-
-Esperado: exit 0. Es de solo lectura.
-- [ ] **V7.** El feed: `curl -fsS https://<dominio-nuevo>:8080/updates/releases.win.json | grep -c 0.5.3` → ≥ 1, y
-  `curl -sI https://<dominio-nuevo>:8080/updates/<FileName-del-full>` → `200` con `Content-Length` igual al `Size` del feed.
-- [ ] **V8.** Backups (con el token de V5):
-
-```bash
-printf 'header = "Authorization: Bearer %s"\n' "$(cat ~/stockapp-backups-vps/token)" \
-  | curl -fsS -K - https://<dominio-nuevo>:8080/backups
-printf 'header = "Authorization: Bearer %s"\n' "$(cat ~/stockapp-backups-vps/token)" \
-  | curl -fsS -K - -o /dev/null -w '%{http_code}\n' https://<dominio-nuevo>:8080/backups/<id-viejo>/contenido
-printf 'header = "Authorization: Bearer %s"\n' "$(cat ~/stockapp-backups-vps/token)" \
-  | curl -fsS -K - -X POST https://<dominio-nuevo>:8080/backups
-```
-
-Esperado: lista con las corridas viejas, `200` en el contenido de una vieja (C6) y, en menos de 60 s, una
-corrida nueva `Exitosa` en `GET /backups` (prueba que `pg_dump` anda con la contraseña nueva; agrega una
-fila a `CorridasBackup`, que V6 ya acepta).
-- [ ] **V9.** Smoke de la GUI **de solo lectura**, hecho por un agente con el toolkit `scripts/gui-verificacion/`:
-  el desktop 0.5.3 apunta al dominio nuevo, login, recorrer las grillas principales (productos, movimientos,
-  gastos, tareas, documentos y auditoría) y abrir un adjunto. Junta capturas y **las mira**: `capturar.sh` no
-  es fail-closed y con WSLg caído captura el escritorio de Windows con exit 0. Resultado: OK o FALLA, con evidencia.
-- [ ] **V10.** El VPS viejo quedó congelado y no se tocó nada ajeno:
-
-```bash
-unset STOCKAPP_ENV_LOCAL
-( set -a; source deploy/.env; set +a
-  ssh -p "$VPS_SSH_PORT" -o BatchMode=yes "${VPS_USER}@${VPS_HOST}" \
-    'systemctl is-enabled stockapp-api; systemctl is-active stockapp-api; docker ps --format "{{.Names}}"' ) > ~/stockapp-backups-vps/v10-viejo.txt
-head -n 2 ~/stockapp-backups-vps/v10-viejo.txt
-tail -n +3 ~/stockapp-backups-vps/v10-viejo.txt | LC_ALL=C sort | diff - ~/stockapp-backups-vps/contenedores-viejo-<fecha>.txt && echo IGUAL
-```
-
-Esperado: `masked`, `inactive` e `IGUAL`: los **mismos contenedores** que guardaste en C2.c antes de C3 (los de
-la otra app incluidos). Un `diff` con diferencias, o un `v10-viejo.txt` vacío, es "no verificado".
-
----
-
-# Rollback
-
-### R-A. Antes de C9, sin escrituras reales en el VPS nuevo
-
-- [ ] **R-A.** Primero, en el VPS **nuevo**: `sudo systemctl stop stockapp-api` (si C7 ya lo arrancó, dos APIs
-  vivas podrían recibir escrituras, y las del nuevo se perderían al reintentar). Después, en el VPS **viejo**, en este orden (son los comandos que `volcado-final-vps.sh` imprime; los datos
-  del viejo están intactos porque el volcado es solo de lectura):
+  Esperado: exit 0. La API nueva quedó **detenida y deshabilitada** a propósito, así que el paso 10 informa
+  `FALLÓ` (la API no responde): en `--verificar` es solo informativo y no cambia el exit. `preparar`
+  completo, en cambio, sale con 5 en ese mismo paso 10, y aflojar la verificación la debilitaría. El paso
+  11 de un corte posterior la vuelve a habilitar.
+- **A mano**, solo si `--revertir` no puede correr (por ejemplo, tu máquina murió a mitad del corte). Son los
+  comandos que el corte imprime antes de la confirmación, en este orden, en el VPS **viejo** (y antes,
+  `sudo systemctl stop stockapp-api` en el nuevo):
 
 ```bash
 sudo systemctl unmask stockapp-api
@@ -708,11 +329,9 @@ sudo systemctl start stockapp-api
 systemctl is-active stockapp-api
 ```
 
-Esperado: `active`. Un `unmask` solo, sin devolver la unit, no sirve: la unit sigue movida. Si el script
-falló antes de mover la unit, imprime solo lo que corresponde a su estado. El VPS nuevo queda como
-estaba, para reintentar otro día.
+  Esperado: `active`. Un `unmask` solo, sin devolver la unit, no sirve: la unit sigue movida.
 
-### R-B. Después de C9
+## 7. R-B: después de la primera escritura real, a mano
 
 - [ ] **R-B.** Corregir hacia adelante es lo preferido. Solo si el VPS nuevo resulta irrecuperable (**último
   recurso**) se hace la **migración inversa con las mismas piezas**:
@@ -724,41 +343,99 @@ estaba, para reintentar otro día.
      `--recrear-base` conserva lo que tenía el viejo.
   4. Recién ahí, los comandos de R-A completos (`unmask`, devolver la unit, `daemon-reload`, `start`) y repuntar las PCs con el Configurador.
 
----
+C4 = paso 8 de `migrar-vps.sh`; R-A es `--revertir` (sección 6). `restaurar-backup.sh` y
+`volcado-final-vps.sh` son los bloques que `migrar-vps.sh` llama por vos; acá, por ser un último recurso
+que ningún modo automatiza, se usan a mano.
 
-# Post-corte
+## 8. Desastre: el VPS murió
 
-- El VPS viejo queda **detenido y enmascarado durante 14 días** (rollback). No se borra nada: ni el volumen
-  `stockapp_pgdata`, ni `/var/lib/stockapp`, ni la unit.
-- Al día 14, **desmantelarlo es una decisión de Martin**. Solo como referencia, siempre acotado por nombre a
-  StockApp (nunca nada global; certbot del viejo solo se toca en la línea del certificado de StockApp):
-  - `docker compose --env-file .env -f docker-compose.postgres.yml down` **sin** `-v`;
-  - `docker volume rm stockapp_pgdata`, solo después de confirmar que `LogsAuditoria` del VPS nuevo es ≥ al del
-    manifiesto **y** de tener el dump del corte archivado en `~/stockapp-backups-vps/corte-<fecha>/` (ver más abajo);
-  - `systemctl disable` solo aplica si antes se hizo `unmask`: enmascarada, la unit ya no arranca.
-- **Copias de los datos de producción (al día 14, o cuando cierre el rollback).** Los volcados contienen
-  todo, incluidos los hashes de contraseñas. **El dump final del corte y su manifiesto NO se borran: se
-  MUEVEN** a un archivo permanente, `~/stockapp-backups-vps/corte-<fecha>/` (modo 700). Ese es el
-  "dump archivado fuera del servidor" que exige el `volume rm` de arriba, y **va primero**: sin él, no
-  se borra nada más. Se verifica el sha256 antes y después del movimiento.
-  1. **Archivar (mover, no borrar):** el `volcado-<ts>.dump` y el `volcado-<ts>.manifiesto` del corte.
-  2. **Borrar, solo con la confirmación de Martin**, una por una, por ruta exacta y mostrando antes ruta y
-     tamaño (nunca con comodines amplios): lo que queda en `~/stockapp-backups-vps/migracion-<fecha>/`,
-     las copias del ensayo `~/stockapp-backups-vps/ensayo-e2-<fecha>/` y, en el servidor nuevo,
-     `~/stockapp-deploy/migracion/` (copias, `ensayo-e2-<fecha>/`, `corte-<fecha>/` y los `pre-recrear-*`).
+El VPS de producción no se puede congelar ni volcar. Se recupera con **el último dump que tengas en tu
+máquina** (el que deja `deploy/bajar-backup-vps.sh` mientras el servidor vive, o el volcado de una
+corrida anterior), sobre un VPS nuevo o reinstalado:
+
+1. Preparar el VPS (sección 3, con el dominio y la IP que corresponda en `deploy/.env.vps-nuevo`):
 
 ```bash
-cd ~/stockapp-backups-vps/migracion-<fecha>
-sha256sum volcado-<ts>.dump volcado-<ts>.manifiesto | tee /tmp/sha-corte-<fecha>.txt   # antes
-mkdir -m 700 ~/stockapp-backups-vps/corte-<fecha>
-mv volcado-<ts>.dump volcado-<ts>.manifiesto ~/stockapp-backups-vps/corte-<fecha>/
-( cd ~/stockapp-backups-vps/corte-<fecha> && sha256sum -c /tmp/sha-corte-<fecha>.txt )   # después: dos OK
-rm -f /tmp/sha-corte-<fecha>.txt
-# recién con los dos OK, y con la confirmación de Martin, por ruta exacta:
-du -sh ~/stockapp-backups-vps/ensayo-e2-<fecha> ~/stockapp-backups-vps/migracion-<fecha>
-ssh -p <puerto-nuevo> <usuario>@<ip-nueva> 'du -sh ~/stockapp-deploy/migracion; ls -la ~/stockapp-deploy/migracion'
-rm -r ~/stockapp-backups-vps/ensayo-e2-<fecha> ~/stockapp-backups-vps/migracion-<fecha>
-ssh -p <puerto-nuevo> <usuario>@<ip-nueva> 'rm -r ~/stockapp-deploy/migracion'
+STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/preparar-vps-nuevo.sh --version 0.5.3
 ```
 
-- Ambiente de testing después del corte: decisión pendiente de Martin (spec §5.8).
+2. Restaurar el dump:
+
+```bash
+deploy/migrar-vps.sh --desde-backup <dump> --env-nuevo deploy/.env.vps-nuevo
+```
+
+   Con `--manifiesto <m>` también se comparan los conteos; sin él se verifica la estructura. Antes de
+   tocar nada comprueba el dump (legible, mínimo 1024 bytes, `pg_restore --list`; su `.sha256` si hay uno
+   al lado) y pide `RESTAURAR`, con la fecha del dump y el aviso de que **todo lo posterior a esa fecha
+   se pierde**. No se contacta al VPS viejo: `--env-viejo` (default `deploy/.env`) es un archivo LOCAL de
+   tu máquina, del que salen `VPS_ADMIN_USER`/`VPS_ADMIN_PASSWORD` para V5 y V8 y la clave de licencias; sin
+   ese archivo o sin `VPS_ADMIN_USER` sale 2. Si falla, la corrida se cierra y se vuelve a correr
+   entera: no hay `--continuar` ni `--revertir`.
+
+**El límite, dicho en voz alta:** un desastre se recupera hasta el último dump que esté fuera del
+servidor muerto, y hoy ninguno lo está de forma automática. Por decisión de Martin,
+el backup off-site programado es el próximo proyecto y no forma parte de esta migración. Mientras tanto, la bajada
+periódica es el Procedimiento 1 de `deploy/PROCEDIMIENTOS.md`.
+
+## 9. D+14: cerrar
+
+El VPS viejo queda **detenido y enmascarado durante 14 días** (rollback). No se borra nada: ni el volumen
+`stockapp_pgdata`, ni `/var/lib/stockapp`, ni la unit. Pasado el plazo (la fecha la imprimió el resumen
+del corte):
+
+```bash
+deploy/migrar-vps.sh --post-corte ~/stockapp-backups-vps/corridas/corte-<ts>
+```
+
+Exige que la corrida tenga `resultado=GO` y 14 días desde el congelamiento (antes del plazo, solo con
+`--antes-de-plazo` y la palabra `BORRAR`). **No toca el VPS viejo.** En orden:
+
+1. Comprueba que `LogsAuditoria` del VPS nuevo sea ≥ al del manifiesto del corte; si no puede
+   consultarlo, se detiene.
+2. **ARCHIVA, no borra:** mueve el dump final del corte y su manifiesto a
+   `~/stockapp-backups-vps/corte-<ts>/` (700), con el sha256 antes y después, y copia ahí el estado y el
+   `registro.log` de la corrida. Es el "dump archivado fuera del servidor", y va primero: si falla, no
+   sigue con nada más. Los volcados contienen hashes de contraseñas: ese directorio no se commitea ni se
+   sube a ningún lado.
+3. Ofrece borrar, **uno por uno**, mostrando la ruta exacta y el tamaño, y pidiendo `BORRAR` cada vez:
+   las corridas de ensayo terminadas, lo que dejó el runbook manual anterior y, en el servidor nuevo,
+   los directorios de `~/stockapp-deploy/migracion/`. Todo lo demás se conserva y lo dice: lo que se
+   conserva incluye `migracion-<fecha>/` (puede tener el dump de un corte manual sin archivar),
+   `corte-*`, `inversa-*` y la corrida del corte, que nunca se borra.
+4. **Imprime, sin ejecutar,** la referencia para desmantelar el VPS viejo. Desmantelarlo es una decisión de
+   Martin, siempre acotada por nombre a StockApp (nunca nada global): `docker compose … down` **sin**
+   `-v`; `docker volume rm stockapp_pgdata` solo con el dump del corte archivado y `LogsAuditoria` del
+   nuevo ≥ al del manifiesto; `systemctl disable` solo aplica si antes se hizo `unmask`.
+
+Re-correrlo da `YA ESTABA` en el archivo. Códigos: 0 hecho; 2 uso; 3 precondición (sin GO, antes del
+plazo, `LogsAuditoria` menor que el manifiesto, lock); 4 sin la palabra `BORRAR` del plazo; 5 falló el
+archivo o un borrado (lo hecho queda hecho; re-correr); 8 no pude consultar; 9 el VPS nuevo no es el de
+la corrida. Ambiente de testing después del corte: decisión pendiente de Martin (spec §5.8).
+
+## 10. Tiempos y E1
+
+Los llena E1 (lo corre un agente); el `--ensayo` imprime la tabla de su corrida lista para pegar y
+completa la columna del VPS nuevo. El corte real usa esos tiempos para dimensionar la ventana.
+
+| Paso | E1 (local) | Ensayo `--ensayo` (VPS nuevo) | Corte real |
+|---|---|---|---|
+| Bajar el backup real (`bajar-backup-vps.sh`) | 13 s (dump de 95 KB; el `--id` del historial, 11 s) | n/a | n/a |
+| `ensayo-local.sh preparar` | 5 s | n/a | n/a |
+| Volcado (paso 6 de `migrar-vps.sh`; en E1, `ensayo-local.sh volcar`) | 2 s | _pendiente_ | _pendiente_ |
+| Restauración (paso 9 de `migrar-vps.sh`; en E1, `ensayo-local.sh restaurar`) | 14 s sobre la base vacía; 5 s con `--recrear-base` | _pendiente_ | _pendiente_ |
+| Arranque de la API contra la base restaurada (paso 11) | 28 s hasta `GET /` OK (incluye restore y build de `dotnet run` con un `HOME` vacío) | _pendiente_ | _pendiente_ |
+| Verificación (paso 12, V1 a V10) | menos de 10 s (V4, V5, V8 y `/updates`; `--verificar-post-arranque`, 0,4 s) | _pendiente_ | _pendiente_ |
+| Ventana total con el VPS viejo sin API (pasos 6 a 13) | n/a | _pendiente_ | _pendiente_ |
+
+**Resultado de E1 (2026-10-20): OK.** Backup real de testing (31 tablas, 150 filas, 25 migraciones,
+última `20260910225922_AgregaIndiceFuncionalNombreCatalogos`): `preparar`, `volcar` y `restaurar` con
+exit 0, conteos idénticos al manifiesto, secuencias y catálogos OK; segundo `restaurar` sin
+`--recrear-base` → 3, con `--recrear-base` → 0 y dump de seguridad. API local: `GET /` OK, sin
+excepciones de migración, V4 `activada: true`, V5 login real con token, V8 historial servido (200) y
+`POST /backups` → 202 con una corrida `Exitosa` en 1 s, `/updates` sirve el feed,
+`--verificar-post-arranque` exit 0 (`CorridasBackup` 11 → 11: el catch-up y el `POST` sumaron dos
+corridas y la retención borró dos). Limpieza: cero contenedores, volúmenes y redes `stockapp-ensayo-*`,
+`docker ps` igual al del inicio. **El ensayo contra los servidores reales (`--ensayo`) y el corte quedan
+PENDIENTES**: necesitan el VPS nuevo, el dominio y la fecha.
+

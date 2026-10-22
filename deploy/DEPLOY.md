@@ -598,8 +598,21 @@ Como el `.env` se carga con `source` **después** del entorno, exportar `VPS_HOS
 `VPS_HOST` definido en el archivo lo pisa. Si `STOCKAPP_ENV_LOCAL` apunta a un archivo que no existe,
 el script aborta antes de abrir ninguna conexión. El marcador del último deploy es **por host**
 (`deploy/dist/.ultimo-deploy-vps-commit-<host>`): el primer deploy a un host nuevo siempre copia
-`install.sh`, aunque ese archivo no haya cambiado desde el último deploy a otro. Ver
-`deploy/MIGRACION-VPS.md` para la migración completa a un servidor nuevo.
+`install.sh`, aunque ese archivo no haya cambiado desde el último deploy a otro.
+
+**Servidor nuevo, migración y recuperación.** Dos scripts reemplazan el procedimiento manual de las
+secciones 2 y 3 cuando el destino es un VPS en blanco: `deploy/preparar-vps-nuevo.sh` (Docker, usuario,
+firewall, TLS con Let's Encrypt, `.env` del servidor, Postgres, primer deploy y feed) y
+`deploy/migrar-vps.sh` (ensayo, corte, vuelta atrás, recuperación desde un backup y cierre a los 14
+días):
+
+```bash
+STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/preparar-vps-nuevo.sh --version 1.5.0
+deploy/migrar-vps.sh --ensayo
+```
+
+Los dos son del operador y no se corren contra el servidor de un cliente on-premise. Para qué `.env`
+cargar, qué hacer con cada código de salida y el día D, ver `deploy/MIGRACION-VPS.md`.
 
 Camino manual:
 
