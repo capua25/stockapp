@@ -619,6 +619,43 @@ public class MigracionVpsSincroniaTests
         Assert.Contains("R-B", s6);
     }
 
+    /// <summary>
+    /// R58: la receta para cerrar a mano una corrida cuyo servidor ya no existe vive en la sección 6, con la
+    /// línea copiable exacta que imprime migrar-vps.sh, el título que el script cita, y cuándo NO se usa
+    /// (con el viejo vivo y congelado, --revertir). La sección 8 (desastre) la nombra.
+    /// </summary>
+    [Fact]
+    public void Runbook_CierreManualDeUnaCorridaCuyoServidorYaNoExiste()
+    {
+        const string titulo = "Cerrar a mano una corrida cuyo servidor ya no existe";
+        const string receta = "printf 'resultado=ABANDONADA-MANUAL\\n' >> ~/stockapp-backups-vps/corridas/<corrida>/estado";
+        var s6 = Seccion(Texto(Runbook), 6);
+        var s8 = Seccion(Texto(Runbook), 8);
+        var script = Texto("deploy/migrar-vps.sh");
+
+        Assert.Contains(titulo, s6);
+        Assert.Contains(titulo, script);
+        Assert.Contains(receta, s6);
+        // En el fuente va entre comillas dobles (\\n); lo que imprime lo afirma MigrarVpsTests.
+        Assert.Contains("printf 'resultado=ABANDONADA-MANUAL\\\\n' >> ", script);
+        var desde = s6.IndexOf(titulo, StringComparison.Ordinal);
+        var cuerpo = Regex.Replace(s6[desde..], @"\s+", " ");
+        Assert.Matches(@"(?i)nunca.{0,160}congelado.{0,160}--revertir", cuerpo);
+        Assert.Matches(@"(?i)sale(n)? 8 o 9", cuerpo);
+        Assert.Contains("ABANDONADA-MANUAL", s8);
+        Assert.Contains(titulo, s8);
+    }
+
+    /// <summary>R56: la regla general de la sección 1 no puede contradecir a la 4 y la 6 sobre deploy-vps.sh contra el nuevo.</summary>
+    [Fact]
+    public void Runbook_Seccion1_DeployVpsContraElNuevoTambienTrasUnRevertir()
+    {
+        var s1 = Regex.Replace(Seccion(Texto(Runbook), 1), @"\s+", " ");
+
+        Assert.DoesNotContain("solo en el caso de la sección 4", s1);
+        Assert.Matches(@"(?i)contra el VPS nuevo solo se usa con `--sin-backup`.{0,300}overrides.{0,300}`--revertir`", s1);
+    }
+
     [Fact]
     public void Runbook_Ensayo_DespuesDelRevertirLevantaLaApiNuevaConDeployVps()
     {

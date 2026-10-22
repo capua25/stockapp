@@ -992,7 +992,23 @@ verificar_corridas_sin_terminar() {
             done
             echo "  o, para una de corte o de ensayo, deshacer el congelamiento si lo hubo:"
             echo "    deploy/migrar-vps.sh --revertir"
+            # R58: en un desastre la corrida abierta suele ser la de un servidor que ya no existe, y ahí
+            # --continuar y --revertir salen 8 o 9 por el machine-id. La única salida es cerrarla a mano.
+            if [[ "$MODO" == "desde-backup" ]]; then
+                echo "  Si el servidor de esa corrida ya no existe (el viejo murió después de CONGELAR, o el nuevo se"
+                echo "  reaprovisionó después de revertir a mano), --continuar y --revertir salen 8 o 9 por el machine-id."
+                echo "  Cerrala a mano con la receta de deploy/MIGRACION-VPS.md, sección 6:"
+                echo "  «Cerrar a mano una corrida cuyo servidor ya no existe»."
+                echo "  Para cada corrida de arriba que esté en ese caso:"
+                for dir in "${sin_terminar[@]}"; do
+                    echo "    printf 'resultado=ABANDONADA-MANUAL\\n' >> $dir/estado"
+                done
+                echo "  Nunca si el VPS viejo sigue vivo y congelado: para eso es deploy/migrar-vps.sh --revertir."
+            fi
         } >&2
+        if [[ "$MODO" == "desde-backup" ]]; then
+            abortar 3 "una corrida sin terminar tiene que retomarse (--continuar), revertirse (--revertir) o, si su servidor ya no existe, cerrarse a mano (deploy/MIGRACION-VPS.md, sección 6) antes de empezar otra. No se tocó nada."
+        fi
         abortar 3 "una corrida sin terminar tiene que retomarse (--continuar) o revertirse (--revertir) antes de empezar otra. No se tocó nada."
     fi
 }
@@ -1144,6 +1160,13 @@ prevuelo_viejo() {
     echo "  - viejo: stockapp-api active, unit en su lugar, sin .congelado, $CONTENEDOR_VIEJO corriendo, base de $TAMANO_BASE_VIEJO bytes con espacio para el dump"
 }
 
+# ayuda_feed_ausente: qué hacer cuando el nuevo no sirve el feed (R56). El caso normal es el reintento
+# después de un --revertir, que deja la API nueva detenida y deshabilitada (R44); preparar-vps-nuevo.sh no
+# la levanta si la unit existe, así que mandar solo a preparar deja al operador en un bucle.
+ayuda_feed_ausente() {
+    printf '%s' "Lo sirve la API nueva: si venís de un --revertir, la API nueva está detenida y deshabilitada. Levantala (reinstalá la misma versión, sin tocar la base) con STOCKAPP_ENV_LOCAL=${ENV_NUEVO} deploy/deploy-vps.sh <v> --sin-backup contra el nuevo y comprobá con preparar-vps-nuevo.sh --verificar (deploy/MIGRACION-VPS.md, sección 6, «Después de un --revertir»). Si el nuevo nunca terminó de prepararse, terminá preparar-vps-nuevo.sh. No se tocó nada."
+}
+
 # leer_version_del_feed: la mayor versión Full que sirve el feed del VPS nuevo -> VERSION_NUEVO.
 leer_version_del_feed() {
     local url="${NUEVO_API_SCHEME}://${NUEVO_API_HOSTNAME}:${NUEVO_API_PORT}/updates/releases.win.json" mayor rc=0
@@ -1155,7 +1178,7 @@ leer_version_del_feed() {
                 VERSION_NUEVO="desconocida"
                 return 0
             fi
-            abortar 3 "el VPS nuevo no sirve el feed de actualizaciones ($url): preparar-vps-nuevo.sh no terminó."
+            abortar 3 "el VPS nuevo no sirve el feed de actualizaciones ($url). $(ayuda_feed_ausente)"
             ;;
         *)
             if [[ "$SIN_VERIFICAR_PREPARACION" -eq 1 ]]; then
@@ -1170,7 +1193,7 @@ leer_version_del_feed() {
         abortar 8 "el feed que sirve el VPS nuevo no es un releases.win.json válido."
     fi
     if [[ -z "$mayor" ]]; then
-        abortar 3 "el feed del VPS nuevo no tiene ninguna versión Full: preparar-vps-nuevo.sh no terminó."
+        abortar 3 "el feed del VPS nuevo no tiene ninguna versión Full. $(ayuda_feed_ausente)"
     fi
     if [[ ! "$mayor" =~ ^[0-9]+(\.[0-9]+){1,3}([-+][0-9A-Za-z.-]+)?$ ]]; then
         abortar 8 "la versión que sirve el feed del VPS nuevo ('$mayor') no tiene forma de versión."
@@ -1496,6 +1519,36 @@ validar_backup() {
     fi
 }
 
+# R59: en --desde-backup los backup_*.dump y *.tmp del destino no son restos de un ensayo: pueden ser las
+# copias más recientes y buenas (producción viva con la base corrupta). El pre-vuelo los lista (solo
+# lectura), la confirmación RESTAURAR los nombra y el paso 4 los aparta en backups/legado-<ts>/: nunca se
+# borran. La API los busca sin bajar de nivel (GetFiles), así que legado-<ts>/ no la confunde.
+BACKUPS_DESTINO=""
+listar_backups_destino() {
+    local dir="${DIR_STOCKAPP_NUEVO}/backups"
+    BACKUPS_DESTINO=""
+    orq_ssh NUEVO "sudo -n test -d ${dir}"
+    if [[ "$ORQ_RC" -eq 1 && -z "$ORQ_STDERR" ]]; then
+        return 0
+    fi
+    if [[ "$ORQ_RC" -ne 0 || -n "$ORQ_STDERR" ]]; then
+        consulta_ok "si existe ${dir} en el VPS nuevo"
+        abortar 8 "no pude consultar si existe ${dir} en el VPS nuevo."
+    fi
+    orq_ssh NUEVO "sudo -n find ${dir} -maxdepth 1 -type f \\( -name 'backup_*.dump' -o -name '*.tmp' \\) -print"
+    consulta_ok "los backups propios de ${dir} en el VPS nuevo"
+    BACKUPS_DESTINO="$ORQ_SALIDA"
+}
+
+# cantidad_backups_destino -> por stdout, cuántos listó listar_backups_destino.
+cantidad_backups_destino() {
+    if [[ -z "$BACKUPS_DESTINO" ]]; then
+        echo 0
+    else
+        printf '%s\n' "$BACKUPS_DESTINO" | grep -c .
+    fi
+}
+
 prevuelo_desde_backup() {
     echo "  - backup: $BACKUP ($BACKUP_BYTES bytes, sha256 ${SHA_VOLCADO:0:12}…, creado $FECHA_BACKUP)"
     echo "  - $SHA_HERMANO_TXT"
@@ -1504,6 +1557,8 @@ prevuelo_desde_backup() {
     # restaurado.
     TAMANO_BASE_VIEJO="$BACKUP_BYTES"
     prevuelo_nuevo
+    listar_backups_destino
+    echo "  - backups propios del destino: $(cantidad_backups_destino) (el paso 4 los aparta, no los borra)"
     # La credencial no se valida acá (no hay API vieja): se pide ahora para no interrumpir después, y la
     # valida V5 contra la API nueva.
     obtener_contrasena
@@ -1511,7 +1566,14 @@ prevuelo_desde_backup() {
 }
 
 confirmacion_desde_backup() {
-    local texto
+    local texto propios n
+    n="$(cantidad_backups_destino)"
+    if [[ "$n" -eq 0 ]]; then
+        propios="En ${DIR_STOCKAPP_NUEVO}/backups del nuevo no hay backups propios (backup_*.dump, *.tmp) que apartar."
+    else
+        propios="En ${DIR_STOCKAPP_NUEVO}/backups del nuevo hay ${n} backups propios. NO se borran: se apartan en ${DIR_STOCKAPP_NUEVO}/backups/legado-<ts>/, donde la API no los ve:
+$(printf '%s\n' "$BACKUPS_DESTINO" | sed 's#^.*/#    - #')"
+    fi
     texto="$(
         cat <<EOF
 
@@ -1519,6 +1581,7 @@ confirmacion_desde_backup() {
 Vas a RESTAURAR un backup en el VPS nuevo (recuperación ante desastres; el VPS viejo no se toca).
   backup: ${BACKUP} (creado ${FECHA_BACKUP}, sha256 ${SHA_VOLCADO:0:12}…)
   nuevo: ${NUEVO_VPS_HOST} (machine-id ${MACHINE_ID_NUEVO:0:8}): versión instalada ${VERSION_NUEVO}; su base se reemplaza (con copia de seguridad).
+  ${propios}
 Atención: todo lo posterior a ${FECHA_BACKUP} se pierde (lo que se escribió después de ese backup no está en él).
 Para continuar escribí exactamente RESTAURAR y Enter. Cualquier otra cosa cancela sin tocar nada:
 EOF
@@ -1769,13 +1832,44 @@ corte_paso3() {
     cerrar_paso 3 OK
 }
 
+# apartar_backups_destino <dir>: R59. Mueve (mv -n, nunca un borrado) los backup_*.dump y *.tmp de <dir> a
+# <dir>/legado-<ts>/ (700). Sale 0 si apartó alguno, 1 si no había ninguno.
+apartar_backups_destino() {
+    local dir="$1" ts legado
+    orq_ssh NUEVO "sudo -n find ${dir} -maxdepth 1 -type f \\( -name 'backup_*.dump' -o -name '*.tmp' \\) -print"
+    consulta_ok "los backups propios de ${dir} en el VPS nuevo"
+    if [[ -z "$ORQ_SALIDA" ]]; then
+        echo "  - ${dir}: no hay backups propios que apartar"
+        return 1
+    fi
+    ts="$(date -u +%Y%m%dT%H%M%SZ)"
+    legado="${dir}/legado-${ts}"
+    orq_ssh NUEVO "sudo -n mkdir -m 700 ${legado}"
+    falla_remota 5 "crear ${legado} en el VPS nuevo"
+    orq_ssh NUEVO "sudo -n find ${dir} -maxdepth 1 -type f \\( -name 'backup_*.dump' -o -name '*.tmp' \\) -print -exec mv -n -t ${legado} -- {} +"
+    falla_remota 5 "apartar los backups propios del destino en ${legado}"
+    printf '%s\n' "$ORQ_SALIDA" | sed "s#^.*/#  - apartado en ${legado}/: #"
+    orq_ssh NUEVO "sudo -n find ${dir} -maxdepth 1 -type f \\( -name 'backup_*.dump' -o -name '*.tmp' \\) -print"
+    consulta_ok "los backups propios de ${dir} en el VPS nuevo"
+    if [[ -n "$ORQ_SALIDA" ]]; then
+        abortar 5 "después de apartarlos siguen sueltos en ${dir}: $(printf '%s' "$ORQ_SALIDA" | tr '\n' ' ')"
+    fi
+    return 0
+}
+
 corte_paso4() {
     local hubo=0 dir="${DIR_STOCKAPP_NUEVO}/backups" lista ts legado
     paso 4
     # Los backup_*.dump y *.tmp del ensayo: ReconciliarDumpHuerfanosAsync los tomaría como propios.
     # Uno por uno, por patrón y sin bajar de nivel; nunca un borrado recursivo.
     orq_ssh NUEVO "sudo -n test -d ${dir}"
-    if [[ "$ORQ_RC" -eq 0 && -z "$ORQ_STDERR" ]]; then
+    if [[ "$ORQ_RC" -eq 0 && -z "$ORQ_STDERR" && "$MODO" == "desde-backup" ]]; then
+        if apartar_backups_destino "$dir"; then
+            hubo=1
+        fi
+    elif [[ "$ORQ_RC" -eq 0 && -z "$ORQ_STDERR" ]]; then
+        # Corte y ensayo (spec 6.5.4, paso 4): en el nuevo recién preparado solo hay backups del ensayo, que
+        # ReconciliarDumpHuerfanosAsync tomaría como propios. Se borran; en --desde-backup no (R59).
         orq_ssh NUEVO "sudo -n find ${dir} -maxdepth 1 -type f \\( -name 'backup_*.dump' -o -name '*.tmp' \\) -print -delete"
         falla_remota 5 "el borrado de los backups del ensayo en el VPS nuevo"
         if [[ -n "$ORQ_SALIDA" ]]; then
@@ -3998,6 +4092,7 @@ EOF
 
 desde_backup() {
     local omitido="desde-backup: no hay VPS viejo"
+    PASO_NOMBRES[4]="apartar los backups propios del destino"
     PASO_NOMBRES[12]="verificación (V1-V8)"
     V_ORDEN=(V1 V2 V3 V4 V5 V6 V7 V8)
     orq_estado_poner modo "$MODO"

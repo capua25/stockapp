@@ -369,7 +369,19 @@ public class MigrarVpsTests : IDisposable
                 cat "$E/journal" 2>/dev/null || :
                 ;;
             "sudo -n test -d "*"/var/lib/stockapp/.local/share/StockApp/backups")
-                if [[ -f "$E/backups-existe" ]]; then exit 0; else exit 1; fi
+                if [[ -f "$E/backups-existe" || -d "$E/backups" ]]; then exit 0; else exit 1; fi
+                ;;
+            # R59: listar y apartar los backups propios del destino (--desde-backup) se EJECUTA de verdad
+            # contra un directorio simulado ($E/backups), con la ruta del servidor traducida ida y vuelta.
+            "sudo -n find "*"/var/lib/stockapp/.local/share/StockApp/backups -maxdepth 1 -type f \\( -name 'backup_*.dump' -o -name '*.tmp' \\) -print" \
+            | "sudo -n mkdir -m 700 "*"/var/lib/stockapp/.local/share/StockApp/backups/legado-"* \
+            | "sudo -n find "*"/var/lib/stockapp/.local/share/StockApp/backups -maxdepth 1 -type f \\( -name 'backup_*.dump' -o -name '*.tmp' \\) -print -exec mv -n -t "*)
+                [[ "$lado" == nuevo ]] || { echo "stub ssh: backups del destino no previstos en el $lado" >&2; exit 99; }
+                [[ "$cmd" =~ (^|[[:space:]])([^[:space:]]*/var/lib/stockapp/\.local/share/StockApp/backups) ]]
+                ruta="${BASH_REMATCH[2]}"
+                comando="${cmd#sudo -n }"
+                bash -c "${comando//"$ruta"/"$E/backups"}" < /dev/null | sed "s#$E/backups#$ruta#g"
+                exit "${PIPESTATUS[0]}"
                 ;;
             "sudo -n find "*"/var/lib/stockapp/.local/share/StockApp/backups -maxdepth 1 -type f \\( -name 'backup_*.dump' -o -name '*.tmp' \\) -print -delete")
                 cat "$E/restos" 2>/dev/null || :
@@ -742,6 +754,9 @@ public class MigrarVpsTests : IDisposable
         new("^" + Regex.Escape("df -P \"$HOME/stockapp-deploy/migracion\"") + "$"),
         new("^" + Regex.Escape("sed -n 's/^\\([A-Za-z_][A-Za-z0-9_]*\\)=.*/\\1/p' \"$HOME/stockapp-deploy/.env\"") + "$"),
         new("^" + Regex.Escape("sudo -n sed -n 's/^\\([A-Za-z_][A-Za-z0-9_]*\\)=.*/\\1/p' \"/etc/stockapp-api/api.env\"") + "$"),
+        // R59: el pre-vuelo de --desde-backup lista (sin tocar) los backups propios del destino.
+        new("^" + Regex.Escape("sudo -n test -d /var/lib/stockapp/.local/share/StockApp/backups") + "$"),
+        new("^" + Regex.Escape("sudo -n find /var/lib/stockapp/.local/share/StockApp/backups -maxdepth 1 -type f \\( -name 'backup_*.dump' -o -name '*.tmp' \\) -print") + "$"),
     ];
 
     private static IEnumerable<(string Lado, string Cmd)> ComandosRemotos(string rastro) =>
@@ -1164,6 +1179,30 @@ public class MigrarVpsTests : IDisposable
 
         Assert.True(r.Exit == 3, r.Todo);
         Assert.Contains("feed", r.Salida);
+    }
+
+    /// <summary>
+    /// R56: después de un --revertir, el 3 por feed es el camino normal del reintento. El mensaje no puede
+    /// mandar solo a preparar-vps-nuevo.sh (no levanta una unit existente: bucle); tiene que decir que la
+    /// API nueva está detenida y nombrar el deploy que la levanta contra el nuevo.
+    /// </summary>
+    [Theory]
+    [InlineData("ausente")]
+    [InlineData("sin-escucha")]
+    [InlineData("sin-full")]
+    public void Prevuelo_FeedAusente_ElMensajeNombraLaApiDetenidaYElDeploy(string modo)
+    {
+        if (modo == "sin-full")
+            File.WriteAllText(Path.Combine(Estado, "feed-json"), "{\"Assets\":[{\"Type\":\"Delta\",\"Version\":\"0.5.3\"}]}");
+        else
+            File.WriteAllText(Path.Combine(Estado, "feed"), modo + "\n");
+
+        var r = CorrerCorte();
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.Contains("la API nueva está detenida", r.Salida);
+        Assert.Matches(@"STOCKAPP_ENV_LOCAL=\S*env-nuevo\.txt deploy/deploy-vps\.sh <v> --sin-backup", r.Salida);
+        Assert.DoesNotContain(": preparar-vps-nuevo.sh no terminó.", r.Salida);
     }
 
     [Theory]
@@ -4041,6 +4080,109 @@ public class MigrarVpsTests : IDisposable
         Assert.True(r.Exit == 3, r.Todo);
         Assert.Contains("sin terminar", r.Salida);
         Assert.Empty(Escrituras(r.Rastro));
+    }
+
+    /// <summary>
+    /// R58: en un desastre, la corrida abierta suele ser la de un servidor que ya no existe (el viejo murió
+    /// después de CONGELAR, o el nuevo se reaprovisionó tras revertir a mano): --continuar y --revertir
+    /// salen 8 o 9 por el machine-id. El rechazo de --desde-backup tiene que nombrar la salida que sí
+    /// funciona: la receta del runbook que la cierra a mano, con la ruta real de esa corrida.
+    /// </summary>
+    [Fact]
+    public void DesdeBackup_ConUnaCorridaSinTerminar_NombraLaRecetaDeCierreManual()
+    {
+        PlantarBackup();
+        var abierta = PlantarCorrida("corte-20260101T090000Z", "modo=corte\ninicio_utc=2026-01-01T09:00:00Z\n");
+
+        var r = CorrerDesdeBackup();
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.Contains("deploy/MIGRACION-VPS.md", r.Salida);
+        Assert.Contains("sección 6", r.Salida);
+        Assert.Contains($"printf 'resultado=ABANDONADA-MANUAL\\n' >> {abierta}/estado", r.Salida);
+        // Y cuándo NO: con el viejo vivo y congelado, la salida es --revertir.
+        Assert.Matches(@"(?is)nunca.{0,120}congelado.{0,120}--revertir", r.Salida);
+        Assert.Empty(Escrituras(r.Rastro));
+    }
+
+    /// <summary>
+    /// R58 y R24: la receta del runbook, ejecutada TAL CUAL (la línea copiable de la sección 6), cierra la
+    /// corrida y --desde-backup ya no se niega.
+    /// </summary>
+    [Fact]
+    public void DesdeBackup_CorridaCerradaConLaRecetaDelRunbook_NoBloquea()
+    {
+        PlantarBackup();
+        var abierta = PlantarCorrida("corte-20260101T090000Z",
+            "modo=corte\ninicio_utc=2026-01-01T09:00:00Z\ncongelado_utc=2026-01-01T09:05:00Z\npaso_6=ok 2026-01-01T09:05:00Z 30\n");
+        var runbook = File.ReadAllText(Path.Combine(BashLimpio.RaizRepo(), "deploy", "MIGRACION-VPS.md"));
+        var receta = runbook.Split('\n').Select(l => l.Trim())
+            .Single(l => l.StartsWith("printf 'resultado=ABANDONADA-MANUAL\\n' >> ", StringComparison.Ordinal));
+        var cierre = BashLimpio.Ejecutar(receta.Replace("<corrida>", Path.GetFileName(abierta)), Home);
+        Assert.True(cierre.ExitCode == 0, cierre.Stderr);
+        Assert.Equal("resultado=ABANDONADA-MANUAL", File.ReadAllLines(Path.Combine(abierta, "estado")).Last());
+
+        var r = CorrerDesdeBackup();
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        Assert.Equal("resultado=GO", File.ReadAllLines(Path.Combine(UnaCorrida("desde-backup"), "estado")).Last());
+    }
+
+    /// <summary>
+    /// R59: los backup_*.dump y *.tmp del destino pueden ser las copias más recientes (producción viva con
+    /// la base corrupta). --desde-backup los APARTA en backups/legado-&lt;ts&gt;/ (nunca -delete) y la
+    /// confirmación RESTAURAR dice cuántos son y cómo se llaman antes de pedir la palabra.
+    /// </summary>
+    [Fact]
+    public void DesdeBackup_BackupsPropiosDelDestino_SeApartanEnLegadoYLaConfirmacionLosNombra()
+    {
+        PlantarBackup();
+        var backups = Host("nuevo", "backups");
+        Directory.CreateDirectory(backups);
+        var propios = new[] { "backup_20261020_030000100.dump", "backup_20261021_030000200.dump", "backup_20261021_150000300.dump.tmp" };
+        foreach (var n in propios) File.WriteAllText(Path.Combine(backups, n), "propio-del-destino");
+        File.WriteAllText(Path.Combine(backups, "respaldo_manual_admin.dump"), "no matchea el patrón");
+
+        var r = CorrerDesdeBackup();
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        Assert.DoesNotContain(ComandosRemotos(r.Rastro), c => c.Lado == "nuevo" && c.Cmd.Contains("-delete"));
+        var legado = Assert.Single(Directory.GetDirectories(backups, "legado-*"));
+        foreach (var n in propios)
+        {
+            Assert.Equal("propio-del-destino", File.ReadAllText(Path.Combine(legado, n)));
+            Assert.False(File.Exists(Path.Combine(backups, n)), $"{n} siguió suelto en backups/");
+        }
+        Assert.True(File.Exists(Path.Combine(backups, "respaldo_manual_admin.dump")));
+        // La confirmación los nombra ANTES de pedir la palabra.
+        var i = r.Stdout.IndexOf("== Confirmación ==", StringComparison.Ordinal);
+        var j = r.Stdout.IndexOf("escribí exactamente RESTAURAR", StringComparison.Ordinal);
+        Assert.True(i >= 0 && j > i, r.Todo);
+        var confirmacion = r.Stdout[i..j];
+        Assert.Contains("3 backups propios", confirmacion);
+        Assert.Contains("legado-", confirmacion);
+        foreach (var n in propios) Assert.Contains(n, confirmacion);
+        // Se apartan con comandos acotados al directorio de backups de StockApp, nunca un borrado.
+        Assert.Contains(ComandosRemotos(r.Rastro), c => c.Lado == "nuevo" &&
+            Regex.IsMatch(c.Cmd, @"^sudo -n mkdir -m 700 /var/lib/stockapp/\.local/share/StockApp/backups/legado-\d{8}T\d{6}Z$"));
+        Assert.Contains(ComandosRemotos(r.Rastro), c => c.Lado == "nuevo" && Regex.IsMatch(c.Cmd,
+            @"^sudo -n find /var/lib/stockapp/\.local/share/StockApp/backups -maxdepth 1 -type f \\\( -name 'backup_\*\.dump' -o -name '\*\.tmp' \\\) -print -exec mv -n -t /var/lib/stockapp/\.local/share/StockApp/backups/legado-\d{8}T\d{6}Z -- \{\} \+$"));
+    }
+
+    [Fact]
+    public void DesdeBackup_SinBackupsPropiosEnElDestino_LaConfirmacionLoDice()
+    {
+        PlantarBackup();
+        Directory.CreateDirectory(Host("nuevo", "backups"));
+
+        var r = CorrerDesdeBackup();
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        var i = r.Stdout.IndexOf("== Confirmación ==", StringComparison.Ordinal);
+        var j = r.Stdout.IndexOf("escribí exactamente RESTAURAR", StringComparison.Ordinal);
+        Assert.True(i >= 0 && j > i, r.Todo);
+        Assert.Contains("no hay backups propios", r.Stdout[i..j]);
+        Assert.Empty(Directory.GetDirectories(Host("nuevo", "backups"), "legado-*"));
     }
 
     [Fact]

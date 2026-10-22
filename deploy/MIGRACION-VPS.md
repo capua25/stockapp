@@ -29,7 +29,8 @@ Reglas que valen en TODO el documento:
   Docker, de systemd ni de certbot, y el proxy de la otra app no se toca.
 - `deploy/deploy-vps.sh`: **NUNCA** se corre contra el VPS viejo. Sin `--sin-backup` deja el backup en el
   directorio temporal del host, legible por los demás usuarios del servidor compartido. Contra el VPS
-  nuevo solo se usa con `--sin-backup`, y solo en el caso de la sección 4 (cargar overrides).
+  nuevo solo se usa con `--sin-backup`, y solo en dos casos: para cargar overrides (sección 4) y para
+  levantar la API nueva después de un `--revertir` (sección 4 y sección 6, "Después de un `--revertir`").
 - Los dumps de producción contienen todo, incluidos los hashes de contraseñas. Viven en
   `~/stockapp-backups-vps/` (700, fuera del repo) y nunca se commitean.
 - Con dos VPS en juego, **mirá siempre qué archivo estás cargando**:
@@ -367,6 +368,30 @@ systemctl is-active stockapp-api
 ```
 
   Esperado: `active`. Un `unmask` solo, sin devolver la unit, no sirve: la unit sigue movida.
+- **Cerrar a mano una corrida cuyo servidor ya no existe.** Una corrida de corte (o de ensayo) que quedó
+  abierta, cuyo servidor ya no existe, no se puede cerrar con el script: `--continuar` y `--revertir` leen
+  primero el machine-id de los dos servidores y salen 8 o 9. Mientras siga abierta, bloquea todo corte,
+  ensayo y `--desde-backup` (sale 3 nombrándola). Esto pasa en dos casos:
+  - el VPS viejo **murió** después de `CONGELAR` (o quedó inalcanzable para siempre): producción se
+    recupera con la sección 8;
+  - el VPS nuevo no contestaba, lo apagaste desde el panel, devolviste el viejo con los comandos de arriba
+    y después **reaprovisionaste** el nuevo (otro machine-id).
+
+  **Nunca** la cierres a mano si el VPS viejo sigue vivo y congelado: ahí la salida es
+  `deploy/migrar-vps.sh --revertir`. Tampoco si `--continuar` o `--revertir` todavía pueden correr: si salen
+  con otro código que no sea 8 o 9 por el machine-id, leé su mensaje. Antes de cerrarla, confirmá el estado
+  real: en el segundo caso, `systemctl is-active stockapp-api` en el viejo tiene que dar `active`; en el
+  primero, el panel del proveedor tiene que confirmar que el viejo no vuelve. Después agregá el resultado como
+  última línea del `estado` de esa corrida (`<corrida>` es el nombre de su directorio, como
+  `corte-20261101T090000Z`; el mensaje de `--desde-backup` lo imprime ya completo):
+
+```bash
+printf 'resultado=ABANDONADA-MANUAL\n' >> ~/stockapp-backups-vps/corridas/<corrida>/estado
+tail -n 1 ~/stockapp-backups-vps/corridas/<corrida>/estado
+```
+
+  Esperado: `resultado=ABANDONADA-MANUAL`. El resto del `estado` y el `registro.log` quedan como estaban,
+  como registro de qué pasó.
 
 ## 7. R-B: después de la primera escritura real, a mano
 
@@ -409,6 +434,16 @@ deploy/migrar-vps.sh --desde-backup <dump> --env-nuevo deploy/.env.vps-nuevo
    tu máquina, del que salen `VPS_ADMIN_USER`/`VPS_ADMIN_PASSWORD` para V5 y V8 y la clave de licencias; sin
    ese archivo o sin `VPS_ADMIN_USER` sale 2. Si falla, la corrida se cierra y se vuelve a correr
    entera: no hay `--continuar` ni `--revertir`.
+
+   Si sale 3 por una corrida sin terminar cuyo servidor ya no existe (el viejo murió después de
+   `CONGELAR`), cerrala con la receta de la sección 6,
+   "Cerrar a mano una corrida cuyo servidor ya no existe" (`resultado=ABANDONADA-MANUAL`), y volvé a
+   correr este paso.
+
+   Los `backup_*.dump` y `*.tmp` que ya tenga el VPS de destino **no se borran**: la confirmación
+   `RESTAURAR` los lista y el paso 4 los aparta en `/var/lib/stockapp/.local/share/StockApp/backups/legado-<ts>/`
+   (700, de root), donde la API no los ve. Pueden ser las copias más recientes si el servidor seguía vivo
+   con la base rota. Cuando ya no hagan falta, se borran a mano.
 
 **El límite, dicho en voz alta:** un desastre se recupera hasta el último dump que esté fuera del
 servidor muerto, y hoy ninguno lo está de forma automática. Por decisión de Martin,
