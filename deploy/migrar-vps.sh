@@ -47,8 +47,9 @@
 #                   paso de la vuelta (re-correr), 8 no pude consultar o la unit no se puede devolver sin
 #                   pisar, 9 otros servidores que los de la corrida o el docker ps del viejo cambió (en ese
 #                   caso la vuelta atrás ya se hizo y la corrida queda REVERTIDO: se informa separando los
-#                   contenedores stockapp* de los ajenos). La API nueva queda detenida Y deshabilitada (el
-#                   paso 11 de un corte posterior la vuelve a habilitar); el resultado previo de la corrida
+#                   contenedores stockapp* de los ajenos). La API nueva queda detenida Y deshabilitada
+#                   (ella sirve el feed que exige el pre-vuelo: antes de reintentar hay que levantarla con
+#                   deploy/deploy-vps.sh <v> --sin-backup contra el nuevo, que hace enable y restart; R56); el resultado previo de la corrida
 #                   revertida queda en resultado_previo. Con el VPS nuevo inalcanzable sale 8 sin tocar el
 #                   viejo: hay que apagar el nuevo desde el panel del proveedor.
 #   --desde-backup  Recuperación ante desastres: el VPS viejo murió o no se puede congelar, y el VPS nuevo
@@ -1179,6 +1180,11 @@ leer_version_del_feed() {
 
 prevuelo_nuevo() {
     leer_version_del_feed
+    # El feed lo sirve la API nueva, y entre el paso 3 (la detiene) y el 11 (la arranca) no contesta:
+    # --continuar no puede volver a leerlo. La versión queda en el estado de la corrida.
+    if [[ -n "${ORQ_CORRIDA:-}" && -d "${ORQ_CORRIDA}" && "$VERSION_NUEVO" != "desconocida" ]]; then
+        orq_estado_poner version_nuevo "$VERSION_NUEVO"
+    fi
 
     if [[ "$SIN_VERIFICAR_PREPARACION" -eq 1 ]]; then
         echo "  - preparación del nuevo: OMITIDO (arnés)"
@@ -1210,34 +1216,48 @@ prevuelo_nuevo() {
     echo "  - nuevo: feed en la versión $VERSION_NUEVO, base de $TAMANO_BASE_NUEVO bytes, espacio para el dump y la copia de seguridad"
 }
 
-# comparar_overrides <archivo>: los nombres de <archivo> que faltan en el .env del servidor nuevo ->
-# OVERRIDES_FALTAN y OVERRIDES_CANTIDAD. Sale 0, 3 si una línea no es un nombre de variable, u 8 si
-# no pudo leer las claves (ORQ_RC dice con qué salió). Solo los NOMBRES cruzan la red.
+# comparar_overrides <archivo>: los nombres de <archivo> que faltan en el .env del servidor nuevo
+# (OVERRIDES_FALTAN) y los que están en el .env pero no en /etc/stockapp-api/api.env (OVERRIDES_SIN_INSTALAR:
+# solo install.sh copia el uno al otro y este script nunca lo corre, así que un override solo en el .env no
+# llega a la API; R57). Además OVERRIDES_CANTIDAD. Sale 0, 3 si una línea no es un nombre de variable, u 8
+# si no pudo leer las claves (ORQ_RC dice con qué salió). Solo los NOMBRES cruzan la red: los dos sed
+# imprimen lo que está antes del "=" y nada más.
 OVERRIDES_FALTAN=""
+OVERRIDES_SIN_INSTALAR=""
 OVERRIDES_CANTIDAD=0
 comparar_overrides() {
-    local archivo="$1" nombre comando
+    local archivo="$1" nombre comando claves_env claves_api
     OVERRIDES_FALTAN=""
+    OVERRIDES_SIN_INSTALAR=""
     OVERRIDES_CANTIDAD=0
     comando='sed -n '\''s/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p'\'' "$HOME/stockapp-deploy/.env"'
     orq_ssh NUEVO "$comando"
     if [[ "$ORQ_RC" -ne 0 ]]; then
         return 8
     fi
+    claves_env="$ORQ_SALIDA"
+    comando='sudo -n sed -n '\''s/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p'\'' "'"${RAIZ_NUEVO}"'/etc/stockapp-api/api.env"'
+    orq_ssh NUEVO "$comando"
+    if [[ "$ORQ_RC" -ne 0 ]]; then
+        return 8
+    fi
+    claves_api="$ORQ_SALIDA"
     while IFS= read -r nombre || [[ -n "$nombre" ]]; do
         [[ -n "$nombre" ]] || continue
         if [[ ! "$nombre" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
             return 3
         fi
         OVERRIDES_CANTIDAD=$((OVERRIDES_CANTIDAD + 1))
-        if ! contiene_linea "$ORQ_SALIDA" "$nombre"; then
+        if ! contiene_linea "$claves_env" "$nombre"; then
             OVERRIDES_FALTAN+="${OVERRIDES_FALTAN:+, }$nombre"
+        elif ! contiene_linea "$claves_api" "$nombre"; then
+            OVERRIDES_SIN_INSTALAR+="${OVERRIDES_SIN_INSTALAR:+, }$nombre"
         fi
     done < "$archivo"
 }
 
 prevuelo_overrides() {
-    local archivo="" dir sub rc=0
+    local archivo="" dir sub rc=0 version_reinstalar
     while IFS= read -r dir; do
         [[ -n "$dir" ]] || continue
         # La carpeta del volcado del ensayo: volcado/ o la del último reintento (volcado_dir).
@@ -1259,7 +1279,14 @@ prevuelo_overrides() {
     if [[ -n "$OVERRIDES_FALTAN" ]]; then
         abortar 3 "faltan en el .env del servidor nuevo (~/stockapp-deploy/.env) los overrides del VPS viejo: $OVERRIDES_FALTAN. Cargalos a mano (solo se muestran los nombres)."
     fi
-    echo "  - overrides: los $OVERRIDES_CANTIDAD del último ensayo están en el .env del servidor nuevo"
+    if [[ -n "$OVERRIDES_SIN_INSTALAR" ]]; then
+        version_reinstalar="<v>"
+        if [[ -n "$VERSION_NUEVO" && "$VERSION_NUEVO" != "desconocida" ]]; then
+            version_reinstalar="$VERSION_NUEVO"
+        fi
+        abortar 3 "los overrides del VPS viejo $OVERRIDES_SIN_INSTALAR están en ~/stockapp-deploy/.env del servidor nuevo pero no en /etc/stockapp-api/api.env, así que la API no los tiene (este script nunca corre install.sh): reinstalá con deploy/deploy-vps.sh ${version_reinstalar} --sin-backup contra el VPS nuevo (STOCKAPP_ENV_LOCAL=<.env del nuevo>)."
+    fi
+    echo "  - overrides: los $OVERRIDES_CANTIDAD del último ensayo están en el .env del servidor nuevo y en su api.env"
 }
 
 # obtener_contrasena: la de VPS_ADMIN_PASSWORD (entorno o .env del viejo) o, si no, se pide: por
@@ -2591,9 +2618,12 @@ overrides_del_ensayo() {
         0)
             if [[ -n "$OVERRIDES_FALTAN" ]]; then
                 echo "Overrides que faltan en el .env del servidor nuevo: $OVERRIDES_FALTAN"
-                echo "  (cargalos a mano en ~/stockapp-deploy/.env del nuevo antes del corte; el pre-vuelo del corte lo exige)"
+                echo "  (cargalos a mano en ~/stockapp-deploy/.env del nuevo y reinstalá con deploy/deploy-vps.sh <v> --sin-backup; el pre-vuelo del corte lo exige)"
+            elif [[ -n "$OVERRIDES_SIN_INSTALAR" ]]; then
+                echo "Overrides en ~/stockapp-deploy/.env pero no en /etc/stockapp-api/api.env: $OVERRIDES_SIN_INSTALAR"
+                echo "  (la API no los tiene: reinstalá con deploy/deploy-vps.sh <v> --sin-backup contra el nuevo; el pre-vuelo del corte lo exige)"
             else
-                echo "Overrides: los $OVERRIDES_CANTIDAD del viejo ya están en el .env del servidor nuevo."
+                echo "Overrides: los $OVERRIDES_CANTIDAD del viejo ya están en el .env y en el api.env del servidor nuevo."
             fi
             ;;
         3) echo "Overrides: $archivo tiene una línea que no es un nombre de variable." ;;
@@ -2922,7 +2952,13 @@ continuar() {
         viejo_sigue_congelado "$DESDE"
     fi
     obtener_contrasena
-    leer_version_del_feed
+    # La versión sale del estado: con el viejo congelado la API nueva está detenida (la detiene el paso 3
+    # y la arranca el 11) y no sirve el feed. Una corrida sin esa clave (anterior a este cambio) lo lee.
+    if leer_clave_continuar version_nuevo && [[ -n "$VALOR_CLAVE" ]]; then
+        VERSION_NUEVO="$VALOR_CLAVE"
+    else
+        leer_version_del_feed
+    fi
     # Todo paso retomado lee su entrada del estado: desde el 7, la carpeta del volcado.
     if [[ "$DESDE" -ge 7 ]]; then
         cargar_volcado_dir
@@ -3218,7 +3254,7 @@ habilitacion_nuevo() {
 }
 
 # Paso 4, también: deshabilitada (R44), para que un reinicio del VPS nuevo no la vuelva a arrancar con el
-# viejo sirviendo. El paso 11 del corte la vuelve a habilitar.
+# viejo sirviendo. Un corte posterior no la levanta: hace falta deploy-vps.sh (R56).
 revertir_detener_nuevo() {
     local hizo=0
     abrir_paso 4 "detener la API nueva"

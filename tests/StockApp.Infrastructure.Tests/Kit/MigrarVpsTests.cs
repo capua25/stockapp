@@ -403,6 +403,16 @@ public class MigrarVpsTests : IDisposable
             "sed -n "*"/stockapp-deploy/.env"*)
                 cat "$E/env-claves"
                 ;;
+            # El api.env del servidor (600, root): se lee con sudo. El comando se EJECUTA de verdad contra
+            # el archivo simulado, así que si el sed dejara de cortar el valor, el secreto saldría.
+            "sudo -n sed -n "*"/etc/stockapp-api/api.env"*)
+                if falla api-env; then echo "sed: can't read /etc/stockapp-api/api.env: No such file or directory" >&2; exit 2; fi
+                if [[ ! -f "$E/api-env" ]]; then
+                    while IFS= read -r clave; do printf '%s=VALOR-SECRETO-DEL-APIENV\n' "$clave"; done < "$E/env-claves" > "$E/api-env"
+                fi
+                comando="${cmd#sudo -n }"
+                bash -c "${comando//\/etc\/stockapp-api\/api.env/$E/api-env}"
+                ;;
             "curl -fsS "*"/auth/login "*)
                 printf '%s' "$entrada" > "$ESTADO/login-stdin.txt"
                 modo="$(cat "$E/login")"
@@ -504,6 +514,12 @@ public class MigrarVpsTests : IDisposable
             esac
         done
         modo() { if [[ -f "$ESTADO/$1" ]]; then cat "$ESTADO/$1"; else echo "${2:-ok}"; fi; }
+        # Fiel al servidor: es la API NUEVA la que contesta (y sirve el feed). Con la unit detenida nadie
+        # escucha: curl sale 7. Un stub que sirviera igual escondería el estado en que un --revertir deja
+        # al nuevo (R44), que es justo el que el pre-vuelo del corte siguiente tiene que ver.
+        if [[ "$(cat "$ESTADO/nuevo/active" 2>/dev/null || echo active)" != active ]]; then
+            echo 'curl: (7) Failed to connect' >&2; exit 7
+        fi
         con_token() {
             if [[ "$entrada" != *"Authorization: Bearer TOKEN-NUEVO-DEF"* ]]; then
                 echo 'curl: (22) The requested URL returned error: 401' >&2; exit 22
@@ -725,6 +741,7 @@ public class MigrarVpsTests : IDisposable
         new(@"^sudo -n docker exec (-i )?stockapp[a-z0-9-]* (psql -U [a-z_][a-z0-9_]* -d [a-z_][a-z0-9_]* -tA -v ON_ERROR_STOP=1|df -P /var/lib/postgresql/data)$"),
         new("^" + Regex.Escape("df -P \"$HOME/stockapp-deploy/migracion\"") + "$"),
         new("^" + Regex.Escape("sed -n 's/^\\([A-Za-z_][A-Za-z0-9_]*\\)=.*/\\1/p' \"$HOME/stockapp-deploy/.env\"") + "$"),
+        new("^" + Regex.Escape("sudo -n sed -n 's/^\\([A-Za-z_][A-Za-z0-9_]*\\)=.*/\\1/p' \"/etc/stockapp-api/api.env\"") + "$"),
     ];
 
     private static IEnumerable<(string Lado, string Cmd)> ComandosRemotos(string rastro) =>
@@ -1221,6 +1238,72 @@ public class MigrarVpsTests : IDisposable
         Assert.Contains("no hay un ensayo anterior", r.Stdout);
     }
 
+    /// <summary>
+    /// R57: un override que está en ~/stockapp-deploy/.env pero no en /etc/stockapp-api/api.env no llega a
+    /// la API (solo install.sh copia el uno al otro, y migrar nunca lo corre). El pre-vuelo lo ve y pide
+    /// reinstalar, sin imprimir ningún valor.
+    /// </summary>
+    [Fact]
+    public void Prevuelo_OverrideEnElEnvPeroNoEnElApiEnv_Aborta3PidiendoReinstalar()
+    {
+        PlantarCorrida("ensayo-20260101T090000Z", EstadoDeEnsayo(), overrides: "Licencia__Algo\nOTRO_OVERRIDE\n");
+        PonerNuevo("env-claves", "POSTGRES_USER\nOTRO_OVERRIDE\nLicencia__Algo\n");
+        PonerNuevo("api-env", "Jwt__Secret=VALOR-SECRETO-DEL-APIENV\nOTRO_OVERRIDE=VALOR-SECRETO-DEL-APIENV\n");
+
+        var r = CorrerCorte();
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.Contains("Licencia__Algo", r.Salida);
+        Assert.DoesNotContain("OTRO_OVERRIDE", r.Salida);
+        Assert.Contains("deploy/deploy-vps.sh", r.Salida);
+        Assert.Contains("--sin-backup", r.Salida);
+        Assert.DoesNotContain("CONGELAR", r.Salida);
+    }
+
+    [Fact]
+    public void Prevuelo_OverridesEnElEnvYEnElApiEnv_Sigue()
+    {
+        PlantarCorrida("ensayo-20260101T090000Z", EstadoDeEnsayo(), overrides: "Licencia__Algo\n");
+        PonerNuevo("env-claves", "POSTGRES_USER\nLicencia__Algo\n");
+        PonerNuevo("api-env", "Jwt__Secret=VALOR-SECRETO-DEL-APIENV\nLicencia__Algo=false\n");
+
+        var r = CorrerCorte();
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        Assert.Contains("api.env", r.Stdout);
+    }
+
+    [Fact]
+    public void Prevuelo_ElApiEnvDelNuevoNoPuedeLeerse_Aborta8()
+    {
+        PlantarCorrida("ensayo-20260101T090000Z", EstadoDeEnsayo(), overrides: "Licencia__Algo\n");
+        PonerNuevo("env-claves", "POSTGRES_USER\nLicencia__Algo\n");
+        PonerNuevo("falla-api-env", "");
+
+        var r = CorrerCorte();
+
+        Assert.True(r.Exit == 8, r.Todo);
+    }
+
+    /// <summary>
+    /// Solo los NOMBRES cruzan la red: el sed del api.env imprime lo que está antes del "=" y nada más.
+    /// El api.env del stub trae un valor secreto: no puede aparecer en la salida, el log ni el rastro.
+    /// </summary>
+    [Fact]
+    public void Prevuelo_ElApiEnv_SoloViajanLosNombres()
+    {
+        PlantarCorrida("ensayo-20260101T090000Z", EstadoDeEnsayo(), overrides: "Licencia__Algo\n");
+        PonerNuevo("env-claves", "POSTGRES_USER\nLicencia__Algo\n");
+
+        var r = CorrerCorte();
+
+        Assert.True(r.Exit == ExitGo, r.Todo);
+        var lecturas = ComandosRemotos(r.Rastro).Where(c => c.Lado == "nuevo" && c.Cmd.Contains("api.env")).ToList();
+        Assert.Single(lecturas);
+        Assert.Equal("sudo -n sed -n 's/^\\([A-Za-z_][A-Za-z0-9_]*\\)=.*/\\1/p' \"/etc/stockapp-api/api.env\"", lecturas[0].Cmd);
+        Assert.DoesNotContain("VALOR-SECRETO-DEL-APIENV", r.Todo);
+    }
+
     [Fact]
     public void Prevuelo_ElListadoDeClavesDelNuevoNoPuedeLeerse_Aborta8()
     {
@@ -1701,7 +1784,12 @@ public class MigrarVpsTests : IDisposable
 
         Assert.True(r.Exit == ExitGo, r.Todo);
         Assert.DoesNotContain("deploy-vps", r.Rastro);
-        Assert.DoesNotContain("deploy-vps", File.ReadAllText(Script));
+        // El script solo NOMBRA deploy-vps.sh en comentarios y en los mensajes que le piden al operador
+        // reinstalar (R56, R57): ninguna otra línea lo ejecuta ni lo menciona.
+        var otras = File.ReadAllLines(Script)
+            .Where(l => l.Contains("deploy-vps") && !l.TrimStart().StartsWith('#') && !l.Contains("reinstalá"))
+            .ToList();
+        Assert.Empty(otras);
     }
 
     [Fact]
@@ -3527,6 +3615,36 @@ public class MigrarVpsTests : IDisposable
         Assert.True(r.Exit == 6, r.Todo);
         Assert.Empty(EscriturasDeRevertir(r.Rastro).Where(e => e.StartsWith("viejo:")));
         Assert.Equal("masked", File.ReadAllText(Host("viejo", "enabled")).Trim());
+    }
+
+    /// <summary>
+    /// R56: la API nueva sirve el feed, y un --revertir la deja detenida y deshabilitada (R44). El corte
+    /// siguiente no puede asumir que el feed está: su pre-vuelo aborta 3 nombrándolo, ANTES de pedir la
+    /// confirmación. El runbook dice cómo salir (deploy-vps.sh contra el nuevo, que hace enable + restart).
+    /// </summary>
+    [Fact]
+    public void Prevuelo_TrasUnRevertir_ElCorteSiguienteAborta3NombrandoElFeed()
+    {
+        CorteConGo();
+        var revertir = CorrerRevertir();
+        Assert.True(revertir.Exit == 0, revertir.Todo);
+
+        var r = CorrerCorte();
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.Contains("feed", r.Salida);
+        Assert.DoesNotContain("CONGELAR", r.Salida);
+    }
+
+    [Fact]
+    public void Prevuelo_ConLaApiNuevaDetenida_ElFeedNoSirve_Aborta3()
+    {
+        PonerNuevo("active", "inactive\n");
+
+        var r = CorrerCorte();
+
+        Assert.True(r.Exit == 3, r.Todo);
+        Assert.Contains("feed", r.Salida);
     }
 
     [Fact]

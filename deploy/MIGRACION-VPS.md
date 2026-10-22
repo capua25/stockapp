@@ -80,7 +80,9 @@ coincide) para no gastar intentos de Let's Encrypt.
   `GestionarDiagnostico` (V5 y V8 hacen login con él y piden `/backups`). `VPS_ADMIN_USER` es
   obligatorio y no cae a `BOOTSTRAP_ADMIN_USER`. La contraseña puede ir en el `.env`, en el entorno del
   comando puntual (`VPS_ADMIN_PASSWORD=… deploy/migrar-vps.sh`, sin `export`) o, si no está en
-  ninguno, se pide por terminal sin eco. Ojo: si el `.env` define la clave, **pisa** a la del entorno.
+  ninguno, se pide por terminal sin eco. Ojo, y no es lo mismo en los dos scripts: en `migrar-vps.sh`
+  **gana el entorno** sobre el `.env`; en `deploy/bajar-backup-vps.sh` es al revés, el `.env` **pisa**
+  al entorno.
 - [ ] **`deploy/.env.vps-nuevo`** completo, con `chmod 600`: `VPS_HOST` (la IP nueva), `VPS_USER`,
   `VPS_SSH_PORT`, `API_SCHEME=https`, `API_HOSTNAME=<dominio-nuevo>` y `API_PORT=8080`. El resto del
   `.env` del servidor (secretos nuevos, `Licencia__Habilitado=false`, rutas del certificado) lo genera
@@ -98,12 +100,14 @@ Preparar no toca el VPS viejo. Primera corrida:
 STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/preparar-vps-nuevo.sh --version 0.5.3
 ```
 
-Esperado: exit 0 y `preparar: el VPS quedó listo.`, con cada uno de los 10 pasos en `OK`. Después de
+Esperado: exit 0 y `preparar: el VPS quedó listo.`, con los pasos 1 a 8 y el 10 en `OK`; sin
+`--probar-renovacion`, el paso 9 sale `OMITIDO`. Después de
 la salida hay una lista de lo que queda **pendiente para vos**: los overrides, la renovación del
 certificado y el `Setup.exe`. Si falla un paso, mirá la tabla de códigos de la sección 6 y re-corré: lo
 hecho queda hecho.
 
-Segunda corrida, para comprobar la idempotencia (todo tiene que dar `YA ESTABA`):
+Segunda corrida, para comprobar la idempotencia (los pasos 1 a 8 tienen que dar `YA ESTABA`,
+el paso 10 da `OK` y el paso 9 sigue `OMITIDO`):
 
 ```bash
 STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/preparar-vps-nuevo.sh --version 0.5.3
@@ -176,8 +180,12 @@ Verificá cada override sin imprimir su valor (en el VPS nuevo):
 sudo grep -c '^<NOMBRE-DEL-OVERRIDE>=' /etc/stockapp-api/api.env
 ```
 
-Esperado: `1`. Después repetí el `--ensayo` hasta que no liste overrides faltantes: el pre-vuelo del
-corte sale 3 si falta alguno.
+Esperado: `1`. No hace falta repetir el `--ensayo` para comprobarlo: el pre-vuelo (el del `--ensayo` y el
+del corte) lee los nombres de `/etc/stockapp-api/api.env` además de los del `.env`, nunca los valores, y
+sale 3 si algún override del viejo falta en el `.env` o está en el `.env` pero no en el `api.env` (pide
+reinstalar con el comando de arriba). Si una de las dos claves que preparar ya escribe
+(`Licencia__Habilitado`, `RateLimiting__Login__PermitLimit`) figura entre los overrides, no le pongas el
+valor del viejo: los valores fijos de preparar no se tocan.
 
 **4.3. Tiempos.** Pegá la tabla del resumen en la sección 10. El corte real usa esos tiempos para
 dimensionar la ventana.
@@ -199,9 +207,15 @@ deploy/migrar-vps.sh --revertir
 
 El primero pide `CONGELAR`; el segundo, `REVERTIR`. Es el mismo código del día D: el viejo queda sin API
 (congelado) mientras dura el corte. Esperado: el corte termina en GO técnico y `--revertir` deja el
-viejo `active`, con los mismos contenedores que antes, y el nuevo detenido. Después comprobá el nuevo con
-`--verificar` (sección 6, "Después de un `--revertir`"). El paso 11 de un corte posterior vuelve a habilitar
-y arrancar la API nueva.
+viejo `active`, con los mismos contenedores que antes, y el nuevo detenido y deshabilitado. **Antes de
+reintentar** el corte (o un `--ensayo`) hay que levantar la API nueva, porque es la que sirve el feed y el
+pre-vuelo lo exige:
+
+```bash
+STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/deploy-vps.sh 0.5.3 --sin-backup
+```
+
+Después comprobá el nuevo con `preparar-vps-nuevo.sh --verificar` (sección 6, "Después de un `--revertir`").
 
 **Qué mirar la primera vez** (lo que los fakes del arnés local no pueden probar; spec 8.3). Es la primera
 vez que estos scripts hablan con servidores reales:
@@ -217,6 +231,17 @@ vez que estos scripts hablan con servidores reales:
 - [ ] El texto real de certbot sin email: la primera emisión no puede quedar esperando un dato por teclado.
 - [ ] El `docker ps` real del VPS compartido: V10 (viejo `masked`/`inactive` e `IGUAL`) compara los
   contenedores de la otra app también, y el arnés usa un `docker` de mentira.
+- [ ] Un banner o aviso que ssh escriba en el stderr del VPS viejo (MOTD, "Warning: Permanently added...")
+  puede hacer que el `test -e` del pre-vuelo dé 8 y bloquee todo; si pasa, es el banner, no la unit.
+- [ ] La rama de terminal de la confirmación: `CONGELAR` se lee de `/dev/tty`, y los fakes del arnés la
+  reemplazan por stdin. La primera vez real es la que la ejercita; probala con el ensayo del corte (4.5).
+- [ ] El reinstalar los overrides (4.2): `deploy-vps.sh 0.5.3 --sin-backup` contra el nuevo,
+  con los datos del ensayo ya cargados, termina bien y el pre-vuelo pasa a ver los overrides en `api.env`. Nadie lo
+  corrió contra un servidor real.
+- [ ] Lo mismo después de un `--revertir`: el `deploy-vps.sh` que levanta la API nueva (enable + restart de
+  `install.sh`) y un `preparar --verificar` posterior con exit 0.
+- [ ] Desde tu máquina, **sin `-k`**: `curl -fsS https://<dominio-nuevo>:8080/` responde con el certificado
+  válido para el dominio nuevo, y `ufw status` en el VPS nuevo muestra las tres reglas (SSH, 80 y 8080).
 
 ## 5. Día D
 
@@ -249,6 +274,10 @@ deploy/migrar-vps.sh
    barato**: hasta ahí `--revertir` es limpio; después, lo único que queda es R-B (sección 7).
 6. **Anotá las fechas** que imprimió el resumen: corte `____-__-__`, fin del rollback `____-__-__`
    (D + 14 días).
+
+Entre el congelamiento y el final del paso 11, **no renueves certificados ni reinicies el VPS nuevo**: el
+hook de TLS reinicia `stockapp-api`, y un reboot la arranca; con la base a medio restaurar, la API
+escribiría sobre ella.
 
 Si en el log ves `AVISO: fecha_utc ... dentro de la tolerancia de 300 s`, el reloj de tu máquina saltó
 hacia atrás durante el volcado. Se acepta hasta 300 s y no es un error.
@@ -306,17 +335,25 @@ repitas un comando a ciegas, y guardá esa salida junto con el `registro.log` de
 - **VPS nuevo inalcanzable.** `--revertir` sale 8 sin tocar el viejo, porque no puede garantizar que la
   API nueva esté detenida (con dos APIs vivas, lo escrito en la nueva se perdería). Apagá el VPS nuevo
   **desde el panel del proveedor** y devolvé el viejo con los comandos de abajo.
-- **Después de un `--revertir`, para comprobar que el nuevo sigue preparado**, usá `--verificar`, no
-  `preparar` completo:
+- **Después de un `--revertir`, antes de reintentar.** El `--revertir` deja la API nueva **detenida y
+  deshabilitada**, y es esa API la que sirve el feed. Por eso, sin hacer nada más, `preparar-vps-nuevo.sh
+  --verificar` sale 5 (paso 8 PENDIENTE: el feed no responde) y el pre-vuelo del corte siguiente aborta 3
+  nombrando el feed, antes de pedir ninguna confirmación. Nada la vuelve a levantar solo (el `preparar`
+  completo no vuelve a desplegar si la unit existe). Se levanta con un deploy, que reinstala la misma
+  versión sin tocar la base (`install.sh` hace `enable` y `restart`):
+
+```bash
+STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/deploy-vps.sh 0.5.3 --sin-backup
+```
+
+  Recién entonces comprobá que el nuevo está listo, con `--verificar` (solo lectura):
 
 ```bash
 STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/preparar-vps-nuevo.sh --version 0.5.3 --verificar
 ```
 
-  Esperado: exit 0. La API nueva quedó **detenida y deshabilitada** a propósito, así que el paso 10 informa
-  `FALLÓ` (la API no responde): en `--verificar` es solo informativo y no cambia el exit. `preparar`
-  completo, en cambio, sale con 5 en ese mismo paso 10, y aflojar la verificación la debilitaría. El paso
-  11 de un corte posterior la vuelve a habilitar.
+  Esperado: exit 0, los pasos 1 a 8 en `HECHO`. Solo en el ensayo previo al día D: ese deploy es seguro
+  porque el nuevo todavía no es producción.
 - **A mano**, solo si `--revertir` no puede correr (por ejemplo, tu máquina murió a mitad del corte). Son los
   comandos que el corte imprime antes de la confirmación, en este orden, en el VPS **viejo** (y antes,
   `sudo systemctl stop stockapp-api` en el nuevo):

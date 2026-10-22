@@ -445,6 +445,11 @@ public class MigracionVpsSincroniaTests
     [InlineData("systemctl unmask stockapp-api")]                     // R-A a mano, si --revertir no puede correr
     [InlineData("stockapp-api.service.congelado")]
     [InlineData("stockapp-ufw-reversa")]                              // firewall: reversa automática
+    [InlineData("no renueves certificados ni reinicies el VPS nuevo")]   // M2: el hook de TLS hace restart
+    [InlineData("gana el entorno")]                                   // M1: en migrar-vps.sh el entorno gana sobre el .env
+    [InlineData("el paso 9 sale `OMITIDO`")]                          // M4: sin --probar-renovacion
+    [InlineData("el paso 10 da `OK`")]                                // M4: en la re-corrida
+    [InlineData("lee los nombres de `/etc/stockapp-api/api.env`")]    // R57: el pre-vuelo verifica los overrides en api.env
     public void Runbook_ReflejaLosHallazgosDeLasReviews(string fragmento)
     {
         Assert.Contains(fragmento, Texto(Runbook));
@@ -461,6 +466,12 @@ public class MigracionVpsSincroniaTests
     [InlineData("SHA256")]                 // el feed de Velopack
     [InlineData("sin email")]              // el texto real de certbot
     [InlineData("docker ps")]              // el del VPS compartido, real
+    [InlineData("banner")]                 // test -e con un banner en el stderr de ssh da 8 (T8)
+    [InlineData("/dev/tty")]               // la rama de terminal de CONGELAR (T2)
+    [InlineData("reinstal")]               // los overrides llegan a api.env solo con install.sh (R57)
+    [InlineData("sin `-k`")]               // curl al dominio nuevo valida el certificado (8.3.1)
+    [InlineData("ufw status")]             // las tres reglas (8.3.1)
+    [InlineData("con los datos del ensayo")]  // deploy-vps.sh --sin-backup contra el nuevo, sin correrlo antes contra uno real
     public void Runbook_Ensayo_ListaLoQueLosFakesNoCubren(string fragmento)
     {
         var s4 = Seccion(Texto(Runbook), 4);
@@ -580,18 +591,48 @@ public class MigracionVpsSincroniaTests
         Assert.DoesNotMatch(@"(?m)^\s*rm\s", s9);                 // nada de rm copiable en el cierre
     }
 
-    /// <summary>R47 y R46: qué se hace después de un --revertir, y qué cuando el VPS nuevo no contesta.</summary>
+    /// <summary>
+    /// R56 y R46: tras un --revertir la API nueva queda detenida y deshabilitada, y ella sirve el feed.
+    /// Antes de reintentar hay que levantarla con deploy-vps.sh (install.sh hace enable y restart);
+    /// recién entonces preparar --verificar sale 0. Sin eso, --verificar sale 5 y el pre-vuelo del corte
+    /// aborta 3 nombrando el feed. Y qué se hace cuando el VPS nuevo no contesta.
+    /// </summary>
     [Fact]
-    public void Runbook_RevertirExplicaLaVerificacionPosteriorYElNuevoInalcanzable()
+    public void Runbook_RevertirExplicaComoLevantarElNuevoAntesDeReintentar()
     {
         var s6 = Seccion(Texto(Runbook), 6);
+        const string deploy = "STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/deploy-vps.sh 0.5.3 --sin-backup";
+        const string verificar = "STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/preparar-vps-nuevo.sh --version 0.5.3 --verificar";
 
         Assert.Contains("deploy/migrar-vps.sh --revertir", s6);
         Assert.Contains("REVERTIR", s6);
-        Assert.Contains("STOCKAPP_ENV_LOCAL=deploy/.env.vps-nuevo deploy/preparar-vps-nuevo.sh --version 0.5.3 --verificar", s6);
-        Assert.Matches(@"(?is)paso 10.{0,400}sale (con )?5|sale (con )?5.{0,400}paso 10", s6);
+        Assert.Contains(deploy, s6);
+        Assert.Contains(verificar, s6);
+        Assert.True(s6.IndexOf(deploy, StringComparison.Ordinal) < s6.IndexOf(verificar, StringComparison.Ordinal),
+            "el deploy que levanta la API nueva va ANTES de preparar --verificar.");
+        Assert.Matches(@"(?is)sale 5.{0,400}paso 8|paso 8.{0,400}sale 5", s6);
+        Assert.Matches(@"(?is)feed", s6);
+        Assert.Matches(@"(?is)sale 3.{0,300}feed|feed.{0,300}sale 3|aborta 3.{0,300}feed|feed.{0,300}aborta 3", s6);
+        // Ya no se promete que el corte posterior habilita la API nueva: su pre-vuelo aborta antes.
+        Assert.DoesNotMatch(@"(?is)paso 11 de un corte posterior", Texto(Runbook));
         Assert.Contains("desde el panel del proveedor", s6);
         Assert.Contains("R-B", s6);
+    }
+
+    [Fact]
+    public void Runbook_Ensayo_DespuesDelRevertirLevantaLaApiNuevaConDeployVps()
+    {
+        var s4 = Seccion(Texto(Runbook), 4);
+
+        Assert.Matches(@"(?is)deploy/migrar-vps\.sh --revertir.{0,1800}deploy/deploy-vps\.sh 0\.5\.3 --sin-backup", s4);
+    }
+
+    [Fact]
+    public void Runbook_DiaD_NoRenovarNiReiniciarElNuevoDuranteElCorte()
+    {
+        var s5 = Seccion(Texto(Runbook), 5);
+
+        Assert.Contains("no renueves certificados ni reinicies el VPS nuevo", s5);
     }
 
     /// <summary>
@@ -643,19 +684,38 @@ public class MigracionVpsSincroniaTests
         Assert.Contains("VPS_ADMIN_USER", texto);
         Assert.Contains("VPS_ADMIN_PASSWORD", texto);
         Assert.Contains("GestionarDiagnostico", texto);
+        // M1: en migrar-vps.sh gana el entorno; "pisa" el .env solo en bajar-backup-vps.sh.
+        Assert.Contains("migrar-vps.sh: gana el entorno", texto);
     }
 
+    /// <summary>
+    /// El runbook nuevo no copia comandos con la contraseña (login de V5 y V8 ahora son código): lo que
+    /// custodia es que NINGÚN bloque de código la traiga, ni por argv ni como asignación, y que las
+    /// frases de los comandos manuales viejos sigan afuera.
+    /// </summary>
     [Fact]
-    public void Runbook_NoPasaLaContrasenaPorArgvNiRestauraDelDirectorioDeE2()
+    public void Runbook_NoPasaLaContrasenaPorArgvNiLaPoneEnBloquesDeCodigo()
     {
         var texto = Texto(Runbook);
+        var enBloque = false;
+        foreach (var linea in texto.Split('\n'))
+        {
+            if (linea.TrimStart().StartsWith("```", StringComparison.Ordinal))
+            {
+                enBloque = !enBloque;
+                continue;
+            }
 
-        Assert.DoesNotContain("--arg p ", texto);
+            if (!enBloque) continue;
+            Assert.DoesNotContain("PASSWORD", linea, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("contrasena", linea, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("--arg p ", linea);
+        }
+
         Assert.DoesNotContain("rm -r ~/stockapp-backups-vps/migracion-<fecha>/volcado", texto);
         Assert.DoesNotMatch(@"rm [^\n]*volcado-<ts>", texto);
         Assert.DoesNotContain("ensayo-e2/", texto);
         Assert.DoesNotContain("migracion/volcado-<ts>", texto);
-        Assert.DoesNotContain("CorridasBackup` puede crecer", texto);
     }
 
     [Fact]
