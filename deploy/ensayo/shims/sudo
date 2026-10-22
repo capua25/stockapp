@@ -6,6 +6,13 @@
 # Descarta -n. 'sudo systemctl ...' va al systemctl falso de este directorio; cualquier otro
 # comando (mv, test, tar, sed sobre la raíz del VPS viejo simulado) corre tal cual, con el
 # usuario de quien ensaya: lo que el ensayo no puede hacer sin privilegios, no lo hace.
+#
+# Rastro (dos hosts, con ENSAYO_TRABAJO): cada comando, antes de correrlo, se agrega a
+# <trabajo>/sudo.rastro como "<host> <comando>", con el host del ENSAYO_ESTADO que puso el ssh
+# falso. Un solo archivo para los dos hosts: así un test ve el ORDEN entre hosts (la API nueva
+# detenida antes de tocar el viejo) y dentro de cada uno (unmask < mv < daemon-reload < start). El
+# sudo real no deja este rastro (el journal de sudo no es algo que un test pueda leer); es solo
+# del arnés y no cambia lo que corre. Sin ENSAYO_TRABAJO (el ensayo E1) no escribe nada.
 # =======================================================================================
 
 set -euo pipefail
@@ -16,6 +23,13 @@ done
 if [[ $# -eq 0 ]]; then
     echo "ensayo: sudo sin comando" >&2
     exit 1
+fi
+
+if [[ -n "${ENSAYO_TRABAJO:-}" ]]; then
+    host="${ENSAYO_ESTADO:-}"
+    host="${host%/estado}"
+    host="${host##*/}"
+    printf '%s %s\n' "${host:-local}" "$*" >> "${ENSAYO_TRABAJO}/sudo.rastro"
 fi
 
 DIR_SHIMS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -1139,6 +1139,596 @@ public class EnsayoLocalTests : IDisposable
     }
 
     /// <summary>
+    /// Con dos hosts, el sudo falso deja un rastro ordenado de lo que corre como root en cada host
+    /// simulado (&lt;trabajo&gt;/sudo.rastro, "&lt;host&gt; &lt;comando&gt;"): es lo que permite
+    /// afirmar el ORDEN de la vuelta atrás en el viejo y que el nuevo se detuvo antes. Sin
+    /// ENSAYO_TRABAJO (el ensayo E1) no escribe nada.
+    /// </summary>
+    [Fact]
+    public void ShimSudo_ConDosHosts_DejaRastroOrdenadoPorHost()
+    {
+        var trabajo = DosHosts();
+        string Ssh(string host, string comando) =>
+            $"\"{Shim("ssh")}\" -p 22 -o BatchMode=yes ensayo@{host} '{comando}' || exit 11\n";
+
+        var r = Bash($"export ENSAYO_TRABAJO=\"{trabajo}\"\n" +
+            Ssh(HostNuevo, "sudo -n true") +
+            Ssh(HostViejo, "sudo -n systemctl is-active stockapp-api") +
+            Ssh(HostViejo, "sudo -n true"));
+
+        Assert.True(r.ExitCode == 0, Diag(r));
+        Assert.Equal(new[]
+        {
+            $"{HostNuevo} true",
+            $"{HostViejo} systemctl is-active stockapp-api",
+            $"{HostViejo} true",
+        }, File.ReadAllLines(Path.Combine(trabajo, "sudo.rastro")));
+
+        var (estado, raiz) = VpsViejoSimulado();
+        var e1 = Bash(EnvShims(estado, raiz) + $"\"{Shim("sudo")}\" -n true");
+        Assert.True(e1.ExitCode == 0, Diag(e1));
+        Assert.DoesNotContain(Directory.EnumerateFiles(Path.GetDirectoryName(estado)!, "*", SearchOption.AllDirectories),
+            f => f.EndsWith("sudo.rastro"));
+    }
+
+    // ---------- Punta a punta de migrar-vps.sh sobre el arnés (spec §8.2) ----------
+    //
+    // Cada test arma su propio arnés (preparar-migracion: dos Postgres y dos APIs reales), corre
+    // migrar-vps.sh REAL en sus modos y compara DATOS de las dos bases, no solo códigos de salida.
+    // Al final: limpiar, docker ps igual al del principio, ninguna API del arnés viva y el HOME del
+    // test vacío. El finally mata por PID exacto lo que quede y borra por nombre exacto.
+
+    /// <summary>
+    /// Un arnés de dos hosts. Bin va al frente del PATH con un docker del test que envuelve al real:
+    /// corta todo comando que nombre stockapp-pg (el contenedor de desarrollo) y lo anota; y, si el
+    /// test crea Bin/truncar-traida, entrega truncada UNA vez la traída del volcado del viejo (un
+    /// fallo de transferencia real, después del stop: volcado-final-vps.sh sale con 4).
+    /// </summary>
+    private sealed record Arnes(string Trabajo, string Sufijo, string Home, string Bin, string[] PsAntes)
+    {
+        public string Viejo => $"stockapp-ensayo-origen-pg-{Sufijo}";
+        public string Nuevo => $"stockapp-ensayo-pg-{Sufijo}";
+        public string Corridas => Path.Combine(Trabajo, "operador", "stockapp-backups-vps", "corridas");
+        public string BackupsOperador => Path.Combine(Trabajo, "operador", "stockapp-backups-vps");
+        public string Raiz(string host) => Path.Combine(DirHost(Trabajo, host), "raiz");
+        public string Estado(string host) => Path.Combine(DirHost(Trabajo, host), "estado");
+        public string Migracion => Path.Combine(DirHost(Trabajo, HostNuevo), "home", "stockapp-deploy", "migracion");
+    }
+
+    private Arnes NuevoArnes()
+    {
+        var sufijo = Guid.NewGuid().ToString("N")[..8];
+        var a = new Arnes(Path.Combine(DirectorioNuevo("ensayo-e2e-"), "trabajo"), sufijo,
+            DirectorioNuevo("ensayo-e2e-home-"), DirectorioNuevo("ensayo-e2e-bin-"),
+            Lineas("docker ps --format '{{.Names}}'"));
+        var docker = Bash("command -v docker").Stdout.Trim();
+        Assert.StartsWith("/", docker);
+        BashLimpio.EscribirEjecutable(Path.Combine(a.Bin, "docker"),
+            "#!/usr/bin/env bash\n" +
+            "for a in \"$@\"; do\n" +
+            "  if [[ \"$a\" == stockapp-pg ]]; then\n" +
+            $"    printf '%s\\n' \"$*\" >> \"{a.Bin}/toco-stockapp-pg\"\n" +
+            "    echo 'docker del test: stockapp-pg es el contenedor de desarrollo' >&2\n" +
+            "    exit 97\n" +
+            "  fi\n" +
+            "done\n" +
+            $"if [[ \"$1\" == exec && \"$2\" == {a.Viejo} && \"$3\" == cat ]] && mv \"{a.Bin}/truncar-traida\" \"{a.Bin}/traida-truncada\" 2>/dev/null; then\n" +
+            $"  \"{docker}\" \"$@\" | head -c 2048\n" +
+            "  exit 0\n" +
+            "fi\n" +
+            $"exec \"{docker}\" \"$@\"\n");
+        return a;
+    }
+
+    private static void Preparar(Arnes a)
+    {
+        var r = BashLimpio.Ejecutar($"export NUGET_PACKAGES=\"{CacheNuget}\" PATH=\"{a.Bin}:$PATH\"\n" +
+            $"\"{Script}\" preparar-migracion --trabajo \"{a.Trabajo}\" --sufijo {a.Sufijo} " +
+            $"--puerto-viejo {PuertoLibre()} --puerto-nuevo {PuertoLibre()}", a.Home);
+        Assert.True(r.ExitCode == 0, "preparar-migracion: " + Diag(r));
+    }
+
+    /// <summary>
+    /// ensayo-local.sh migrar con la palabra (o las respuestas) por stdin y, si hace falta, una
+    /// variable del arnés en el entorno de ese único comando.
+    /// </summary>
+    private static (int ExitCode, string Stdout, string Stderr) Migrar(Arnes a, string args, string stdin = "", string entorno = "") =>
+        BashLimpio.Ejecutar($"export PATH=\"{a.Bin}:$PATH\"\n" +
+            $"printf '%s' '{stdin}' | {entorno}\"{Script}\" migrar --trabajo \"{a.Trabajo}\" -- {args}", a.Home);
+
+    private static string Psql(string contenedor, string sql)
+    {
+        Assert.StartsWith("stockapp-ensayo-", contenedor);
+        var r = Bash($"docker exec -i {contenedor} psql -U stockapp -d stockapp -AtX -v ON_ERROR_STOP=1 <<'SQL'\n{sql}\nSQL");
+        Assert.True(r.ExitCode == 0, $"psql en {contenedor}: " + Diag(r));
+        return r.Stdout.Trim();
+    }
+
+    /// <summary>Filas de cada tabla de public, contadas de verdad (count(*), no estadísticas).</summary>
+    private static Dictionary<string, long> Conteos(string contenedor) =>
+        Psql(contenedor,
+                "SELECT t || '=' || (xpath('/row/c/text()', query_to_xml(format('SELECT count(*) AS c FROM public.%I', t), false, true, '')))[1]::text " +
+                "FROM (SELECT table_name::text AS t FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE') s ORDER BY t;")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(l => l.Split('='))
+            .ToDictionary(p => p[0], p => long.Parse(p[1]));
+
+    /// <summary>Huella del contenido completo de "Categorias" (cada fila, en orden de Id).</summary>
+    private static string HuellaCategorias(string contenedor) =>
+        Psql(contenedor, "SELECT md5(coalesce(string_agg(format('%s|%s|%s', \"Id\", \"Nombre\", \"Activo\"), E'\\n' ORDER BY \"Id\"), '')) FROM \"Categorias\";");
+
+    /// <summary>Un registro concreto que solo existe en la base donde el test lo escribió.</summary>
+    private static string Marcar(string contenedor, string nombre) =>
+        Psql(contenedor, $"INSERT INTO \"Categorias\" (\"Nombre\") VALUES ('{nombre}') RETURNING format('%s|%s|%s', \"Id\", \"Nombre\", \"Activo\");");
+
+    private static string FilaDe(string contenedor, string nombre) =>
+        Psql(contenedor, $"SELECT format('%s|%s|%s', \"Id\", \"Nombre\", \"Activo\") FROM \"Categorias\" WHERE \"Nombre\" = '{nombre}';");
+
+    /// <summary>
+    /// Las dos bases con los mismos datos: el mismo conjunto de tablas, la misma cantidad de filas en
+    /// cada una (LogsAuditoria y CorridasBackup del nuevo pueden haber crecido con la verificación:
+    /// V8 hace un backup), el mismo contenido de Categorias y el registro concreto del test en las dos.
+    /// </summary>
+    private static void AfirmarMismosDatos(Arnes a, string marca, string contexto)
+    {
+        var viejo = Conteos(a.Viejo);
+        var nuevo = Conteos(a.Nuevo);
+        Assert.True(viejo["Usuarios"] >= 1 && viejo["Categorias"] >= 1 && viejo["CorridasBackup"] >= 1,
+            $"{contexto}: el viejo no tiene los datos que el arnés siembra");
+        Assert.Equal(viejo.Keys.Order(), nuevo.Keys.Order());
+        foreach (var (tabla, n) in viejo)
+        {
+            if (tabla is "LogsAuditoria" or "CorridasBackup")
+                Assert.True(nuevo[tabla] >= n, $"{contexto}: \"{tabla}\" tiene {n} filas en el viejo y {nuevo[tabla]} en el nuevo");
+            else
+                Assert.True(nuevo[tabla] == n, $"{contexto}: \"{tabla}\" tiene {n} filas en el viejo y {nuevo[tabla]} en el nuevo");
+        }
+        Assert.Equal(HuellaCategorias(a.Viejo), HuellaCategorias(a.Nuevo));
+        var fila = FilaDe(a.Viejo, marca);
+        Assert.Matches($@"^\d+\|{marca}\|t$", fila);
+        Assert.True(FilaDe(a.Nuevo, marca) == fila, $"{contexto}: el registro '{marca}' del viejo ({fila}) no está igual en el nuevo");
+    }
+
+    private static string Corrida(Arnes a, string modo)
+    {
+        var dirs = Directory.GetDirectories(a.Corridas, modo + "-*");
+        Assert.True(dirs.Length == 1, $"se esperaba una corrida {modo}-* en {a.Corridas}: {string.Join(", ", dirs)}");
+        return dirs[0];
+    }
+
+    private static string? Clave(string corrida, string clave) =>
+        File.ReadAllLines(Path.Combine(corrida, "estado"))
+            .Where(l => l.StartsWith(clave + "="))
+            .Select(l => l[(clave.Length + 1)..])
+            .LastOrDefault();
+
+    private static string Leer(string archivo) => File.ReadAllText(archivo).Trim();
+
+    private static int Puerto(Arnes a, string host) =>
+        int.Parse(File.ReadAllLines(Path.Combine(a.Trabajo, "config"))
+            .Single(l => l.StartsWith(host == HostViejo ? "PUERTO_VIEJO=" : "PUERTO_NUEVO="))
+            .Split('=')[1]);
+
+    private static string UnitDe(Arnes a, string host) =>
+        Path.Combine(a.Raiz(host), "etc", "systemd", "system", "stockapp-api.service");
+
+    /// <summary>El viejo congelado: inactive, enmascarado (symlink a /dev/null), la unit en .congelado y sin atender.</summary>
+    private static void AfirmarViejoCongelado(Arnes a)
+    {
+        Assert.Equal("inactive", Leer(Path.Combine(a.Estado(HostViejo), "stockapp-api.activo")));
+        Assert.Equal("masked", Leer(Path.Combine(a.Estado(HostViejo), "stockapp-api.habilitado")));
+        Assert.Equal("/dev/null", new FileInfo(UnitDe(a, HostViejo)).LinkTarget);
+        Assert.True(File.Exists(UnitDe(a, HostViejo) + ".congelado"), "la unit del viejo no está en .congelado");
+        Assert.False(PuertoAtiende(Puerto(a, HostViejo)), "la API vieja sigue atendiendo");
+    }
+
+    /// <summary>El viejo sirviendo como antes: active, enabled, la unit como archivo regular y GET / OK.</summary>
+    private static void AfirmarViejoSirviendo(Arnes a)
+    {
+        Assert.Equal("active", Leer(Path.Combine(a.Estado(HostViejo), "stockapp-api.activo")));
+        Assert.Equal("enabled", Leer(Path.Combine(a.Estado(HostViejo), "stockapp-api.habilitado")));
+        Assert.Null(new FileInfo(UnitDe(a, HostViejo)).LinkTarget);
+        Assert.False(File.Exists(UnitDe(a, HostViejo) + ".congelado"), "quedó un .congelado en el viejo");
+        Assert.True(PuertoAtiende(Puerto(a, HostViejo)), "la API vieja no atiende");
+    }
+
+    /// <summary>El rastro del sudo falso (ShimSudo_ConDosHosts_DejaRastroOrdenadoPorHost).</summary>
+    private static string[] RastroSudo(Arnes a)
+    {
+        var archivo = Path.Combine(a.Trabajo, "sudo.rastro");
+        return File.Exists(archivo) ? File.ReadAllLines(archivo) : [];
+    }
+
+    /// <summary>PIDs de toda API publicada de ESTE arnés que siga viva (también las de arranques anteriores).</summary>
+    private static int[] ApisVivas(Arnes a)
+    {
+        var dll = $"{a.Trabajo}/api/StockApp.Api.dll";
+        var r = Bash("ps -eo pid=,args=");
+        Assert.True(r.ExitCode == 0, Diag(r));
+        return r.Stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(l => l.Trim())
+            .Where(l => l.Contains(dll))
+            .Select(l => int.Parse(l.Split(' ', 2)[0]))
+            .ToArray();
+    }
+
+    /// <summary>limpiar, y la máquina como estaba: docker ps igual, ninguna API viva, nada del sufijo, HOME del test vacío.</summary>
+    private static void AfirmarTerminaLimpio(Arnes a)
+    {
+        var limpiar = BashLimpio.Ejecutar($"export PATH=\"{a.Bin}:$PATH\"\n\"{Script}\" limpiar --trabajo \"{a.Trabajo}\"", a.Home);
+        Assert.True(limpiar.ExitCode == 0, "limpiar: " + Diag(limpiar));
+        Assert.Empty(ApisVivas(a));
+        Assert.Equal(a.PsAntes, Lineas("docker ps --format '{{.Names}}'"));
+        Assert.DoesNotContain(TodosLosContenedores(), n => n.EndsWith("-" + a.Sufijo));
+        Assert.DoesNotContain(Lineas("docker volume ls --format '{{.Name}}'"), n => n.EndsWith("_" + a.Sufijo));
+        Assert.False(File.Exists(Path.Combine(a.Bin, "toco-stockapp-pg")),
+            "algo nombró stockapp-pg: " + (File.Exists(Path.Combine(a.Bin, "toco-stockapp-pg")) ? File.ReadAllText(Path.Combine(a.Bin, "toco-stockapp-pg")) : ""));
+        Assert.Empty(Directory.EnumerateFileSystemEntries(a.Home));
+    }
+
+    /// <summary>Pase lo que pase: las APIs del arnés por PID exacto (su grupo: PID == PGID), limpiar y los nombres exactos.</summary>
+    private static void LimpiarDeRespaldo(Arnes a)
+    {
+        foreach (var p in ApisVivas(a))
+            Bash($"kill -KILL -- -{p} 2>/dev/null || kill -KILL {p}");
+        MatarApisDeRespaldo(a.Trabajo);
+        if (File.Exists(Path.Combine(a.Trabajo, "config")))
+            BashLimpio.Ejecutar($"\"{Script}\" limpiar --trabajo \"{a.Trabajo}\"", a.Home);
+        Bash($"docker rm -f -v {a.Nuevo} {a.Viejo} 2>/dev/null; " +
+             $"docker volume rm stockapp_ensayo_origen_pgdata_{a.Sufijo} stockapp_ensayo_pgdata_{a.Sufijo} 2>/dev/null; true");
+    }
+
+    /// <summary>--ensayo: GO, el nuevo con los datos del viejo y el viejo sirviendo exactamente como antes.</summary>
+    [Fact]
+    public void Migrar_Ensayo_Go_ViejoActive()
+    {
+        var a = NuevoArnes();
+        try
+        {
+            Preparar(a);
+            var marca = "marca" + a.Sufijo;
+            Marcar(a.Viejo, marca);
+
+            var r = Migrar(a, "--ensayo");
+
+            Assert.True(r.ExitCode == 0, "--ensayo: " + Diag(r));
+            Assert.Equal("GO", Clave(Corrida(a, "ensayo"), "resultado"));
+            AfirmarMismosDatos(a, marca, "después del ensayo");
+            AfirmarViejoSirviendo(a);
+            Assert.True(PuertoAtiende(Puerto(a, HostNuevo)), "la API nueva no quedó arriba");
+            AfirmarTerminaLimpio(a);
+        }
+        finally
+        {
+            LimpiarDeRespaldo(a);
+        }
+    }
+
+    /// <summary>
+    /// El corte con CONGELAR: GO, el viejo congelado (masked) y el nuevo con TODOS los datos del
+    /// viejo, incluido un registro escrito justo antes. Los datos se comparan ANTES que el código de
+    /// salida: un corte que no restaura tiene que fallar por los datos, no solo por una V.
+    /// </summary>
+    [Fact]
+    public void Migrar_Corte_Go_ViejoMasked()
+    {
+        var a = NuevoArnes();
+        try
+        {
+            Preparar(a);
+            var marca = "marca" + a.Sufijo;
+            Marcar(a.Viejo, marca);
+
+            var r = Migrar(a, "", "CONGELAR\n");
+
+            AfirmarMismosDatos(a, marca, $"después del corte (exit={r.ExitCode})");
+            Assert.True(r.ExitCode == 0, "corte: " + Diag(r));
+            var corte = Corrida(a, "corte");
+            Assert.Equal("GO", Clave(corte, "resultado"));
+            Assert.NotNull(Clave(corte, "congelado_utc"));
+            AfirmarViejoCongelado(a);
+            Assert.True(PuertoAtiende(Puerto(a, HostNuevo)), "la API nueva no quedó arriba");
+            AfirmarTerminaLimpio(a);
+        }
+        finally
+        {
+            LimpiarDeRespaldo(a);
+        }
+    }
+
+    /// <summary>
+    /// --revertir después de un corte GO: el viejo vuelve a servir con sus datos intactos, el nuevo
+    /// queda detenido y deshabilitado, y la corrida del corte cierra REVERTIDO. Con el shim fiel, un
+    /// --revertir que no devuelve la unit a su lugar falla el start con 5.
+    /// </summary>
+    [Fact]
+    public void Migrar_RevertirTrasCorte_ViejoActiveNuevoInactive()
+    {
+        var a = NuevoArnes();
+        try
+        {
+            Preparar(a);
+            var marca = "marca" + a.Sufijo;
+            Marcar(a.Viejo, marca);
+            var conteosViejo = Conteos(a.Viejo);
+            var huellaViejo = HuellaCategorias(a.Viejo);
+            var corte = Migrar(a, "", "CONGELAR\n");
+            Assert.True(corte.ExitCode == 0, "corte: " + Diag(corte));
+            AfirmarViejoCongelado(a);
+
+            var r = Migrar(a, "--revertir", "REVERTIR\n");
+
+            Assert.True(r.ExitCode == 0, "--revertir: " + Diag(r));
+            AfirmarViejoSirviendo(a);
+            Assert.Equal("inactive", Leer(Path.Combine(a.Estado(HostNuevo), "stockapp-api.activo")));
+            Assert.Equal("disabled", Leer(Path.Combine(a.Estado(HostNuevo), "stockapp-api.habilitado")));
+            Assert.False(PuertoAtiende(Puerto(a, HostNuevo)), "la API nueva sigue atendiendo");
+            Assert.Equal("REVERTIDO", Clave(Corrida(a, "corte"), "resultado"));
+            Assert.Equal("GO", Clave(Corrida(a, "corte"), "resultado_previo"));
+            Assert.Equal("REVERTIDO", Clave(Corrida(a, "revertir"), "resultado"));
+            // El viejo vuelve con lo que tenía: nada se perdió ni se agregó en la ida y vuelta.
+            Assert.Equal(conteosViejo, Conteos(a.Viejo));
+            Assert.Equal(huellaViejo, HuellaCategorias(a.Viejo));
+            Assert.Matches($@"^\d+\|{marca}\|t$", FilaDe(a.Viejo, marca));
+            AfirmarTerminaLimpio(a);
+        }
+        finally
+        {
+            LimpiarDeRespaldo(a);
+        }
+    }
+
+    /// <summary>
+    /// El --revertir REAL tras un corte, mirado en el rastro del sudo falso: la API nueva se detiene
+    /// antes de tocar el viejo, y en el viejo el orden es unmask &lt; mv del .congelado a su lugar &lt;
+    /// daemon-reload &lt; start, una vez cada uno. Al final el viejo queda active.
+    /// </summary>
+    [Fact]
+    public void Revertir_OrdenEnElViejo_UnmaskMvReloadStart()
+    {
+        var a = NuevoArnes();
+        try
+        {
+            Preparar(a);
+            var corte = Migrar(a, "", "CONGELAR\n");
+            Assert.True(corte.ExitCode == 0, "corte: " + Diag(corte));
+            var desde = RastroSudo(a).Length;
+
+            var r = Migrar(a, "--revertir", "REVERTIR\n");
+
+            Assert.True(r.ExitCode == 0, "--revertir: " + Diag(r));
+            var rastro = RastroSudo(a).Skip(desde).ToList();
+            var unit = UnitDe(a, HostViejo);
+            int Indice(string linea)
+            {
+                var i = rastro.FindIndex(l => l == linea);
+                Assert.True(i >= 0, $"falta '{linea}' en el rastro del --revertir:\n{string.Join('\n', rastro)}");
+                Assert.True(rastro.Count(l => l == linea) == 1, $"'{linea}' aparece más de una vez:\n{string.Join('\n', rastro)}");
+                return i;
+            }
+            var stopNuevo = Indice($"{HostNuevo} systemctl stop stockapp-api");
+            var unmask = Indice($"{HostViejo} systemctl unmask stockapp-api");
+            var mv = Indice($"{HostViejo} mv {unit}.congelado {unit}");
+            var reload = Indice($"{HostViejo} systemctl daemon-reload");
+            var start = Indice($"{HostViejo} systemctl start stockapp-api");
+            Assert.True(stopNuevo < unmask, $"el viejo se modificó antes de detener el nuevo:\n{string.Join('\n', rastro)}");
+            Assert.True(unmask < mv && mv < reload && reload < start, $"orden equivocado en el viejo:\n{string.Join('\n', rastro)}");
+            AfirmarViejoSirviendo(a);
+            AfirmarTerminaLimpio(a);
+        }
+        finally
+        {
+            LimpiarDeRespaldo(a);
+        }
+    }
+
+    /// <summary>
+    /// Corte con un fallo inyectado (solo arnés) después de congelar: en el 7 (identificar el
+    /// volcado) y el 9 (restaurar, como un 5) sale 6, en el 11 (arrancar) sale 7; la corrida queda
+    /// abierta y el viejo congelado. --continuar retoma y da GO con los datos del viejo en el nuevo.
+    /// </summary>
+    [Theory]
+    [InlineData(7, 6)]
+    [InlineData(9, 6)]
+    [InlineData(11, 7)]
+    public void Migrar_CorteConFalloInyectado_ContinuarDaGo(int paso, int exitDelCorte)
+    {
+        var a = NuevoArnes();
+        try
+        {
+            Preparar(a);
+            var marca = "marca" + a.Sufijo;
+            Marcar(a.Viejo, marca);
+
+            var corte = Migrar(a, "", "CONGELAR\n", $"STOCKAPP_ENSAYO_FALLAR_EN={paso} ");
+
+            Assert.True(corte.ExitCode == exitDelCorte, $"corte con fallo en el {paso}: " + Diag(corte));
+            var corrida = Corrida(a, "corte");
+            Assert.Null(Clave(corrida, "resultado"));
+            Assert.Equal("1", Clave(corrida, $"fallo_inyectado_{paso}"));
+            Assert.Null(Clave(corrida, $"paso_{paso}"));
+            Assert.Contains($"--continuar {corrida}", corte.Stdout + corte.Stderr);
+            AfirmarViejoCongelado(a);
+
+            var r = Migrar(a, $"--continuar \"{corrida}\"");
+
+            AfirmarMismosDatos(a, marca, $"después de --continuar (exit={r.ExitCode})");
+            Assert.True(r.ExitCode == 0, "--continuar: " + Diag(r));
+            Assert.Equal("GO", Clave(corrida, "resultado"));
+            Assert.StartsWith("ok ", Clave(corrida, $"paso_{paso}"));
+            AfirmarViejoCongelado(a);
+            AfirmarTerminaLimpio(a);
+        }
+        finally
+        {
+            LimpiarDeRespaldo(a);
+        }
+    }
+
+    /// <summary>
+    /// Un fallo REAL del volcado después del stop (la traída llega truncada: volcado-final-vps.sh sale
+    /// con 4) deja el viejo congelado y la corrida abierta. El primer --continuar vuelve a volcar en
+    /// una carpeta NUEVA (volcado-2/) y cae en el 7 (inyectado); el segundo retoma en el 7 con la
+    /// carpeta que dice el estado (volcado_dir), nunca con la vacía del intento fallido, y da GO.
+    /// </summary>
+    [Fact]
+    public void Migrar_VolcadoFallaTrasElStop_ContinuarVuelcaEnOtraCarpetaYDaGo()
+    {
+        var a = NuevoArnes();
+        try
+        {
+            Preparar(a);
+            var marca = "marca" + a.Sufijo;
+            Marcar(a.Viejo, marca);
+            File.WriteAllText(Path.Combine(a.Bin, "truncar-traida"), "");
+
+            var corte = Migrar(a, "", "CONGELAR\n");
+
+            Assert.True(corte.ExitCode == 6, "corte con la traída truncada: " + Diag(corte));
+            Assert.True(File.Exists(Path.Combine(a.Bin, "traida-truncada")), "la traída no pasó por el docker del test");
+            Assert.Contains("volcado-final-vps.sh salió con 4", corte.Stdout + corte.Stderr);
+            var corrida = Corrida(a, "corte");
+            Assert.Null(Clave(corrida, "resultado"));
+            Assert.Empty(Directory.GetFiles(Path.Combine(corrida, "volcado"), "volcado-*.dump"));
+            AfirmarViejoCongelado(a);
+
+            var segundo = Migrar(a, $"--continuar \"{corrida}\"", entorno: "STOCKAPP_ENSAYO_FALLAR_EN=7 ");
+            Assert.True(segundo.ExitCode == 6, "primer --continuar (fallo en el 7): " + Diag(segundo));
+            Assert.Equal("volcado-2", Clave(corrida, "volcado_dir"));
+            Assert.Single(Directory.GetFiles(Path.Combine(corrida, "volcado-2"), "volcado-*.dump"));
+
+            var r = Migrar(a, $"--continuar \"{corrida}\"");
+
+            AfirmarMismosDatos(a, marca, $"después del segundo --continuar (exit={r.ExitCode})");
+            Assert.True(r.ExitCode == 0, "segundo --continuar: " + Diag(r));
+            Assert.Equal("GO", Clave(corrida, "resultado"));
+            var volcado = Clave(corrida, "volcado");
+            Assert.Equal(Path.GetFileName(Directory.GetFiles(Path.Combine(corrida, "volcado-2"), "volcado-*.dump").Single()), volcado);
+            Assert.Equal(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(corrida, "volcado-2", volcado!)))),
+                Clave(corrida, "sha256"));
+            AfirmarViejoCongelado(a);
+            AfirmarTerminaLimpio(a);
+        }
+        finally
+        {
+            LimpiarDeRespaldo(a);
+        }
+    }
+
+    /// <summary>
+    /// --desde-backup con el volcado de una corrida anterior (el de un --ensayo): GO reducido (sin
+    /// viejo: los pasos 5, 6, 7 y 10 y V10 OMITIDO), sin un solo comando como root en el viejo, y el
+    /// nuevo con EXACTAMENTE ese dump: tiene lo escrito antes del ensayo, no lo escrito en el viejo
+    /// después, y perdió lo que tenía el nuevo.
+    /// </summary>
+    [Fact]
+    public void Migrar_DesdeBackup_DumpDeOtraCorrida_GoReducido()
+    {
+        var a = NuevoArnes();
+        try
+        {
+            Preparar(a);
+            var antes = "antes" + a.Sufijo;
+            Marcar(a.Viejo, antes);
+            var ensayo = Migrar(a, "--ensayo");
+            Assert.True(ensayo.ExitCode == 0, "--ensayo: " + Diag(ensayo));
+            var volcado = Path.Combine(Corrida(a, "ensayo"), "volcado");
+            var dump = Directory.GetFiles(volcado, "volcado-*.dump").Single();
+            var manifiesto = Directory.GetFiles(volcado, "volcado-*.manifiesto").Single();
+            var despues = "despues" + a.Sufijo;
+            var enElNuevo = "nuevo" + a.Sufijo;
+            Marcar(a.Viejo, despues);
+            Marcar(a.Nuevo, enElNuevo);
+            var conteosViejo = Conteos(a.Viejo);
+            var pidViejo = PidDe(a.Trabajo, HostViejo);
+            var desde = RastroSudo(a).Length;
+
+            var r = Migrar(a, $"--desde-backup \"{dump}\" --manifiesto \"{manifiesto}\"", "RESTAURAR\n");
+
+            Assert.True(r.ExitCode == 0, "--desde-backup: " + Diag(r));
+            var corrida = Corrida(a, "desde-backup");
+            Assert.Equal("GO", Clave(corrida, "resultado"));
+            foreach (var p in new[] { 5, 6, 7, 10 })
+                Assert.Matches($@"\(\s*{p}/13\) .*OMITIDO", r.Stdout);
+            Assert.Matches(@"V10 .*OMITIDO", r.Stdout);
+            Assert.Matches(@"V6 .*OK", r.Stdout);
+            Assert.DoesNotContain(RastroSudo(a).Skip(desde), l => l.StartsWith(HostViejo + " "));
+            Assert.Equal(pidViejo, PidDe(a.Trabajo, HostViejo));
+            AfirmarViejoSirviendo(a);
+
+            Assert.Equal(FilaDe(a.Viejo, antes), FilaDe(a.Nuevo, antes));
+            Assert.Equal("", FilaDe(a.Nuevo, despues));
+            Assert.Equal("", FilaDe(a.Nuevo, enElNuevo));
+            var conteosNuevo = Conteos(a.Nuevo);
+            Assert.Equal(conteosViejo["Categorias"] - 1, conteosNuevo["Categorias"]);
+            Assert.Equal(conteosViejo["Usuarios"], conteosNuevo["Usuarios"]);
+            Assert.Equal(conteosViejo["__EFMigrationsHistory"], conteosNuevo["__EFMigrationsHistory"]);
+            AfirmarTerminaLimpio(a);
+        }
+        finally
+        {
+            LimpiarDeRespaldo(a);
+        }
+    }
+
+    /// <summary>
+    /// --post-corte --antes-de-plazo tras un ensayo y un corte GO, con las palabras por stdin: BORRAR
+    /// para el plazo, y después se conserva el directorio del corte en el nuevo, se borra el del
+    /// ensayo y se conserva la corrida local del ensayo. El dump y el manifiesto del corte quedan
+    /// archivados en corte-&lt;ts&gt; (700) con el sha256 del estado, y solo se borró lo confirmado.
+    /// </summary>
+    [Fact]
+    public void Migrar_PostCorteAntesDePlazo_ArchivaYBorraSoloLoConfirmado()
+    {
+        var a = NuevoArnes();
+        try
+        {
+            Preparar(a);
+            var marca = "marca" + a.Sufijo;
+            Marcar(a.Viejo, marca);
+            var ensayo = Migrar(a, "--ensayo");
+            Assert.True(ensayo.ExitCode == 0, "--ensayo: " + Diag(ensayo));
+            var corte = Migrar(a, "", "CONGELAR\n");
+            Assert.True(corte.ExitCode == 0, "corte: " + Diag(corte));
+            var corrida = Corrida(a, "corte");
+            var corridaEnsayo = Corrida(a, "ensayo");
+            var nombreCorte = Path.GetFileName(corrida);
+            var nombreEnsayo = Path.GetFileName(corridaEnsayo);
+            var volcado = Clave(corrida, "volcado")!;
+            var manifiesto = volcado.Replace(".dump", ".manifiesto");
+            Assert.True(Directory.Exists(Path.Combine(a.Migracion, nombreCorte)));
+            Assert.True(Directory.Exists(Path.Combine(a.Migracion, nombreEnsayo)));
+
+            // Los directorios del nuevo se ofrecen en orden (corte-* < ensayo-*), después las corridas locales.
+            var r = Migrar(a, $"--post-corte \"{corrida}\" --antes-de-plazo", "BORRAR\nno\nBORRAR\nno\n");
+
+            Assert.True(r.ExitCode == 0, "--post-corte: " + Diag(r));
+            var archivo = Path.Combine(a.BackupsOperador, nombreCorte);
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute, File.GetUnixFileMode(archivo));
+            var sha = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(Path.Combine(archivo, volcado))));
+            Assert.Equal(Clave(corrida, "sha256"), sha);
+            Assert.Equal($"{sha}  {volcado}", Leer(Path.Combine(archivo, volcado + ".sha256")));
+            Assert.True(File.Exists(Path.Combine(archivo, manifiesto)), "el manifiesto no quedó en el archivo");
+            Assert.True(File.Exists(Path.Combine(archivo, "estado")) && File.Exists(Path.Combine(archivo, "registro.log")));
+            Assert.False(File.Exists(Path.Combine(corrida, "volcado", volcado)), "el dump quedó también en la corrida");
+            Assert.True(File.Exists(Path.Combine(corrida, "estado")), "la corrida del corte se borró");
+
+            Assert.True(Directory.Exists(Path.Combine(a.Migracion, nombreCorte)), "se borró el directorio del corte en el nuevo (no se confirmó)");
+            Assert.False(Directory.Exists(Path.Combine(a.Migracion, nombreEnsayo)), "no se borró el directorio del ensayo en el nuevo (se confirmó)");
+            Assert.True(Directory.Exists(corridaEnsayo), "se borró la corrida local del ensayo (no se confirmó)");
+            Assert.Contains("1 borrados, 2 conservados", r.Stdout);
+            // Archivar y borrar copias no tocó los datos: el nuevo sigue con los del viejo.
+            AfirmarMismosDatos(a, marca, "después del --post-corte");
+            AfirmarViejoCongelado(a);
+            AfirmarTerminaLimpio(a);
+        }
+        finally
+        {
+            LimpiarDeRespaldo(a);
+        }
+    }
+
+    /// <summary>
     /// Reemplazo de <c>new ConfigurationBuilder().Build()</c> sin agregar el paquete concreto
     /// (mismo criterio que RestaurabilidadBackupTests): EjecutorPgDumpProceso resuelve "pg_dump"
     /// por PATH.
