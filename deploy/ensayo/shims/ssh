@@ -11,6 +11,15 @@
 # Como el ssh real, une el resto de los argumentos con espacios y lo corre con 'bash -c', con
 # stdin/stdout heredados y los shims de este directorio al frente del PATH (el sudo y el
 # systemctl "remotos" también son los del ensayo).
+#
+# Dos hosts (ensayo-local.sh preparar-migracion/migrar): con ENSAYO_TRABAJO definido, el shim
+# enruta por nombre y SOLO conoce dos hosts, vps-viejo.ensayo.invalid y vps-nuevo.ensayo.invalid.
+# Para cada uno pisa lo heredado con lo de su directorio <trabajo>/hosts/<host>/:
+#   ENSAYO_ESTADO=<…>/estado  ENSAYO_RAIZ=<…>/raiz  HOME=<…>/home
+# y, como el ssh real, el comando arranca en ese HOME. Cualquier otro host (también otro .invalid,
+# aunque exista un directorio con su nombre) sale con 255 sin correr nada. Sin ENSAYO_TRABAJO, el
+# comportamiento es el de un solo host (el VPS viejo del ensayo E1, con el estado y la raíz que
+# ponga quien llama).
 # =======================================================================================
 
 set -euo pipefail
@@ -48,4 +57,24 @@ if [[ $# -eq 0 ]]; then
 fi
 
 DIR_SHIMS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [[ -n "${ENSAYO_TRABAJO:-}" ]]; then
+    case "$host" in
+        vps-viejo.ensayo.invalid | vps-nuevo.ensayo.invalid) ;;
+        *)
+            echo "ensayo: host no permitido: '${host}' (con dos hosts solo existen vps-viejo.ensayo.invalid y vps-nuevo.ensayo.invalid)" >&2
+            exit 255
+            ;;
+    esac
+    dir_host="${ENSAYO_TRABAJO}/hosts/${host}"
+    if [[ ! -d "${dir_host}/estado" || ! -d "${dir_host}/raiz" || ! -d "${dir_host}/home" ]]; then
+        echo "ensayo: el host simulado '${host}' no está preparado en ${dir_host}" >&2
+        exit 255
+    fi
+    export ENSAYO_ESTADO="${dir_host}/estado"
+    export ENSAYO_RAIZ="${dir_host}/raiz"
+    export HOME="${dir_host}/home"
+    cd "$HOME"
+fi
+
 PATH="${DIR_SHIMS}:${PATH}" exec bash -c "$*"

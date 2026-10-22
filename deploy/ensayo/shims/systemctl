@@ -14,7 +14,32 @@
 #   - con la unit movida, 'mask' crea el symlink a /dev/null en esa ruta y, sin -q, avisa
 #     "Created symlink" por stderr aunque funcione;
 #   - 'unmask' saca el symlink; 'start' sobre una unit enmascarada falla con 1;
+#   - 'start' sin archivo de unit (movida a .congelado y sin enmascarar) falla con 5 y
+#     "Unit stockapp-api.service not found." (verificado en esta máquina con systemd 255 y una
+#     unit inexistente);
+#   - 'enable' sin archivo de unit falla con 1 y "Unit file … does not exist." (verificado igual);
 #   - 'show -p FragmentPath' da la ruta del archivo regular (vacía si no hay archivo).
+# Sin verificar contra systemd (no se puede sin instalar una unit en esta máquina), y por eso
+# ningún test se apoya en el texto: 'enable' sobre una unit enmascarada falla con 1; 'disable'
+# deja is-enabled en "disabled" (exit 1).
+#
+# La raíz válida es <dir>/vps-viejo (un host, el ensayo E1) o <dir>/raiz (dos hosts,
+# <trabajo>/hosts/<host>/raiz), donde <dir> es el directorio que contiene a ENSAYO_ESTADO.
+#
+# API real (dos hosts): si existe $ENSAYO_ESTADO/api.lanzar (una línea: la ruta de un .dll, que
+# se corre con dotnet, o de un ejecutable), 'start' lo LANZA desacoplado como lo haría systemd con
+# Type=simple, y no espera a que atienda:
+#   - en su propia sesión (setsid), sin stdin, con stdout/stderr en $ENSAYO_ESTADO/api.log y sin
+#     ningún otro descriptor heredado (ni el pipe de quien captura la salida ni el lock);
+#   - con un entorno LIMPIO: el PATH por defecto de systemd, las líneas Environment= de la unit,
+#     después las del api.env de la raíz (<raiz>/etc/stockapp-api/api.env, línea por línea, sin
+#     source), HOME=<raiz>/var/lib/stockapp, DOTNET_CLI_HOME=<dir>/home, TMPDIR=<raiz>/tmp (el
+#     /tmp del host simulado), DOTNET_NOLOGO=1 y una marca ENSAYO_API_ESTADO=$ENSAYO_ESTADO; nada
+#     del entorno de quien llama;
+#   - en el directorio del ejecutable (el WorkingDirectory de la unit real es el de la API).
+#   El PID va a $ENSAYO_ESTADO/api.pid. 'stop' manda TERM al grupo de ese PID (y KILL si no
+#   terminó en 30 s), solo si el proceso tiene la marca (un PID reusado no se toca), y verifica
+#   con ps que no quede ninguno; 'is-active' con la unit activa y el PID muerto da failed.
 # =======================================================================================
 
 set -euo pipefail
@@ -29,18 +54,23 @@ if [[ -z "${ENSAYO_RAIZ:-}" || ! -d "${ENSAYO_RAIZ}" ]]; then
     echo "ensayo: systemctl necesita ENSAYO_RAIZ (raíz del VPS viejo simulado)" >&2
     exit 1
 fi
-# La raíz tiene que ser la del ensayo (<trabajo>/vps-viejo, al lado de <trabajo>/estado, como la
-# arma ensayo-local.sh preparar): nunca '/' ni otro directorio, así el mask/unmask simulado no
-# puede tocar el /etc real ni nada fuera del directorio de trabajo.
-RAIZ_ESPERADA="$(realpath -e -- "$(dirname -- "$ENSAYO_ESTADO")")/vps-viejo"
-if [[ "$ENSAYO_RAIZ" == "/" || "$(realpath -e -- "$ENSAYO_RAIZ")" != "$RAIZ_ESPERADA" ]]; then
-    echo "ensayo: ENSAYO_RAIZ='${ENSAYO_RAIZ}' no es la raíz del ensayo (${RAIZ_ESPERADA})" >&2
+# La raíz tiene que ser la del ensayo, al lado del estado: <dir>/vps-viejo (como la arma
+# ensayo-local.sh preparar) o <dir>/raiz (cada host de preparar-migracion). Nunca '/' ni otro
+# directorio, así el mask/unmask simulado no puede tocar el /etc real ni nada fuera del directorio
+# de trabajo.
+DIR_HOST="$(realpath -e -- "$(dirname -- "$ENSAYO_ESTADO")")"
+RAIZ_REAL="$(realpath -e -- "$ENSAYO_RAIZ")"
+if [[ "$ENSAYO_RAIZ" == "/" || "$RAIZ_REAL" == "/" ||
+    ( "$RAIZ_REAL" != "${DIR_HOST}/vps-viejo" && "$RAIZ_REAL" != "${DIR_HOST}/raiz" ) ]]; then
+    echo "ensayo: ENSAYO_RAIZ='${ENSAYO_RAIZ}' no es la raíz del ensayo (${DIR_HOST}/vps-viejo o ${DIR_HOST}/raiz)" >&2
     exit 1
 fi
 
 ACTIVO="${ENSAYO_ESTADO}/${UNIT}.activo"
 HABILITADO="${ENSAYO_ESTADO}/${UNIT}.habilitado"
 FRAGMENTO="${ENSAYO_RAIZ}/etc/systemd/system/${UNIT}.service"
+LANZAR="${ENSAYO_ESTADO}/api.lanzar"
+PIDFILE="${ENSAYO_ESTADO}/api.pid"
 
 silencio=0
 propiedad=""
@@ -75,6 +105,121 @@ enmascarada() {
     [[ -L "$FRAGMENTO" && "$(readlink "$FRAGMENTO")" == "/dev/null" ]]
 }
 
+hay_archivo_de_unit() {
+    [[ -f "$FRAGMENTO" && ! -L "$FRAGMENTO" ]]
+}
+
+# es_nuestro <pid>: vivo y con la marca de ESTE estado en su entorno (un PID reusado por otro
+# proceso no la tiene).
+es_nuestro() {
+    local pid="$1" entorno
+    [[ "$pid" =~ ^[1-9][0-9]*$ ]] || return 1
+    ps -p "$pid" -o pid= >/dev/null 2>&1 || return 1
+    entorno="$(tr '\0' '\n' < "/proc/${pid}/environ" 2>/dev/null)" || return 1
+    grep -qxF "ENSAYO_API_ESTADO=${ENSAYO_ESTADO}" <<< "$entorno"
+}
+
+pid_guardado() {
+    [[ -f "$PIDFILE" ]] || return 1
+    PID="$(cat "$PIDFILE")"
+    [[ "$PID" =~ ^[1-9][0-9]*$ ]]
+}
+
+# quedan_del_grupo <pgid>: algún proceso vivo con ese grupo.
+quedan_del_grupo() {
+    local pgid="$1" lista
+    # "No pude consultar" cuenta como "quedan": nunca se da por muerta una API sin verlo.
+    lista="$(ps -e -o pgid= 2>/dev/null)" || return 0
+    grep -qxF "$pgid" <<< "$(tr -d ' ' <<< "$lista")"
+}
+
+# lanzar: el ejecutable de api.lanzar, desacoplado, con el entorno de la unit y del api.env.
+lanzar() {
+    # Copias sin exportar: el subshell vacía el entorno antes de armar el de la API.
+    local objetivo dotnet="" linea pid raiz_api="$ENSAYO_RAIZ" estado_api="$ENSAYO_ESTADO"
+    objetivo="$(head -n 1 "$LANZAR")"
+    if [[ ! -f "$objetivo" ]]; then
+        echo "ensayo: api.lanzar apunta a '${objetivo}', que no existe" >&2
+        exit 1
+    fi
+    if [[ "$objetivo" == *.dll ]]; then
+        dotnet="$(command -v dotnet)" || { echo "ensayo: no encuentro dotnet para lanzar ${objetivo}" >&2; exit 1; }
+        dotnet="$(realpath -e -- "$dotnet")"
+    fi
+    (
+        # Ningún descriptor heredado salvo 0-2, que se reemplazan abajo: si la API se quedara con el
+        # pipe de quien captura la salida, esa captura no terminaría nunca; con el fd del lock, el
+        # lock de la migración quedaría tomado mientras viva la API.
+        for fd in /proc/self/fd/*; do
+            fd="${fd##*/}"
+            if [[ "$fd" =~ ^[0-9]+$ && "$fd" -gt 2 ]]; then
+                eval "exec ${fd}>&-" 2>/dev/null || :
+            fi
+        done
+        cd "$(dirname -- "$objetivo")"
+        for v in $(compgen -e); do
+            unset "$v" 2>/dev/null || :
+        done
+        export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        while IFS= read -r linea || [[ -n "$linea" ]]; do
+            if [[ "$linea" =~ ^Environment=([A-Za-z_][A-Za-z0-9_]*)=(.*)$ && "${BASH_REMATCH[1]}" != HOME ]]; then
+                export "${BASH_REMATCH[1]}=${BASH_REMATCH[2]}"
+            fi
+        done < "$FRAGMENTO"
+        if [[ -f "${raiz_api}/etc/stockapp-api/api.env" ]]; then
+            while IFS= read -r linea || [[ -n "$linea" ]]; do
+                if [[ "$linea" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+                    export "${BASH_REMATCH[1]}=${BASH_REMATCH[2]}"
+                fi
+            done < "${raiz_api}/etc/stockapp-api/api.env"
+        fi
+        export HOME="${raiz_api}/var/lib/stockapp"
+        export DOTNET_CLI_HOME="${DIR_HOST}/home"
+        # El /tmp del host simulado vive en su raíz: nada de la API cae en el /tmp de esta máquina.
+        mkdir -p "${raiz_api}/tmp"
+        export TMPDIR="${raiz_api}/tmp"
+        export DOTNET_NOLOGO=1
+        export ENSAYO_API_ESTADO="$estado_api"
+        if [[ -n "$dotnet" ]]; then
+            export DOTNET_ROOT="${dotnet%/*}"
+            exec setsid "$dotnet" "$objetivo" </dev/null >>"${estado_api}/api.log" 2>&1
+        fi
+        exec setsid "$objetivo" </dev/null >>"${estado_api}/api.log" 2>&1
+    ) &
+    pid=$!
+    echo "$pid" > "$PIDFILE"
+}
+
+# detener: TERM al grupo del PID guardado, KILL si no terminó en 30 s, y verificación con ps.
+detener() {
+    local i
+    if ! pid_guardado; then
+        rm -f -- "$PIDFILE"
+        return 0
+    fi
+    if ps -p "$PID" -o pid= >/dev/null 2>&1 && ! es_nuestro "$PID"; then
+        echo "ensayo: el PID ${PID} de api.pid está vivo pero no es la API de este estado: no se mata" >&2
+        exit 1
+    fi
+    kill -TERM -- "-${PID}" 2>/dev/null || :
+    for i in $(seq 1 150); do
+        quedan_del_grupo "$PID" || break
+        sleep 0.2
+    done
+    if quedan_del_grupo "$PID"; then
+        kill -KILL -- "-${PID}" 2>/dev/null || :
+        for i in $(seq 1 50); do
+            quedan_del_grupo "$PID" || break
+            sleep 0.2
+        done
+    fi
+    if ps -p "$PID" -o pid= >/dev/null 2>&1 || quedan_del_grupo "$PID"; then
+        echo "ensayo: la API (PID ${PID}) sigue viva después de TERM y KILL" >&2
+        exit 1
+    fi
+    rm -f -- "$PIDFILE"
+}
+
 if [[ "$subcomando" == "daemon-reload" ]]; then
     if [[ ${#unidades[@]} -ne 0 ]]; then
         echo "ensayo: daemon-reload no lleva unit" >&2
@@ -96,6 +241,11 @@ fi
 case "$subcomando" in
     is-active)
         estado="$(cat "$ACTIVO")"
+        # Con la API real: activa solo si el proceso que se lanzó sigue vivo.
+        if [[ "$estado" == "active" && -f "$LANZAR" ]] && ! { pid_guardado && es_nuestro "$PID"; }; then
+            estado="failed"
+            echo failed > "$ACTIVO"
+        fi
         decir "$estado"
         [[ "$estado" == "active" ]] && exit 0
         exit 3
@@ -106,13 +256,41 @@ case "$subcomando" in
         [[ "$estado" == "enabled" ]] && exit 0
         exit 1
         ;;
+    enable)
+        if enmascarada; then
+            echo "Failed to enable unit: Unit file ${FRAGMENTO} is masked." >&2
+            exit 1
+        fi
+        if ! hay_archivo_de_unit; then
+            echo "Failed to enable unit: Unit file ${UNIT}.service does not exist." >&2
+            exit 1
+        fi
+        echo enabled > "$HABILITADO"
+        ;;
+    disable)
+        if ! enmascarada; then
+            echo disabled > "$HABILITADO"
+        fi
+        ;;
     stop)
+        [[ ! -f "$LANZAR" ]] || detener
         echo inactive > "$ACTIVO"
         ;;
     start)
-        if [[ "$(cat "$HABILITADO")" == "masked" ]]; then
+        if [[ "$(cat "$HABILITADO")" == "masked" ]] || enmascarada; then
             echo "Failed to start ${UNIT}.service: Unit ${UNIT}.service is masked." >&2
             exit 1
+        fi
+        if ! hay_archivo_de_unit; then
+            echo "Failed to start ${UNIT}.service: Unit ${UNIT}.service not found." >&2
+            exit 5
+        fi
+        if [[ -f "$LANZAR" ]]; then
+            # Ya corriendo: systemd no hace nada.
+            if [[ "$(cat "$ACTIVO")" == "active" ]] && pid_guardado && es_nuestro "$PID"; then
+                exit 0
+            fi
+            lanzar
         fi
         echo active > "$ACTIVO"
         ;;

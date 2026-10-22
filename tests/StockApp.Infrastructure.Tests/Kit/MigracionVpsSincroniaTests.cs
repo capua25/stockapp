@@ -27,6 +27,7 @@ public class MigracionVpsSincroniaTests
         "deploy/bajar-backup-vps.sh",
         "deploy/ensayo/ensayo-local.sh",
         "deploy/ensayo/shims/ssh",
+        "deploy/ensayo/shims/scp",
         "deploy/ensayo/shims/sudo",
         "deploy/ensayo/shims/systemctl",
         "deploy/lib/orquestacion.sh",

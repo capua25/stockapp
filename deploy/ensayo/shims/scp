@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+# =======================================================================================
+# deploy/ensayo/shims/scp -- scp FALSO del ensayo local con dos hosts: copia con cp entre esta
+# máquina y el HOME de uno de los dos hosts simulados.
+# =======================================================================================
+#
+# Lo pone ensayo-local.sh (subcomando migrar) al frente del PATH, junto con el ssh falso. Solo
+# funciona con ENSAYO_TRABAJO definido (sin él, 255) y solo conoce los mismos dos hosts que el ssh
+# falso: vps-viejo.ensayo.invalid y vps-nuevo.ensayo.invalid. Cualquier otro host, .invalid o no,
+# sale con 255 sin copiar nada.
+#
+# Como el scp real (OpenSSH 9.6p1, el de Ubuntu 24.04), según su manual: no se verificó contra un
+# servidor, porque el ensayo nunca abre un ssh real, y los tests no se apoyan en nada más que esto:
+#   - ignora -P <puerto> y -o <opción>; '--' termina las opciones;
+#   - el último argumento es el destino y los anteriores, los orígenes; un lado remoto se escribe
+#     [usuario@]host:ruta;
+#   - una ruta remota relativa, '~' o '~/…' se resuelve contra el HOME remoto del host
+#     (<trabajo>/hosts/<host>/home);
+#   - varios orígenes exigen un destino que sea un directorio existente; un fallo de la copia sale
+#     con 1.
+# Más estricto que el real, a propósito: una ruta remota ABSOLUTA tiene que caer dentro de
+# <trabajo>/hosts/<host>/ (si no, sale con 1 sin copiar): así el ensayo nunca escribe ni lee fuera
+# del host simulado. Copiar entre dos remotos no se simula (1).
+# =======================================================================================
+
+set -euo pipefail
+
+if [[ -z "${ENSAYO_TRABAJO:-}" ]]; then
+    echo "ensayo: el scp simulado necesita ENSAYO_TRABAJO (los dos hosts del ensayo)" >&2
+    exit 255
+fi
+
+argumentos=()
+opciones=1
+while [[ $# -gt 0 ]]; do
+    if [[ "$opciones" -eq 1 ]]; then
+        case "$1" in
+            -P | -o)
+                if [[ $# -lt 2 ]]; then
+                    echo "ensayo: falta el valor de $1" >&2
+                    exit 255
+                fi
+                shift 2
+                continue
+                ;;
+            --)
+                opciones=0
+                shift
+                continue
+                ;;
+            -*)
+                echo "ensayo: opción de scp no simulada: $1" >&2
+                exit 255
+                ;;
+        esac
+    fi
+    argumentos+=("$1")
+    shift
+done
+if [[ ${#argumentos[@]} -lt 2 ]]; then
+    echo "ensayo: scp necesita al menos un origen y un destino" >&2
+    exit 1
+fi
+
+# es_remoto <arg>: [usuario@]host:ruta (una ruta local con ':' no se simula).
+es_remoto() {
+    [[ "$1" =~ ^([A-Za-z0-9._-]+@)?[A-Za-z0-9.-]+:.*$ ]]
+}
+
+# local_de <arg>: la ruta local que corresponde a <arg> (remoto o no) -> LOCAL. Sale del script con
+# 255 (host desconocido) o 1 (ruta fuera del host simulado).
+LOCAL=""
+local_de() {
+    local arg="$1" destino host ruta dir_host
+    if ! es_remoto "$arg"; then
+        LOCAL="$arg"
+        return 0
+    fi
+    destino="${arg%%:*}"
+    ruta="${arg#*:}"
+    host="${destino#*@}"
+    case "$host" in
+        vps-viejo.ensayo.invalid | vps-nuevo.ensayo.invalid) ;;
+        *)
+            echo "ensayo: host no permitido: '${host}' (con dos hosts solo existen vps-viejo.ensayo.invalid y vps-nuevo.ensayo.invalid)" >&2
+            exit 255
+            ;;
+    esac
+    dir_host="${ENSAYO_TRABAJO}/hosts/${host}"
+    if [[ ! -d "${dir_host}/home" ]]; then
+        echo "ensayo: el host simulado '${host}' no está preparado en ${dir_host}" >&2
+        exit 255
+    fi
+    case "$ruta" in
+        "" | "~") LOCAL="${dir_host}/home" ;;
+        "~/"*) LOCAL="${dir_host}/home/${ruta#"~/"}" ;;
+        /*)
+            if [[ "$ruta" == *..* || ( "$ruta" != "${dir_host}/"* ) ]]; then
+                echo "ensayo: scp: la ruta remota '${ruta}' está fuera del host simulado (${dir_host})" >&2
+                exit 1
+            fi
+            LOCAL="$ruta"
+            ;;
+        *)
+            if [[ "$ruta" == *..* ]]; then
+                echo "ensayo: scp: la ruta remota '${ruta}' no puede tener '..'" >&2
+                exit 1
+            fi
+            LOCAL="${dir_host}/home/${ruta}"
+            ;;
+    esac
+}
+
+remotos=0
+origenes=()
+for arg in "${argumentos[@]:0:${#argumentos[@]}-1}"; do
+    es_remoto "$arg" && remotos=$((remotos + 1))
+    local_de "$arg"
+    origenes+=("$LOCAL")
+done
+ultimo="${argumentos[-1]}"
+es_remoto "$ultimo" && remotos=$((remotos + 1))
+local_de "$ultimo"
+destino_local="$LOCAL"
+if [[ "$remotos" -ne 1 ]]; then
+    echo "ensayo: el scp simulado copia entre esta máquina y UN host (hubo ${remotos} lados remotos)" >&2
+    exit 1
+fi
+if [[ ${#origenes[@]} -gt 1 && ! -d "$destino_local" ]]; then
+    echo "ensayo: scp: ${ultimo}: Not a directory" >&2
+    exit 1
+fi
+
+rc=0
+cp -- "${origenes[@]}" "$destino_local" || rc=$?
+[[ "$rc" -eq 0 ]] || exit 1

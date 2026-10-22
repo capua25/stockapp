@@ -12,14 +12,26 @@
 #   deploy/ensayo/ensayo-local.sh restaurar --trabajo <dir> [--recrear-base]
 #   deploy/ensayo/ensayo-local.sh limpiar   --trabajo <dir>
 #
-#   --trabajo    directorio del ensayo (700). 'preparar' lo exige vacío o inexistente. Nunca
-#                dentro del repo ni bajo /mnt/ (ahí no rigen los permisos): exit 2.
+#   Dos hosts (el ensayo de migrar-vps.sh de punta a punta):
+#   deploy/ensayo/ensayo-local.sh preparar-migracion --trabajo <dir> [--dump <dump-real>]
+#                                 [--sufijo <s>] [--puerto-viejo <n>] [--puerto-nuevo <n>]
+#   deploy/ensayo/ensayo-local.sh migrar    --trabajo <dir> -- <argumentos de migrar-vps.sh>
+#
+#   --trabajo    directorio del ensayo (700). 'preparar' y 'preparar-migracion' lo exigen vacío o
+#                inexistente. Nunca dentro del repo, bajo /mnt/ (ahí no rigen los permisos), ni el
+#                HOME entero o uno de sus padres: exit 2.
 #   --historial  backups que hacen de historial del VPS viejo (repetible).
 #   --sufijo     ^[a-z0-9]{0,12}$, default vacío: se agrega como -<s> / _<s> a los nombres de
 #                abajo, para que dos ensayos (o los tests) no choquen.
 #   --puerto     default 5434: el destino publica 127.0.0.1:<puerto>.
-#   --sufijo y --puerto se dan en 'preparar', que los guarda en <trabajo>/config; los demás
-#   subcomandos los leen de ahí.
+#   --dump       el viejo arranca con ese dump real restaurado (si no, con la base que migra y
+#                siembra su primer arranque). Con --dump, VPS_ADMIN_USER tiene que venir en el
+#                entorno (es el usuario real de verificación) y la contraseña, VPS_ADMIN_PASSWORD,
+#                en el entorno de 'migrar': nunca se guarda.
+#   --puerto-viejo, --puerto-nuevo  defaults 5291 y 5292: las APIs del viejo y del nuevo atienden
+#                en 127.0.0.1:<n>.
+#   --sufijo y los puertos se dan en 'preparar' o 'preparar-migracion', que los guardan en
+#   <trabajo>/config; los demás subcomandos los leen de ahí.
 #
 # Qué hace cada subcomando:
 #   preparar   aborta si ya existe algún contenedor o volumen del ensayo (nunca reutiliza uno)
@@ -37,8 +49,27 @@
 #              sea *.invalid).
 #   restaurar  restaurar-backup.sh del volcado sobre el destino, con su manifiesto y SIN shims:
 #              el systemctl real no conoce la unit en esta máquina y cuenta como inactiva.
-#   limpiar    borra los dos contenedores (con sus volúmenes) por sus nombres EXACTOS y compara
-#              la lista de contenedores con la de 'preparar'.
+#   preparar-migracion
+#              los dos hosts de migrar-vps.sh, en <trabajo>/hosts/<host>/{estado,raiz,home}, con
+#              vps-viejo.ensayo.invalid y vps-nuevo.ensayo.invalid: publica la API una vez
+#              (dotnet publish a <trabajo>/api), levanta los mismos dos Postgres que 'preparar'
+#              (publicados en un puerto libre de 127.0.0.1) y lanza una API real en cada host
+#              con el systemctl falso. El viejo, con la base migrada y el admin sembrado por su
+#              primer arranque (contraseña aleatoria en <trabajo>/admin-password, 600) y un backup
+#              hecho por la API (el historial), o con el --dump restaurado. El nuevo, en el estado
+#              que deja preparar-vps-nuevo.sh: base migrada por un primer arranque, feed mínimo,
+#              unit, directorios y ~/stockapp-deploy/.env. Cada host con su /etc/machine-id. Los
+#              .env del operador, <trabajo>/env-vps-viejo-ensayo y env-vps-nuevo-ensayo, apuntan a
+#              los hosts .invalid con API_SCHEME=http y API_HOSTNAME=127.0.0.1. Si falla después
+#              de escribir la config, mata las APIs y borra los contenedores que alcanzó a crear.
+#   migrar     corre migrar-vps.sh REAL contra los dos hosts: los shims al frente del PATH, el
+#              HOME del operador en <trabajo>/operador (corridas, lock y ~/stockapp-backups-vps
+#              quedan ahí), los .env del ensayo, --contenedor-*, --raiz-remota-* y
+#              --sin-verificar-preparacion según el modo, y su stdin pasa tal cual (las palabras
+#              de confirmación). Devuelve el código de migrar-vps.sh.
+#   limpiar    detiene las APIs de los hosts (por su PID exacto, verificado con ps), borra los dos
+#              contenedores (con sus volúmenes) por sus nombres EXACTOS y compara la lista de
+#              contenedores con la de 'preparar'.
 #
 # Nombres (con sufijo s): contenedores stockapp-ensayo-origen-pg-<s> y stockapp-ensayo-pg-<s>;
 # volúmenes stockapp_ensayo_origen_pgdata_<s> y stockapp_ensayo_pgdata_<s>. El script no nombra
@@ -53,10 +84,12 @@
 #   0  OK
 #   2  uso / argumentos inválidos
 #   3  precondición: contenedor o volumen del ensayo ya existente, puerto ocupado, directorio
-#      de trabajo no vacío o sin preparar, volcado ausente o repetido
-#   8  no se pudo consultar o crear (docker con error, Postgres que no arranca)
+#      de trabajo no vacío o sin preparar (o preparado para el otro tipo de ensayo), volcado
+#      ausente o repetido
+#   8  no se pudo consultar o crear (docker con error, Postgres o una API que no arranca, una
+#      API que no se pudo detener)
 #   9  alcance: al limpiar, la lista de contenedores no es la de antes de preparar
-#   volcar y restaurar devuelven el código del script que corren.
+#   volcar, restaurar y migrar devuelven el código del script que corren.
 # =======================================================================================
 
 set -euo pipefail
@@ -65,7 +98,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DIR_SHIMS="${REPO_ROOT}/deploy/ensayo/shims"
 
 uso() {
-    sed -n '/^# Uso:/,/^#   subcomandos los leen/p' "$0" | sed 's/^# \{0,1\}//' >&2
+    sed -n '/^# Uso:/,/subcomandos los leen de ahí/p' "$0" | sed 's/^# \{0,1\}//' >&2
 }
 
 error_uso() {
@@ -92,9 +125,12 @@ recordar_datos() {
 al_salir() {
     local rc=$?
     trap - EXIT
-    # preparar que falla después de escribir la config: se borra lo que se alcanzó a crear.
-    if [[ "$SUBCOMANDO" == "preparar" && "$rc" -ne 0 && "$CONFIG_ESCRITA" -eq 1 ]]; then
-        if borrar_recursos; then
+    # preparar que falla después de escribir la config: se borra lo que se alcanzó a crear (y, con
+    # dos hosts, se detienen las APIs que se alcanzaron a lanzar).
+    if [[ "$SUBCOMANDO" == preparar* && "$rc" -ne 0 && "$CONFIG_ESCRITA" -eq 1 ]]; then
+        local apis=0
+        detener_apis || apis=$?
+        if [[ "$apis" -eq 0 ]] && borrar_recursos; then
             echo "  preparar falló: se borraron los contenedores y volúmenes de este ensayo." >&2
         else
             echo "ATENCIÓN: no se pudo borrar todo; corré: $0 limpiar --trabajo ${TRABAJO}" >&2
@@ -112,7 +148,7 @@ trap al_salir EXIT
 # ---------------------------------------------------------------------------------------
 [[ $# -ge 1 ]] || error_uso "falta el subcomando."
 case "$1" in
-    preparar|volcar|restaurar|limpiar) SUBCOMANDO="$1"; shift ;;
+    preparar|volcar|restaurar|limpiar|preparar-migracion|migrar) SUBCOMANDO="$1"; shift ;;
     -h|--help) uso; exit 0 ;;
     *) error_uso "subcomando desconocido: $1" ;;
 esac
@@ -121,13 +157,20 @@ DUMP_REAL=""
 HISTORIAL=()
 SUFIJO=""
 PUERTO="5434"
+PUERTO_VIEJO="5291"
+PUERTO_NUEVO="5292"
+TIPO="e1"
 RECREAR=0
+MIGRAR_ARGS=()
+SEPARADOR=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --trabajo|--historial|--sufijo|--puerto)
             [[ $# -ge 2 ]] || error_uso "falta el valor de $1."
-            if [[ "$SUBCOMANDO" != "preparar" && "$1" != "--trabajo" ]]; then
+            if [[ "$1" == "--sufijo" && "$SUBCOMANDO" == "preparar-migracion" ]]; then
+                :
+            elif [[ "$SUBCOMANDO" != "preparar" && "$1" != "--trabajo" ]]; then
                 error_uso "$1 solo va con 'preparar' (los demás subcomandos lo leen de <trabajo>/config)."
             fi
             case "$1" in
@@ -137,6 +180,24 @@ while [[ $# -gt 0 ]]; do
                 --puerto) PUERTO="$2" ;;
             esac
             shift 2
+            ;;
+        --dump|--puerto-viejo|--puerto-nuevo)
+            [[ $# -ge 2 ]] || error_uso "falta el valor de $1."
+            [[ "$SUBCOMANDO" == "preparar-migracion" ]] \
+                || error_uso "$1 solo va con 'preparar-migracion' (los demás subcomandos lo leen de <trabajo>/config)."
+            case "$1" in
+                --dump) DUMP_REAL="$2" ;;
+                --puerto-viejo) PUERTO_VIEJO="$2" ;;
+                --puerto-nuevo) PUERTO_NUEVO="$2" ;;
+            esac
+            shift 2
+            ;;
+        --)
+            [[ "$SUBCOMANDO" == "migrar" ]] || error_uso "'--' solo va con 'migrar' (separa los argumentos de migrar-vps.sh)."
+            shift
+            MIGRAR_ARGS=("$@")
+            SEPARADOR=1
+            break
             ;;
         --recrear-base)
             [[ "$SUBCOMANDO" == "restaurar" ]] || error_uso "--recrear-base solo va con 'restaurar'."
@@ -153,6 +214,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$TRABAJO" ]] || error_uso "falta --trabajo <dir>."
+if [[ "$SUBCOMANDO" == "migrar" && "$SEPARADOR" -eq 0 ]]; then
+    error_uso "migrar necesita '--' y después los argumentos de migrar-vps.sh (por ejemplo: -- --ensayo)."
+fi
 TRABAJO="$(realpath -m -- "$TRABAJO")"
 # La raíz del VPS viejo simulado se pasa a volcado-final-vps.sh como --raiz-remota, que exige
 # este patrón.
@@ -167,22 +231,37 @@ fi
 if [[ "$TRABAJO" == /mnt || "$TRABAJO" == /mnt/* ]]; then
     error_uso "--trabajo '${TRABAJO}' está bajo /mnt/, donde no rigen los permisos 700/600."
 fi
+# Ni el HOME entero ni uno de sus padres: el ensayo vive en un directorio propio.
+HOME_REAL="$(realpath -m -- "${HOME:-/}")"
+if [[ "$TRABAJO" == "$HOME_REAL" || "$HOME_REAL" == "$TRABAJO"/* ]]; then
+    error_uso "--trabajo '${TRABAJO}' es el HOME o lo contiene: elegí un directorio propio para el ensayo."
+fi
 
 CONFIG="${TRABAJO}/config"
 ESTADO="${TRABAJO}/estado"
 RAIZ="${TRABAJO}/vps-viejo"
 SALIDA="${TRABAJO}/salida"
 ENV_OPERADOR="${TRABAJO}/env-vps-viejo-ensayo"
+ENV_NUEVO_OPERADOR="${TRABAJO}/env-vps-nuevo-ensayo"
 PS_ANTES="${TRABAJO}/docker-ps-antes.txt"
+HOST_VIEJO="vps-viejo.ensayo.invalid"
+HOST_NUEVO="vps-nuevo.ensayo.invalid"
+DIR_VIEJO="${TRABAJO}/hosts/${HOST_VIEJO}"
+DIR_NUEVO="${TRABAJO}/hosts/${HOST_NUEVO}"
+HOME_OPERADOR="${TRABAJO}/operador"
 
 # ---------------------------------------------------------------------------------------
 # Config (preparar la escribe; el resto la lee línea por línea, nunca con 'source')
 # ---------------------------------------------------------------------------------------
 validar_config() {
+    local p
     [[ "$SUFIJO" =~ ^[a-z0-9]{0,12}$ ]] || error_uso "--sufijo '${SUFIJO}' no matchea ^[a-z0-9]{0,12}$."
-    if [[ ! "$PUERTO" =~ ^[1-9][0-9]{0,4}$ ]] || (( PUERTO > 65535 )); then
-        error_uso "--puerto '${PUERTO}' no es un puerto válido."
-    fi
+    for p in PUERTO PUERTO_VIEJO PUERTO_NUEVO; do
+        if [[ ! "${!p}" =~ ^[1-9][0-9]{0,4}$ ]] || (( ${!p} > 65535 )); then
+            error_uso "--$(tr '_A-Z' '-a-z' <<< "$p") '${!p}' no es un puerto válido."
+        fi
+    done
+    [[ "$TIPO" == "e1" || "$TIPO" == "migracion" ]] || error_uso "config con TIPO='${TIPO}' desconocido."
 }
 
 leer_config() {
@@ -195,16 +274,27 @@ leer_config() {
         case "$linea" in
             SUFIJO=*) SUFIJO="${linea#SUFIJO=}" ;;
             PUERTO=*) PUERTO="${linea#PUERTO=}" ;;
+            PUERTO_VIEJO=*) PUERTO_VIEJO="${linea#PUERTO_VIEJO=}" ;;
+            PUERTO_NUEVO=*) PUERTO_NUEVO="${linea#PUERTO_NUEVO=}" ;;
+            TIPO=*) TIPO="${linea#TIPO=}" ;;
         esac
     done < "$CONFIG"
     validar_config
 }
 
-if [[ "$SUBCOMANDO" == "preparar" ]]; then
-    validar_config
-else
-    leer_config
-fi
+# exigir_tipo <tipo>: el subcomando solo sirve para el ensayo de ese tipo.
+exigir_tipo() {
+    if [[ "$TIPO" != "$1" ]]; then
+        echo "ERROR: '${TRABAJO}' está preparado para el ensayo '${TIPO}' y '${SUBCOMANDO}' es del ensayo '$1'." >&2
+        exit 3
+    fi
+}
+
+case "$SUBCOMANDO" in
+    preparar) validar_config ;;
+    preparar-migracion) TIPO="migracion"; validar_config ;;
+    *) leer_config ;;
+esac
 
 SUF_G="${SUFIJO:+-${SUFIJO}}"
 SUF_U="${SUFIJO:+_${SUFIJO}}"
@@ -355,6 +445,7 @@ preparar() {
 # ---------------------------------------------------------------------------------------
 volcar() {
     local rc=0
+    exigir_tipo e1
     PATH="${DIR_SHIMS}:${PATH}" ENSAYO_ESTADO="$ESTADO" ENSAYO_RAIZ="$RAIZ" \
         STOCKAPP_ENV_LOCAL="$ENV_OPERADOR" \
         "${REPO_ROOT}/deploy/volcado-final-vps.sh" --salida "$SALIDA" \
@@ -367,6 +458,7 @@ volcar() {
 # ---------------------------------------------------------------------------------------
 restaurar() {
     local dumps=() manifiesto rc=0 path_sin_shims="" d
+    exigir_tipo e1
     shopt -s nullglob
     dumps=("${SALIDA}"/volcado-*.dump)
     shopt -u nullglob
@@ -393,8 +485,320 @@ restaurar() {
 }
 
 # ---------------------------------------------------------------------------------------
+# preparar-migracion: dos hosts con la API real
+# ---------------------------------------------------------------------------------------
+VERSION_FEED="0.0.1-ensayo"
+
+# aleatorio <n>: n caracteres alfanuméricos (sin pipes que puedan cortar con SIGPIPE).
+aleatorio() {
+    local x=""
+    while [[ "${#x}" -lt "$1" ]]; do
+        x+="$(head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9')"
+    done
+    printf '%s' "${x:0:$1}"
+}
+
+# puerto_libre <opción> <n>: aborta con 3 si 127.0.0.1:<n> ya atiende.
+puerto_libre() {
+    if (exec 3<>"/dev/tcp/127.0.0.1/$2") 2>/dev/null; then
+        echo "ERROR: el puerto 127.0.0.1:$2 está ocupado. Elegí otro con $1. ABORTO." >&2
+        exit 3
+    fi
+}
+
+# crear_pg <nombre> <volumen>: Postgres del ensayo publicado en un puerto libre de 127.0.0.1 ->
+# PUERTO_PG (el que eligió docker).
+PUERTO_PG=""
+crear_pg() {
+    local nombre="$1" volumen="$2" mapeo
+    # La contraseña viaja por el entorno de docker (-e sin valor), nunca por argv.
+    POSTGRES_PASSWORD="$(cat "${TRABAJO}/pg-password")" docker run -d --name "$nombre" \
+        -v "${volumen}:/var/lib/postgresql/data" -p "127.0.0.1::5432" \
+        -e POSTGRES_USER=stockapp -e POSTGRES_DB=stockapp -e POSTGRES_PASSWORD \
+        postgres:16-alpine >/dev/null || fallo_preparar 8 "no se pudo crear '${nombre}'."
+    esperar_postgres "$nombre"
+    mapeo="$(docker port "$nombre" 5432/tcp)" || fallo_preparar 8 "no pude leer el puerto publicado de '${nombre}'."
+    PUERTO_PG="${mapeo##*:}"
+    [[ "$mapeo" == 127.0.0.1:* && "$PUERTO_PG" =~ ^[1-9][0-9]{0,4}$ ]] \
+        || fallo_preparar 8 "'${nombre}' no publicó 5432 en 127.0.0.1 (docker port dice '${mapeo}')."
+}
+
+# armar_host <dir> <puerto-api> <puerto-pg> <jwt> <admin> <contraseña-admin>: la raíz como la deja
+# install.sh (unit como archivo regular, api.env 600, el directorio de datos de la API con
+# .local/share para que LocalApplicationData resuelva ahí) más el feed, el machine-id y el estado.
+armar_host() {
+    local dir="$1" puerto="$2" puerto_pg="$3" jwt="$4" admin="$5" contrasena="$6"
+    local raiz="${dir}/raiz" datos="${dir}/raiz/var/lib/stockapp"
+    mkdir -p "${dir}/estado" "${dir}/home" "${raiz}/etc/stockapp-api" "${raiz}/etc/systemd/system" \
+        "${datos}/.local/share/StockApp/backups" "${datos}/updates"
+    # 32 hex, como /etc/machine-id; uno por host, así migrar-vps.sh los ve distintos (A9).
+    head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n' > "${raiz}/etc/machine-id"
+    printf '%s\n' \
+        "Jwt__Secret=${jwt}" \
+        "Bootstrap__AdminUser=${admin}" \
+        "Bootstrap__Password=${contrasena}" \
+        "ConnectionStrings__Default=Host=127.0.0.1;Port=${puerto_pg};Database=stockapp;Username=stockapp;Password=$(cat "${TRABAJO}/pg-password")" \
+        "Licencia__Habilitado=false" \
+        "RateLimiting__Login__PermitLimit=10" \
+        "Actualizaciones__Directorio=${datos}/updates" > "${raiz}/etc/stockapp-api/api.env"
+    chmod 600 "${raiz}/etc/stockapp-api/api.env"
+    sed -e "s/__API_PORT__/${puerto}/g" -e "s/__API_BIND__/127.0.0.1/g" -e "s/__API_SCHEME__/http/g" \
+        "${REPO_ROOT}/deploy/stockapp-api.service" > "${raiz}/etc/systemd/system/stockapp-api.service"
+    echo inactive > "${dir}/estado/stockapp-api.activo"
+    echo enabled > "${dir}/estado/stockapp-api.habilitado"
+    echo "${TRABAJO}/api/StockApp.Api.dll" > "${dir}/estado/api.lanzar"
+}
+
+# arrancar_api <dir> <puerto> <host>: systemctl start (el falso, que lanza la API publicada) y
+# espera acotada a que GET / responda; una API que muere en el arranque aborta en el acto.
+arrancar_api() {
+    local dir="$1" puerto="$2" host="$3" pid _
+    ENSAYO_ESTADO="${dir}/estado" ENSAYO_RAIZ="${dir}/raiz" "${DIR_SHIMS}/systemctl" start stockapp-api \
+        || fallo_preparar 8 "systemctl start de la API de ${host} falló."
+    pid="$(cat "${dir}/estado/api.pid")"
+    for _ in $(seq 1 240); do
+        if curl -fsS --max-time 5 -o /dev/null "http://127.0.0.1:${puerto}/" 2>/dev/null; then
+            echo "  API de ${host} atendiendo en 127.0.0.1:${puerto} (PID ${pid})"
+            return 0
+        fi
+        if ! ps -p "$pid" -o pid= >/dev/null 2>&1; then
+            tail -n 30 "${dir}/estado/api.log" >&2 || :
+            fallo_preparar 8 "la API de ${host} murió al arrancar (log: ${dir}/estado/api.log)."
+        fi
+        sleep 0.5
+    done
+    tail -n 30 "${dir}/estado/api.log" >&2 || :
+    fallo_preparar 8 "la API de ${host} no respondió GET / en 120 s (log: ${dir}/estado/api.log)."
+}
+
+# backup_en_el_viejo: el historial del viejo lo hace la propia API (POST /backups como admin), así
+# V8 encuentra una corrida Exitosa con su archivo. El token vive en una variable y viaja por el
+# stdin de curl; la contraseña, por el entorno de jq.
+backup_en_el_viejo() {
+    local url="http://127.0.0.1:${PUERTO_VIEJO}" cuerpo respuesta token config listado _
+    cuerpo="$(PW="$(cat "${TRABAJO}/admin-password")" jq -nc '{nombreUsuario: "admin", contrasena: env.PW}')"
+    respuesta="$(curl -fsS --max-time 30 -X POST "${url}/auth/login" -H 'Content-Type: application/json' \
+        --data @- <<< "$cuerpo")" || fallo_preparar 8 "login de admin en la API vieja falló."
+    token="$(jq -r '.token // empty' <<< "$respuesta")"
+    [[ -n "$token" ]] || fallo_preparar 8 "el login de admin en la API vieja no devolvió token."
+    config="$(printf 'header = "Authorization: Bearer %s"' "$token")"
+    curl -fsS --max-time 30 -o /dev/null -K - -X POST "${url}/backups" <<< "$config" \
+        || fallo_preparar 8 "POST /backups en la API vieja falló."
+    for _ in $(seq 1 180); do
+        listado="$(curl -fsS --max-time 30 -K - "${url}/backups" <<< "$config")" \
+            || fallo_preparar 8 "GET /backups en la API vieja falló."
+        if [[ "$(jq -r '[.[] | select(.resultado == "Exitosa")] | length' <<< "$listado")" -gt 0 ]]; then
+            echo "  historial del viejo: una corrida de backup Exitosa"
+            return 0
+        fi
+        sleep 0.5
+    done
+    fallo_preparar 8 "el backup de la API vieja no terminó Exitoso en 90 s."
+}
+
+preparar_migracion() {
+    local admin="admin" n jwt pwbase feed nupkg tam
+    if [[ -n "$DUMP_REAL" ]]; then
+        [[ -f "$DUMP_REAL" && -r "$DUMP_REAL" ]] || error_uso "el dump '${DUMP_REAL}' no existe o no se puede leer."
+        [[ -n "${VPS_ADMIN_USER:-}" ]] \
+            || error_uso "con --dump, VPS_ADMIN_USER tiene que venir en el entorno: es el usuario real con el que migrar-vps.sh verifica."
+        [[ "$VPS_ADMIN_USER" =~ ^[A-Za-z0-9._@-]+$ ]] || error_uso "VPS_ADMIN_USER '${VPS_ADMIN_USER}' tiene caracteres no válidos."
+        admin="$VPS_ADMIN_USER"
+    fi
+    [[ "$PUERTO_VIEJO" != "$PUERTO_NUEVO" ]] || error_uso "--puerto-viejo y --puerto-nuevo tienen que ser distintos."
+    if [[ -e "$TRABAJO" && -n "$(ls -A "$TRABAJO")" ]]; then
+        echo "ERROR: '${TRABAJO}' no está vacío: el ensayo nunca reutiliza un directorio. ABORTO." >&2
+        exit 3
+    fi
+    lista_docker "los contenedores (docker ps -a)" docker ps -a --format '{{.Names}}'
+    for n in "$ORIGEN" "$DESTINO"; do
+        if contiene "$n"; then
+            echo "ERROR: ya existe el contenedor '${n}': el ensayo nunca reutiliza uno. ABORTO sin tocarlo." >&2
+            echo "       Si es de un ensayo anterior, corré 'limpiar' con su --trabajo." >&2
+            exit 3
+        fi
+    done
+    lista_docker "los volúmenes (docker volume ls)" docker volume ls --format '{{.Name}}'
+    for n in "$VOL_ORIGEN" "$VOL_DESTINO"; do
+        if contiene "$n"; then
+            echo "ERROR: ya existe el volumen '${n}': el ensayo nunca reutiliza uno. ABORTO sin tocarlo." >&2
+            exit 3
+        fi
+    done
+    puerto_libre --puerto-viejo "$PUERTO_VIEJO"
+    puerto_libre --puerto-nuevo "$PUERTO_NUEVO"
+
+    umask 077
+    mkdir -p "$TRABAJO"
+    chmod 700 "$TRABAJO"
+    printf 'TIPO=migracion\nSUFIJO=%s\nPUERTO_VIEJO=%s\nPUERTO_NUEVO=%s\n' "$SUFIJO" "$PUERTO_VIEJO" "$PUERTO_NUEVO" > "$CONFIG"
+    chmod 600 "$CONFIG"
+    CONFIG_ESCRITA=1
+    contenedores_ps > "$PS_ANTES"
+    aleatorio 32 > "${TRABAJO}/pg-password"
+    chmod 600 "${TRABAJO}/pg-password"
+    mkdir -p "$HOME_OPERADOR"
+
+    echo "== API publicada (dotnet publish, una vez) =="
+    # HOME y DOTNET_CLI_HOME dentro del trabajo: el SDK escribe en el HOME (~/.dotnet/corefx,
+    # ~/.local/share/NuGet; verificado) y el ensayo no toca el de quien lo corre. Los paquetes salen
+    # de la caché de NuGet de siempre, solo lectura en la práctica (si no, publicar los volvería a
+    # bajar).
+    # TMPDIR también: el SDK deja directorios temporales propios en /tmp.
+    local cache_nuget="${NUGET_PACKAGES:-${HOME}/.nuget/packages}"
+    mkdir -p "${TRABAJO}/dotnet-cli" "${TRABAJO}/tmp"
+    HOME="${TRABAJO}/dotnet-cli" DOTNET_CLI_HOME="${TRABAJO}/dotnet-cli" TMPDIR="${TRABAJO}/tmp" \
+        DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+        NUGET_PACKAGES="$cache_nuget" \
+        dotnet publish "${REPO_ROOT}/src/StockApp.Api/StockApp.Api.csproj" -c Release -o "${TRABAJO}/api" \
+        -nodeReuse:false -p:UseSharedCompilation=false > "${TRABAJO}/publicar.log" 2>&1 \
+        || { tail -n 30 "${TRABAJO}/publicar.log" >&2; fallo_preparar 8 "dotnet publish de la API falló (log: ${TRABAJO}/publicar.log)."; }
+    [[ -f "${TRABAJO}/api/StockApp.Api.dll" ]] || fallo_preparar 8 "dotnet publish no dejó ${TRABAJO}/api/StockApp.Api.dll."
+    echo "  ${TRABAJO}/api"
+
+    echo "== Contenedores del ensayo =="
+    crear_pg "$ORIGEN" "$VOL_ORIGEN"
+    local pg_viejo="$PUERTO_PG"
+    crear_pg "$DESTINO" "$VOL_DESTINO"
+    local pg_nuevo="$PUERTO_PG"
+    echo "  ${ORIGEN} (VPS viejo, 127.0.0.1:${pg_viejo}) y ${DESTINO} (VPS nuevo, 127.0.0.1:${pg_nuevo})"
+
+    if [[ -n "$DUMP_REAL" ]]; then
+        echo "== Dump real en el origen =="
+        local rc=0
+        "${REPO_ROOT}/deploy/restaurar-backup.sh" "$DUMP_REAL" --contenedor "$ORIGEN" \
+            --base stockapp --usuario stockapp --dir-seguridad "${TRABAJO}/seguridad-origen" || rc=$?
+        [[ "$rc" -eq 0 ]] || fallo_preparar "$rc" "restaurar-backup.sh no pudo cargar el dump en '${ORIGEN}'."
+    else
+        pwbase="Ens$(aleatorio 20)9"
+        printf '%s' "$pwbase" > "${TRABAJO}/admin-password"
+        chmod 600 "${TRABAJO}/admin-password"
+    fi
+
+    echo "== VPS viejo (${HOST_VIEJO}) =="
+    # Con --dump ya hay usuarios y el seed no hace nada: la contraseña de bootstrap es solo de relleno.
+    local contrasena_viejo
+    if [[ -f "${TRABAJO}/admin-password" ]]; then
+        contrasena_viejo="$(cat "${TRABAJO}/admin-password")"
+    else
+        contrasena_viejo="Ens$(aleatorio 20)9"
+    fi
+    armar_host "$DIR_VIEJO" "$PUERTO_VIEJO" "$pg_viejo" "$(aleatorio 64)" "$admin" "$contrasena_viejo"
+    arrancar_api "$DIR_VIEJO" "$PUERTO_VIEJO" "$HOST_VIEJO"
+    [[ -n "$DUMP_REAL" ]] || backup_en_el_viejo
+
+    echo "== VPS nuevo (${HOST_NUEVO}), como lo deja preparar-vps-nuevo.sh =="
+    jwt="$(aleatorio 64)"
+    pwbase="Ens$(aleatorio 20)9"
+    armar_host "$DIR_NUEVO" "$PUERTO_NUEVO" "$pg_nuevo" "$jwt" admin "$pwbase"
+    feed="${DIR_NUEVO}/raiz/var/lib/stockapp/updates"
+    nupkg="StockApp-${VERSION_FEED}-full.nupkg"
+    head -c 4096 /dev/urandom > "${feed}/${nupkg}"
+    tam="$(stat -c %s "${feed}/${nupkg}")"
+    jq -n --arg v "$VERSION_FEED" --arg f "$nupkg" --argjson t "$tam" \
+        --arg sha1 "$(sha1sum "${feed}/${nupkg}" | cut -d' ' -f1)" \
+        --arg sha256 "$(sha256sum "${feed}/${nupkg}" | cut -d' ' -f1)" \
+        '{Assets: [{PackageId: "StockApp", Version: $v, Type: "Full", FileName: $f, SHA1: $sha1, SHA256: $sha256, Size: $t, NotesMarkdown: "", NotesHtml: ""}]}' \
+        > "${feed}/releases.win.json"
+    mkdir -p "${DIR_NUEVO}/home/stockapp-deploy/migracion"
+    chmod 700 "${DIR_NUEVO}/home/stockapp-deploy" "${DIR_NUEVO}/home/stockapp-deploy/migracion"
+    # El .env del servidor, con las claves que escribe preparar-vps-nuevo.sh y los overrides que
+    # el api.env del viejo tiene fuera de lo de install.sh (así el pre-vuelo de overrides pasa).
+    printf '%s\n' \
+        "POSTGRES_USER=stockapp" "POSTGRES_PASSWORD=$(cat "${TRABAJO}/pg-password")" "POSTGRES_DB=stockapp" \
+        "BOOTSTRAP_ADMIN_USER=admin" "BOOTSTRAP_PASSWORD=${pwbase}" "JWT_SECRET=${jwt}" \
+        "API_BIND=127.0.0.1" "API_SCHEME=http" "API_PORT=${PUERTO_NUEVO}" "API_HOSTNAME=127.0.0.1" \
+        "Licencia__Habilitado=false" "RateLimiting__Login__PermitLimit=10" \
+        "Actualizaciones__Directorio=${feed}" > "${DIR_NUEVO}/home/stockapp-deploy/.env"
+    chmod 600 "${DIR_NUEVO}/home/stockapp-deploy/.env"
+    arrancar_api "$DIR_NUEVO" "$PUERTO_NUEVO" "$HOST_NUEVO"
+    curl -fsS --max-time 10 -o /dev/null "http://127.0.0.1:${PUERTO_NUEVO}/updates/releases.win.json" \
+        || fallo_preparar 8 "la API nueva no sirve el feed (/updates/releases.win.json)."
+    echo "  feed ${VERSION_FEED}; unit, directorios y ~/stockapp-deploy/.env en su lugar"
+
+    echo "== .env del operador =="
+    local h archivo puerto
+    for h in viejo nuevo; do
+        if [[ "$h" == viejo ]]; then archivo="$ENV_OPERADOR" puerto="$PUERTO_VIEJO"; else archivo="$ENV_NUEVO_OPERADOR" puerto="$PUERTO_NUEVO"; fi
+        printf '%s\n' \
+            "VPS_HOST=vps-${h}.ensayo.invalid" "VPS_USER=ensayo" "VPS_SSH_PORT=22" \
+            "API_SCHEME=http" "API_HOSTNAME=127.0.0.1" "API_PORT=${puerto}" \
+            "POSTGRES_USER=stockapp" "POSTGRES_DB=stockapp" "VPS_ADMIN_USER=${admin}" > "$archivo"
+        chmod 600 "$archivo"
+    done
+    echo "  ${ENV_OPERADOR} y ${ENV_NUEVO_OPERADOR}"
+    echo "OK: ensayo de migración preparado en ${TRABAJO}"
+    recordar_datos
+}
+
+# ---------------------------------------------------------------------------------------
+# migrar
+# ---------------------------------------------------------------------------------------
+migrar() {
+    local modo="corte" a extra=() rc=0 contrasena=""
+    exigir_tipo migracion
+    for a in "${MIGRAR_ARGS[@]}"; do
+        case "$a" in
+            --ensayo) modo="ensayo" ;;
+            --continuar) modo="continuar" ;;
+            --revertir) modo="revertir" ;;
+            --desde-backup) modo="desde-backup" ;;
+            --post-corte) modo="post-corte" ;;
+        esac
+    done
+    # Los contenedores y las raíces del arnés (R13, R11) en todo modo que opere los hosts: sin ellos,
+    # migrar-vps.sh operaría el contenedor de desarrollo y el /etc de esta máquina. --continuar y --revertir no
+    # aceptan --env-* (salen del estado de la corrida); --post-corte no acepta nada más.
+    case "$modo" in
+        corte | ensayo)
+            extra=(--env-viejo "$ENV_OPERADOR" --env-nuevo "$ENV_NUEVO_OPERADOR"
+                --contenedor-viejo "$ORIGEN" --contenedor-nuevo "$DESTINO"
+                --raiz-remota-viejo "${DIR_VIEJO}/raiz" --raiz-remota-nuevo "${DIR_NUEVO}/raiz"
+                --sin-verificar-preparacion) ;;
+        continuar | revertir)
+            extra=(--contenedor-viejo "$ORIGEN" --contenedor-nuevo "$DESTINO"
+                --raiz-remota-viejo "${DIR_VIEJO}/raiz" --raiz-remota-nuevo "${DIR_NUEVO}/raiz"
+                --sin-verificar-preparacion) ;;
+        desde-backup)
+            extra=(--env-viejo "$ENV_OPERADOR" --env-nuevo "$ENV_NUEVO_OPERADOR"
+                --contenedor-nuevo "$DESTINO" --raiz-remota-nuevo "${DIR_NUEVO}/raiz"
+                --sin-verificar-preparacion) ;;
+        post-corte) extra=() ;;
+    esac
+    # La contraseña del admin del ensayo, en el entorno de ESTE comando (nunca en argv); con --dump
+    # no hay archivo y VPS_ADMIN_PASSWORD viene del entorno de quien llama.
+    if [[ -f "${TRABAJO}/admin-password" ]]; then
+        contrasena="$(cat "${TRABAJO}/admin-password")"
+        VPS_ADMIN_PASSWORD="$contrasena" PATH="${DIR_SHIMS}:${PATH}" ENSAYO_TRABAJO="$TRABAJO" HOME="$HOME_OPERADOR" \
+            "${REPO_ROOT}/deploy/migrar-vps.sh" "${MIGRAR_ARGS[@]}" "${extra[@]}" || rc=$?
+    else
+        PATH="${DIR_SHIMS}:${PATH}" ENSAYO_TRABAJO="$TRABAJO" HOME="$HOME_OPERADOR" \
+            "${REPO_ROOT}/deploy/migrar-vps.sh" "${MIGRAR_ARGS[@]}" "${extra[@]}" || rc=$?
+    fi
+    return "$rc"
+}
+
+# ---------------------------------------------------------------------------------------
 # limpiar
 # ---------------------------------------------------------------------------------------
+# detener_apis: las APIs de los dos hosts, con el systemctl falso (mata por el PID guardado) y
+# verificado acá con ps sobre ese mismo PID. Devuelve 0 u 8.
+detener_apis() {
+    local rc=0 dir pid
+    for dir in "$DIR_VIEJO" "$DIR_NUEVO"; do
+        [[ -f "${dir}/estado/api.pid" ]] || continue
+        pid="$(cat "${dir}/estado/api.pid")"
+        if ! ENSAYO_ESTADO="${dir}/estado" ENSAYO_RAIZ="${dir}/raiz" "${DIR_SHIMS}/systemctl" stop stockapp-api; then
+            rc=8
+        fi
+        if [[ "$pid" =~ ^[1-9][0-9]*$ ]] && ps -p "$pid" -o pid= >/dev/null 2>&1; then
+            echo "ERROR: la API de ${dir##*/} (PID ${pid}) sigue viva." >&2
+            rc=8
+        fi
+    done
+    return "$rc"
+}
+
 # borrar_recursos: los dos contenedores (con -v) y los dos volúmenes de este sufijo, por nombre
 # EXACTO y solo si existen; después verifica que no quede ninguno. Devuelve 0 u 8.
 borrar_recursos() {
@@ -429,6 +833,9 @@ borrar_recursos() {
 
 limpiar() {
     local rc=0
+    detener_apis || rc=$?
+    [[ "$rc" -eq 0 ]] || exit "$rc"
+    [[ ! -d "${TRABAJO}/hosts" ]] || echo "  APIs del ensayo detenidas."
     borrar_recursos || rc=$?
     [[ "$rc" -eq 0 ]] || exit "$rc"
     echo "  Contenedores y volúmenes del ensayo borrados."
@@ -448,4 +855,7 @@ limpiar() {
     echo "OK: contenedores corriendo iguales a los de antes del ensayo."
 }
 
-"$SUBCOMANDO"
+case "$SUBCOMANDO" in
+    preparar-migracion) preparar_migracion ;;
+    *) "$SUBCOMANDO" ;;
+esac
