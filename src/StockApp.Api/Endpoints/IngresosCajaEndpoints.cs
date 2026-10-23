@@ -2,19 +2,20 @@ using System.Linq;
 using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 
 namespace StockApp.Api.Endpoints;
 
 public record IngresoCajaDto(
     int Id, DateTime Fecha, string Concepto,
     int FuenteFinanciamientoId, string? FuenteNombre,
-    decimal Monto, bool Activo);
+    decimal Monto, bool Activo, Caja Caja);
 
 public record CrearIngresoCajaRequest(
-    DateTime Fecha, string Concepto, int FuenteFinanciamientoId, decimal Monto);
+    DateTime Fecha, string Concepto, int FuenteFinanciamientoId, decimal Monto, Caja Caja);
 
 public record ModificarIngresoCajaRequest(
-    DateTime Fecha, string Concepto, int FuenteFinanciamientoId, decimal Monto);
+    DateTime Fecha, string Concepto, int FuenteFinanciamientoId, decimal Monto, Caja Caja);
 
 public static class IngresosCajaEndpoints
 {
@@ -34,6 +35,7 @@ public static class IngresosCajaEndpoints
                 Concepto = request.Concepto,
                 FuenteFinanciamientoId = request.FuenteFinanciamientoId,
                 Monto = request.Monto,
+                Caja = request.Caja,
             });
             return Results.Created((string?)null, new { id });
         })
@@ -48,6 +50,7 @@ public static class IngresosCajaEndpoints
                 Concepto = request.Concepto,
                 FuenteFinanciamientoId = request.FuenteFinanciamientoId,
                 Monto = request.Monto,
+                Caja = request.Caja,
             });
             return Results.Ok();
         })
@@ -66,5 +69,5 @@ public static class IngresosCajaEndpoints
     private static IngresoCajaDto ADto(IngresoCaja i) => new(
         i.Id, i.Fecha, i.Concepto,
         i.FuenteFinanciamientoId, i.FuenteFinanciamiento?.Nombre,
-        i.Monto, i.Activo);
+        i.Monto, i.Activo, i.Caja);
 }

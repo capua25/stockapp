@@ -60,7 +60,7 @@ public class IngresosCajaEndpointTests : ApiTestBase
         var client = ClienteAutenticado(TokenOperador());
 
         var response = await client.PostAsJsonAsync("/finanzas/ingresos",
-            new CrearIngresoCajaRequest(DateTime.UtcNow, "Partida FIGM julio", fuenteId, 250000m));
+            new CrearIngresoCajaRequest(DateTime.UtcNow, "Partida FIGM julio", fuenteId, 250000m, Caja.Local));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         await using var verificacion = Factory.CrearContexto();
@@ -94,7 +94,7 @@ public class IngresosCajaEndpointTests : ApiTestBase
         var client = ClienteAutenticado(TokenAdmin());
 
         var response = await client.PostAsJsonAsync("/finanzas/ingresos",
-            new CrearIngresoCajaRequest(DateTime.UtcNow, "Inválido", fuenteId, 0m));
+            new CrearIngresoCajaRequest(DateTime.UtcNow, "Inválido", fuenteId, 0m, Caja.Local));
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
@@ -105,7 +105,7 @@ public class IngresosCajaEndpointTests : ApiTestBase
         var fuenteId = await SeedFuenteAsync();
         var client = ClienteAutenticado(TokenOperador());
         await client.PostAsJsonAsync("/finanzas/ingresos",
-            new CrearIngresoCajaRequest(DateTime.UtcNow, "Multas junio", fuenteId, 12000m));
+            new CrearIngresoCajaRequest(DateTime.UtcNow, "Multas junio", fuenteId, 12000m, Caja.Local));
 
         var response = await client.GetAsync("/finanzas/ingresos");
 
@@ -117,18 +117,68 @@ public class IngresosCajaEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task Post_PoaConFuenteLocal_Devuelve409()
+    {
+        var fuenteId = await SeedFuenteAsync();   // la fuente sembrada es de la caja Local
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsJsonAsync("/finanzas/ingresos",
+            new CrearIngresoCajaRequest(DateTime.UtcNow, "Fondos POA cruzados", fuenteId, 100m, Caja.Poa));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        await using var verificacion = Factory.CrearContexto();
+        Assert.False(await verificacion.IngresosCaja.AnyAsync(i => i.Concepto == "Fondos POA cruzados"));
+    }
+
+    [Fact]
+    public async Task Post_Caja7_Devuelve400()
+    {
+        var fuenteId = await SeedFuenteAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var json = $$"""
+            {"fecha":"2026-01-15T00:00:00Z","concepto":"Caja inexistente","fuenteFinanciamientoId":{{fuenteId}},"monto":100,"caja":7}
+            """;
+        var response = await client.PostAsync("/finanzas/ingresos",
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var verificacion = Factory.CrearContexto();
+        Assert.False(await verificacion.IngresosCaja.AnyAsync(i => i.Concepto == "Caja inexistente"));
+    }
+
+    [Fact]
+    public async Task Get_DevuelveLaCajaComoNumero()
+    {
+        var fuenteId = await SeedFuenteAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+        var alta = await client.PostAsJsonAsync("/finanzas/ingresos",
+            new CrearIngresoCajaRequest(DateTime.UtcNow, "Con caja numérica", fuenteId, 100m, Caja.Local));
+        Assert.Equal(HttpStatusCode.Created, alta.StatusCode);
+
+        var response = await client.GetAsync("/finanzas/ingresos");
+
+        using var doc = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var ingreso = doc.RootElement.EnumerateArray()
+            .Single(i => i.GetProperty("concepto").GetString() == "Con caja numérica");
+        var caja = ingreso.GetProperty("caja");
+        Assert.Equal(System.Text.Json.JsonValueKind.Number, caja.ValueKind);
+        Assert.Equal(0, caja.GetInt32());
+    }
+
+    [Fact]
     public async Task PutIngresos_Modifica200()
     {
         var fuenteId = await SeedFuenteAsync();
         var client = ClienteAutenticado(TokenAdmin());
         await client.PostAsJsonAsync("/finanzas/ingresos",
-            new CrearIngresoCajaRequest(DateTime.UtcNow, "Original", fuenteId, 100m));
+            new CrearIngresoCajaRequest(DateTime.UtcNow, "Original", fuenteId, 100m, Caja.Local));
         await using var ctx = Factory.CrearContexto();
         var id = await ctx.IngresosCaja.Where(i => i.Concepto == "Original")
             .Select(i => i.Id).SingleAsync();
 
         var response = await client.PutAsJsonAsync($"/finanzas/ingresos/{id}",
-            new ModificarIngresoCajaRequest(DateTime.UtcNow, "Editado", fuenteId, 200m));
+            new ModificarIngresoCajaRequest(DateTime.UtcNow, "Editado", fuenteId, 200m, Caja.Local));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         await using var verificacion = Factory.CrearContexto();
@@ -143,7 +193,7 @@ public class IngresosCajaEndpointTests : ApiTestBase
         var fuenteId = await SeedFuenteAsync();
         var client = ClienteAutenticado(TokenAdmin());
         await client.PostAsJsonAsync("/finanzas/ingresos",
-            new CrearIngresoCajaRequest(DateTime.UtcNow, "Para baja", fuenteId, 100m));
+            new CrearIngresoCajaRequest(DateTime.UtcNow, "Para baja", fuenteId, 100m, Caja.Local));
         await using var ctx = Factory.CrearContexto();
         var id = await ctx.IngresosCaja.Where(i => i.Concepto == "Para baja")
             .Select(i => i.Id).SingleAsync();

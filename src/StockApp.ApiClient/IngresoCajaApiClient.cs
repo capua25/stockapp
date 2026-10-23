@@ -1,16 +1,17 @@
 using System.Net.Http.Json;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 
 namespace StockApp.ApiClient;
 
 internal sealed record IngresoCajaWire(
     int Id, DateTime Fecha, string Concepto,
     int FuenteFinanciamientoId, string? FuenteNombre,
-    decimal Monto, bool Activo);
+    decimal Monto, bool Activo, Caja Caja);
 
 internal sealed record IngresoCajaBody(
-    DateTime Fecha, string Concepto, int FuenteFinanciamientoId, decimal Monto);
+    DateTime Fecha, string Concepto, int FuenteFinanciamientoId, decimal Monto, Caja Caja);
 
 /// <summary>IIngresoCajaService contra /finanzas/ingresos.</summary>
 public sealed class IngresoCajaApiClient : IIngresoCajaService
@@ -53,7 +54,7 @@ public sealed class IngresoCajaApiClient : IIngresoCajaService
     }
 
     private static IngresoCajaBody ABody(IngresoCaja i) => new(
-        i.Fecha, i.Concepto, i.FuenteFinanciamientoId, i.Monto);
+        i.Fecha, i.Concepto, i.FuenteFinanciamientoId, i.Monto, i.Caja);
 
     private static IngresoCaja AEntidad(IngresoCajaWire dto) => new()
     {
@@ -66,5 +67,6 @@ public sealed class IngresoCajaApiClient : IIngresoCajaService
             : new FuenteFinanciamiento { Id = dto.FuenteFinanciamientoId, Nombre = dto.FuenteNombre },
         Monto = dto.Monto,
         Activo = dto.Activo,
+        Caja = dto.Caja,
     };
 }

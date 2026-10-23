@@ -136,6 +136,113 @@ public class IngresoCajaServiceTests
     }
 
     [Fact]
+    public async Task AltaAsync_CajaPoaConFuenteLocal_LanzaReglaDeNegocio()
+    {
+        var (svc, repo, fuentes, _) = Crear();
+        fuentes.Setup(f => f.ObtenerPorIdAsync(1))
+            .ReturnsAsync(new FuenteFinanciamiento { Id = 1, Nombre = "Literal A", Activo = true, Caja = Caja.Local });
+        var ingreso = IngresoValido();
+        ingreso.Caja = Caja.Poa;
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.AltaAsync(ingreso));
+
+        Assert.Equal(CajaYLiteral.MensajeFuenteDeOtraCaja("Literal A", Caja.Poa), ex.Message);
+        repo.Verify(r => r.AgregarAsync(It.IsAny<IngresoCaja>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AltaAsync_CajaInexistente_LanzaArgumentException()
+    {
+        var (svc, repo, _, _) = Crear();
+        var ingreso = IngresoValido();
+        ingreso.Caja = (Caja)7;
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(() => svc.AltaAsync(ingreso));
+
+        Assert.Equal(CajaYLiteral.MensajeCajaInexistente, ex.Message);
+        repo.Verify(r => r.AgregarAsync(It.IsAny<IngresoCaja>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AltaAsync_PoaConLiteralB_GuardaYAuditaCajaYFuente()
+    {
+        var (svc, repo, fuentes, audit) = Crear();
+        fuentes.Setup(f => f.ObtenerPorIdAsync(2))
+            .ReturnsAsync(new FuenteFinanciamiento { Id = 2, Nombre = "Literal B", Activo = true, Caja = Caja.Poa });
+        repo.Setup(r => r.AgregarAsync(It.IsAny<IngresoCaja>())).ReturnsAsync(8);
+        var ingreso = IngresoValido();
+        ingreso.Caja = Caja.Poa;
+        ingreso.FuenteFinanciamientoId = 2;
+
+        await svc.AltaAsync(ingreso);
+
+        repo.Verify(r => r.AgregarAsync(It.Is<IngresoCaja>(i => i.Caja == Caja.Poa)), Times.Once);
+        audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.AltaIngresoCaja, "IngresoCaja", 8,
+            It.Is<string>(d => d.Contains("Caja: POA") && d.Contains("Fuente: 2"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_HistoricoCruzado_SinCambiarCajaNiFuente_Guarda()
+    {
+        // Dato histórico: ingreso en caja Local con una fuente que hoy es de la caja POA.
+        var original = IngresoValido();
+        original.Id = 1;
+        var (svc, repo, fuentes, _) = Crear();
+        fuentes.Setup(f => f.ObtenerPorIdAsync(1))
+            .ReturnsAsync(new FuenteFinanciamiento { Id = 1, Nombre = "Cruzada", Activo = true, Caja = Caja.Poa });
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+
+        var editado = IngresoValido();
+        editado.Id = 1;
+        editado.Concepto = "Solo cambia el concepto";
+        await svc.ModificarAsync(editado);
+
+        repo.Verify(r => r.ActualizarAsync(It.Is<IngresoCaja>(i =>
+            i.Concepto == "Solo cambia el concepto" && i.Caja == Caja.Local)), Times.Once);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_CambiaLaCaja_ValidaYAudita()
+    {
+        var original = IngresoValido();
+        original.Id = 1;
+        var (svc, repo, fuentes, audit) = Crear();
+        fuentes.Setup(f => f.ObtenerPorIdAsync(1))
+            .ReturnsAsync(new FuenteFinanciamiento { Id = 1, Nombre = "Literal B", Activo = true, Caja = Caja.Poa });
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+
+        var editado = IngresoValido();
+        editado.Id = 1;
+        editado.Caja = Caja.Poa;
+        await svc.ModificarAsync(editado);
+
+        repo.Verify(r => r.ActualizarAsync(It.Is<IngresoCaja>(i => i.Caja == Caja.Poa)), Times.Once);
+        audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.ModificacionIngresoCaja, "IngresoCaja", 1,
+            It.Is<string>(d => d.Contains("Caja: Local → POA"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_CambiaLaCajaConFuenteIncompatible_LanzaReglaDeNegocio()
+    {
+        var original = IngresoValido();
+        original.Id = 1;
+        var (svc, repo, fuentes, _) = Crear();
+        fuentes.Setup(f => f.ObtenerPorIdAsync(1))
+            .ReturnsAsync(new FuenteFinanciamiento { Id = 1, Nombre = "Literal A", Activo = true, Caja = Caja.Local });
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+
+        var editado = IngresoValido();
+        editado.Id = 1;
+        editado.Caja = Caja.Poa;
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.ModificarAsync(editado));
+
+        Assert.Equal(CajaYLiteral.MensajeFuenteDeOtraCaja("Literal A", Caja.Poa), ex.Message);
+        repo.Verify(r => r.ActualizarAsync(It.IsAny<IngresoCaja>()), Times.Never);
+    }
+
+    [Fact]
     public async Task BajaLogicaAsync_ActivoFalse_RegistraBaja()
     {
         var ingreso = IngresoValido();

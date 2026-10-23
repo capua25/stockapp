@@ -37,14 +37,10 @@ public class IngresoCajaService : IIngresoCajaService
         if (ingreso.Fecha == default)
             throw new ArgumentException("La fecha del ingreso es obligatoria.");
 
-        var fuente = await _fuentes.ObtenerPorIdAsync(ingreso.FuenteFinanciamientoId)
-            ?? throw new EntidadNoEncontradaException(
-                $"Fuente de financiamiento {ingreso.FuenteFinanciamientoId} no encontrada.");
-        var fuenteCambio = original is null
-            || original.FuenteFinanciamientoId != ingreso.FuenteFinanciamientoId;
-        if (!fuente.Activo && fuenteCambio)
-            throw new ReglaDeNegocioException(
-                $"La fuente de financiamiento '{fuente.Nombre}' está dada de baja.");
+        var cambio = original is null
+            || original.FuenteFinanciamientoId != ingreso.FuenteFinanciamientoId
+            || original.Caja != ingreso.Caja;
+        await CajaYLiteral.ValidarFuenteAsync(_fuentes, ingreso.Caja, ingreso.FuenteFinanciamientoId, cambio);
     }
 
     public async Task<int> AltaAsync(IngresoCaja ingreso)
@@ -56,7 +52,7 @@ public class IngresoCajaService : IIngresoCajaService
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id, AccionAuditada.AltaIngresoCaja, "IngresoCaja", id,
-            $"Concepto: {ingreso.Concepto}; Monto: {ingreso.Monto}; Fecha: {ingreso.Fecha:yyyy-MM-dd}");
+            $"Concepto: {ingreso.Concepto}; Monto: {ingreso.Monto}; Fecha: {ingreso.Fecha:yyyy-MM-dd}; Caja: {ingreso.Caja.Nombre()}; Fuente: {ingreso.FuenteFinanciamientoId}");
 
         return id;
     }
@@ -79,6 +75,8 @@ public class IngresoCajaService : IIngresoCajaService
             cambios.Add($"Fecha: {original.Fecha:yyyy-MM-dd} → {ingreso.Fecha:yyyy-MM-dd}");
         if (original.Monto != ingreso.Monto)
             cambios.Add($"Monto: {original.Monto} → {ingreso.Monto}");
+        if (original.Caja != ingreso.Caja)
+            cambios.Add($"Caja: {original.Caja.Nombre()} → {ingreso.Caja.Nombre()}");
         if (original.FuenteFinanciamientoId != ingreso.FuenteFinanciamientoId)
             cambios.Add($"Fuente: {original.FuenteFinanciamientoId} → {ingreso.FuenteFinanciamientoId}");
 
@@ -90,6 +88,7 @@ public class IngresoCajaService : IIngresoCajaService
         original.Concepto               = ingreso.Concepto;
         original.Fecha                  = ingreso.Fecha;
         original.Monto                  = ingreso.Monto;
+        original.Caja                   = ingreso.Caja;
         original.FuenteFinanciamientoId = ingreso.FuenteFinanciamientoId;
         await _repo.ActualizarAsync(original);
 

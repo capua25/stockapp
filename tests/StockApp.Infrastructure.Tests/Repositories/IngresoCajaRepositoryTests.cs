@@ -1,4 +1,6 @@
+using Microsoft.EntityFrameworkCore;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Repositories;
 using StockApp.Infrastructure.Tests.Fixtures;
 using Xunit;
@@ -40,6 +42,24 @@ public class IngresoCajaRepositoryTests : PostgresRepositoryTestBase
         Assert.Equal(250000.5000m, found.Monto);
         Assert.NotNull(found.FuenteFinanciamiento);
         Assert.True(found.Activo);
+    }
+
+    [Fact]
+    public async Task Agregar_ConCajaPoa_LaPersiste()
+    {
+        var fuente = new FuenteFinanciamiento { Nombre = $"Literal POA {Guid.NewGuid():N}", Caja = Caja.Poa };
+        Context.Add(fuente);
+        await Context.SaveChangesAsync();
+        var id = await _repo.AgregarAsync(new IngresoCaja
+        {
+            Fecha = DateTime.UtcNow, Concepto = "Fondos POA", Caja = Caja.Poa,
+            FuenteFinanciamientoId = fuente.Id, Monto = 500m,
+        });
+
+        await using var otroContexto = Fixture.CrearContexto();
+        var leido = await otroContexto.IngresosCaja.SingleAsync(i => i.Id == id);
+
+        Assert.Equal(Caja.Poa, leido.Caja);
     }
 
     [Fact]

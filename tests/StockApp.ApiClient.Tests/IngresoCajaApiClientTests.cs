@@ -1,7 +1,9 @@
 using System.Net;
+using System.Text.Json;
 using StockApp.ApiClient;
 using StockApp.ApiClient.Tests.TestInfra;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 
 namespace StockApp.ApiClient.Tests;
@@ -47,6 +49,37 @@ public class IngresoCajaApiClientTests
         Assert.Contains("\"concepto\":\"Multas\"", fake.UltimoBody);
         Assert.DoesNotContain("\"id\"", fake.UltimoBody);
         Assert.Equal(7, id);
+    }
+
+    [Fact]
+    public async Task AltaAsync_EnviaLaCajaComoNumero()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(new { id = 7 }, HttpStatusCode.Created));
+        var client = new IngresoCajaApiClient(TestHttp.CrearCliente(fake));
+
+        await client.AltaAsync(new IngresoCaja
+        {
+            Fecha = Hoy, Concepto = "Fondos POA", FuenteFinanciamientoId = 2, Monto = 100m, Caja = Caja.Poa,
+        });
+
+        using var doc = JsonDocument.Parse(fake.UltimoBody!);
+        Assert.Equal(1, doc.RootElement.GetProperty("caja").GetInt32());
+    }
+
+    [Fact]
+    public async Task ListarTodosAsync_LeeLaCaja()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(new[]
+        {
+            new { id = 1, fecha = Hoy, concepto = "Local", fuenteFinanciamientoId = 1, fuenteNombre = "A", monto = 1m, activo = true, caja = 0 },
+            new { id = 2, fecha = Hoy, concepto = "POA", fuenteFinanciamientoId = 2, fuenteNombre = "B", monto = 2m, activo = true, caja = 1 },
+        }));
+        var client = new IngresoCajaApiClient(TestHttp.CrearCliente(fake));
+
+        var ingresos = await client.ListarTodosAsync();
+
+        Assert.Equal(Caja.Local, ingresos[0].Caja);
+        Assert.Equal(Caja.Poa, ingresos[1].Caja);
     }
 
     [Fact]

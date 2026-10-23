@@ -1,4 +1,7 @@
+using StockApp.Application.Interfaces;
+using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Domain.Exceptions;
 
 namespace StockApp.Application.Finanzas;
 
@@ -17,5 +20,31 @@ public static class CajaYLiteral
     {
         if (!Enum.IsDefined(caja))
             throw new ArgumentException(MensajeCajaInexistente);
+    }
+
+    public static string MensajeFuenteDeOtraCaja(string fuente, Caja caja)
+        => $"La fuente de financiamiento '{fuente}' no corresponde a la caja {caja.Nombre()}.";
+
+    /// <summary>
+    /// Valida la fuente de un movimiento contra su caja. La caja y la existencia se chequean siempre; la baja y la
+    /// pertenencia a la caja solo cuando <paramref name="cambio"/> (alta, o se cambió la caja o la fuente): editar
+    /// otro campo de un movimiento histórico no puede quedar bloqueado por una fuente que hoy es de otra caja.
+    /// </summary>
+    public static async Task<FuenteFinanciamiento> ValidarFuenteAsync(
+        IFuenteFinanciamientoRepository fuentes, Caja caja, int fuenteFinanciamientoId, bool cambio)
+    {
+        ValidarCaja(caja);
+        var fuente = await fuentes.ObtenerPorIdAsync(fuenteFinanciamientoId)
+            ?? throw new EntidadNoEncontradaException(
+                $"Fuente de financiamiento {fuenteFinanciamientoId} no encontrada.");
+        if (cambio)
+        {
+            if (!fuente.Activo)
+                throw new ReglaDeNegocioException(
+                    $"La fuente de financiamiento '{fuente.Nombre}' está dada de baja.");
+            if (fuente.Caja != caja)
+                throw new ReglaDeNegocioException(MensajeFuenteDeOtraCaja(fuente.Nombre, caja));
+        }
+        return fuente;
     }
 }
