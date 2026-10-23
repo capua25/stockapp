@@ -120,9 +120,20 @@ public class IngresosViewV2Tests
         var m = Montar(Partida);
         var grilla = Control<DataGrid>(m, "Grilla");
 
-        Assert.Equal(new object?[] { "FECHA", "CONCEPTO", "FUENTE", "MONTO" }, grilla.Columns.Select(c => c.Header).ToArray());
+        Assert.Equal(new object?[] { "FECHA", "CONCEPTO", "CAJA", "FUENTE", "MONTO" }, grilla.Columns.Select(c => c.Header).ToArray());
         Assert.DoesNotContain(grilla.Columns, c => c is DataGridCheckBoxColumn);
         Assert.True(grilla.CanUserSortColumns);
+    }
+
+    [AvaloniaFact]
+    public void Grilla_ColumnaCaja_MuestraPOA()
+    {
+        var poa = I(4, "Aporte POA obras", 90_000m);
+        poa.Caja = Caja.Poa;
+        var m = Montar(Partida, poa);
+
+        Assert.True(Visible(CeldaConTexto(m, "POA")));
+        Assert.True(Visible(CeldaConTexto(m, "Local")));
     }
 
     [AvaloniaFact]
@@ -155,7 +166,7 @@ public class IngresosViewV2Tests
         var fila = Fila(m, Duplicado);
         var textos = fila.GetVisualDescendants().OfType<TextBlock>()
             .Where(t => !string.IsNullOrEmpty(t.Text) && t.FindAncestorOfType<Insignia>() is null).ToList();
-        Assert.Equal(4, textos.Count); // fecha, concepto, fuente, monto
+        Assert.Equal(5, textos.Count); // fecha, concepto, caja, fuente, monto
         Assert.All(textos, t => Assert.Equal(Terciario, Assert.IsAssignableFrom<ISolidColorBrush>(t.Foreground).Color));
         var insignia = fila.GetVisualDescendants().OfType<Insignia>().Single(i => i.Texto == "Inactivo");
         Assert.True(Visible(insignia));

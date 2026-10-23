@@ -12,7 +12,7 @@
   /* Grid con una columna * de MaxWidth 760: la card mide 760 a la izquierda. Padding de formulario 24. */
   .formulario { max-width: var(--v2-ancho-formulario-max); padding: 24px; }
   .subtitulo { margin-bottom: 12px; }
-  /* Grid *,16,*: Fecha | Monto, Concepto a todo el ancho, Fuente en la columna izquierda. Medido: columnas de 347. */
+  /* Grid *,16,*: Fecha | Monto, Concepto a todo el ancho, Caja | Fuente. Medido: columnas de 347. */
   .campos { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; row-gap: 16px; align-items: start; }
   .completo { grid-column: 1 / 3; }
   /* Monto: TextBox alineado a la derecha. */
@@ -81,6 +81,10 @@
           <div class="v2-campo completo">
             <div class="v2-campo-etiqueta"><span>Concepto</span><span class="v2-campo-requerido">*</span></div>
             <div><div class="v2-input"><span class="v2-input-placeholder">Ej.: Partida mensual FIGM julio</span></div></div>
+          </div>
+          <div class="v2-campo">
+            <div class="v2-campo-etiqueta"><span>Caja</span><span class="v2-campo-requerido">*</span></div>
+            <div><div class="v2-input"><span class="v2-input-placeholder">Elegí la caja</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div>
           </div>
           <div class="v2-campo">
             <div class="v2-campo-etiqueta"><span>Fuente de financiamiento</span><span class="v2-campo-requerido">*</span></div>

@@ -29,6 +29,9 @@ public partial class IngresoFormViewModel : ViewModelBase, INotifyDataErrorInfo
 
     private int _idEdicion;
     private IngresoCaja? _ingresoParaEditar;
+    private List<FuenteFinanciamiento> _fuentesActivas = new();
+    private FuenteFinanciamiento? _fuenteHistorica;
+    private bool _fuentesCargadas;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
@@ -38,9 +41,17 @@ public partial class IngresoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
     private string _concepto = string.Empty;
 
+    /// <summary>Sin default: la caja se elige explícitamente al dar de alta un ingreso.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
+    private Caja? _cajaSeleccionada;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
     private FuenteFinanciamiento? _fuenteSeleccionada;
+
+    /// <summary>Aviso cuando la caja elegida no tiene literales activos asignados; null si los tiene o no hay caja.</summary>
+    [ObservableProperty] private string? _avisoSinLiterales;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
@@ -56,15 +67,18 @@ public partial class IngresoFormViewModel : ViewModelBase, INotifyDataErrorInfo
 
     public ObservableCollection<FuenteFinanciamiento> FuentesDisponibles { get; } = new();
 
+    public IReadOnlyList<Caja> Cajas => CajaExtensions.Todas;
+
     public const string MensajeFechaObligatoria = "La fecha del ingreso es obligatoria.";
     public const string MensajeMontoObligatorio = "El monto es obligatorio.";
     public const string MensajeConceptoObligatorio = "El concepto es obligatorio.";
     public const string MensajeFuenteObligatoria = "Elegí la fuente de financiamiento.";
+    public const string MensajeCajaObligatoria = "Elegí la caja.";
 
     /// <summary>Propiedades bindeadas que se validan en el cliente. ErrorsChanged se levanta con estos nombres: son los
     /// que el binding de cada control le pregunta a GetErrors.</summary>
     private static readonly string[] CamposValidados =
-        [nameof(FechaSeleccionada), nameof(MontoTexto), nameof(Concepto), nameof(FuenteSeleccionada)];
+        [nameof(FechaSeleccionada), nameof(MontoTexto), nameof(Concepto), nameof(CajaSeleccionada), nameof(FuenteSeleccionada)];
 
     /// <summary>Campos que el usuario ya tocó (cambió el valor, salió del campo o intentó guardar). Un campo sin tocar
     /// no muestra su error: el formulario recién abierto no aparece en rojo.</summary>
@@ -98,6 +112,30 @@ public partial class IngresoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     partial void OnConceptoChanged(string value) => AlCambiarCampo(nameof(Concepto));
     partial void OnFuenteSeleccionadaChanged(FuenteFinanciamiento? value) => AlCambiarCampo(nameof(FuenteSeleccionada));
 
+    partial void OnCajaSeleccionadaChanged(Caja? value)
+    {
+        AlCambiarCampo(nameof(CajaSeleccionada));
+        RefrescarFuentes();
+        if (FuenteSeleccionada is not null && FuenteSeleccionada.Caja != value)
+            FuenteSeleccionada = null;
+    }
+
+    /// <summary>Rellena el combo de fuentes con los literales de la caja elegida (sin caja, vacío) y recalcula el aviso.
+    /// Antes de que lleguen las fuentes no avisa: la lista vacía todavía no quiere decir "sin literales".</summary>
+    private void RefrescarFuentes()
+    {
+        if (CajaSeleccionada is not { } caja)
+        {
+            FuentesDisponibles.Clear();
+            AvisoSinLiterales = null;
+            return;
+        }
+        LiteralesPorCaja.Refrescar(FuentesDisponibles, _fuentesActivas, caja, _fuenteHistorica);
+        AvisoSinLiterales = _fuentesCargadas
+            ? LiteralesPorCaja.Aviso(caja, _fuentesActivas.Count(f => f.Caja == caja))
+            : null;
+    }
+
     /// <summary>Reglas del cliente (las mismas de antes: fecha, monto numérico es-UY, concepto y fuente obligatorios).
     /// "El monto debe ser mayor a cero" es del servidor y sale por la Alerta de error.</summary>
     private string? ReglaDe(string propiedad) => propiedad switch
@@ -105,6 +143,7 @@ public partial class IngresoFormViewModel : ViewModelBase, INotifyDataErrorInfo
         nameof(FechaSeleccionada) => FechaSeleccionada is null ? MensajeFechaObligatoria : null,
         nameof(MontoTexto) => ReglaDelMonto(),
         nameof(Concepto) => string.IsNullOrWhiteSpace(Concepto) ? MensajeConceptoObligatorio : null,
+        nameof(CajaSeleccionada) => CajaSeleccionada is null ? MensajeCajaObligatoria : null,
         nameof(FuenteSeleccionada) => FuenteSeleccionada is null ? MensajeFuenteObligatoria : null,
         _ => null,
     };
@@ -154,6 +193,7 @@ public partial class IngresoFormViewModel : ViewModelBase, INotifyDataErrorInfo
         FechaSeleccionada  = ingreso.Fecha;
         Concepto           = ingreso.Concepto;
         MontoTexto         = FormatoEsUy.Decimal(ingreso.Monto);
+        CajaSeleccionada   = ingreso.Caja;
         EsEdicion          = true;
     }
 
@@ -171,20 +211,20 @@ public partial class IngresoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     {
         await EjecutarCargaProtegidaAsync(async () =>
         {
-            var fuentes = await _fuentesService.ListarActivasAsync();
-            FuentesDisponibles.Clear();
-            foreach (var f in fuentes)
-                FuentesDisponibles.Add(f);
+            _fuentesActivas = (await _fuentesService.ListarActivasAsync()).ToList();
+            _fuentesCargadas = true;
 
             if (_ingresoParaEditar is not null)
             {
-                FuenteSeleccionada =
-                    FuentesDisponibles.FirstOrDefault(f => f.Id == _ingresoParaEditar.FuenteFinanciamientoId)
+                // La fuente del ingreso guardado puede estar dada de baja: sigue en el combo de SU caja y elegida.
+                _fuenteHistorica =
+                    _fuentesActivas.FirstOrDefault(f => f.Id == _ingresoParaEditar.FuenteFinanciamientoId)
                     ?? _ingresoParaEditar.FuenteFinanciamiento;
-                if (FuenteSeleccionada is not null
-                    && FuentesDisponibles.All(f => f.Id != FuenteSeleccionada.Id))
-                    FuentesDisponibles.Add(FuenteSeleccionada);
+                RefrescarFuentes();
+                FuenteSeleccionada = FuentesDisponibles.FirstOrDefault(f => f.Id == _fuenteHistorica?.Id);
             }
+            else
+                RefrescarFuentes();
         }, MensajeSinPermisoFormulario);
         GuardarCommand.NotifyCanExecuteChanged();
     }
@@ -211,6 +251,7 @@ public partial class IngresoFormViewModel : ViewModelBase, INotifyDataErrorInfo
             Id = EsEdicion ? _idEdicion : 0,
             Fecha = DateTime.SpecifyKind(FechaSeleccionada!.Value.Date, DateTimeKind.Utc),
             Concepto = Concepto,
+            Caja = CajaSeleccionada!.Value,
             FuenteFinanciamientoId = FuenteSeleccionada!.Id,
             Monto = monto,
         };

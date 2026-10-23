@@ -23,6 +23,7 @@ public partial class IngresoFormView : UserControl
         TocarAlSalir(SelectorFecha, nameof(IngresoFormViewModel.FechaSeleccionada));
         TocarAlSalir(CajaMonto, nameof(IngresoFormViewModel.MontoTexto));
         TocarAlSalir(CajaConcepto, nameof(IngresoFormViewModel.Concepto));
+        TocarAlSalir(ComboCaja, nameof(IngresoFormViewModel.CajaSeleccionada));
         TocarAlSalir(ComboFuente, nameof(IngresoFormViewModel.FuenteSeleccionada));
     }
 

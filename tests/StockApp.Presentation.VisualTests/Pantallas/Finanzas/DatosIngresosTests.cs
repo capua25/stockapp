@@ -37,7 +37,8 @@ public class DatosIngresosTests
         vm.InicializarAsync().GetAwaiter().GetResult();
 
         Assert.Equal(new DateTime(2026, 10, 6), vm.FechaSeleccionada);
-        Assert.Equal(3, vm.FuentesDisponibles.Count);
+        Assert.Null(vm.CajaSeleccionada);
+        Assert.Empty(vm.FuentesDisponibles);
         Assert.False(vm.HasErrors);
     }
 
@@ -58,6 +59,7 @@ public class DatosIngresosTests
         var vm = (IngresoFormViewModel)DatosIngresos.ConErrorDelServidor().CurrentContent!;
         await vm.InicializarAsync();
 
+        Assert.Equal(StockApp.Domain.Enums.Caja.Local, vm.CajaSeleccionada);
         Assert.Equal("FIGM Literal B", vm.FuenteSeleccionada?.Nombre);
         Assert.Equal("El monto del ingreso debe ser mayor a cero.", vm.MensajeError);
         Assert.True(vm.GuardarCommand.CanExecute(null));

@@ -26,7 +26,8 @@ namespace StockApp.Presentation.UiTests.V2;
 /// de cada control (nada en rojo al abrir), Alerta del servidor y del 403, gates con un Operador mixto y 403 en caliente.</summary>
 public class IngresoFormViewV2Tests
 {
-    private static readonly FuenteFinanciamiento Figm = new() { Id = 1, Nombre = "FIGM Literal B", Activo = true };
+    private static readonly FuenteFinanciamiento Figm = new() { Id = 1, Nombre = "FIGM Literal B", Activo = true, Caja = Caja.Local };
+    private static readonly FuenteFinanciamiento Poa1 = new() { Id = 4, Nombre = "POA Obras", Activo = true, Caja = Caja.Poa };
     private static readonly FuenteFinanciamiento DeBaja = new() { Id = 9, Nombre = "Fondo de emergencia", Activo = false };
 
     private static readonly IngresoCaja Existente = new()
@@ -73,6 +74,7 @@ public class IngresoFormViewV2Tests
 
     private static void Completar(Montaje m)
     {
+        m.Vm.CajaSeleccionada = Caja.Local;
         m.Vm.FuenteSeleccionada = Figm;
         m.Vm.Concepto = "Partida mensual FIGM octubre";
         m.Vm.MontoTexto = "1.250.000,00";
@@ -119,12 +121,13 @@ public class IngresoFormViewV2Tests
     }
 
     [AvaloniaFact]
-    public void Campos_FechaYMontoArriba_ConceptoATodoElAncho_FuenteALaIzquierda()
+    public void Campos_FechaYMontoArriba_ConceptoATodoElAncho_CajaALaIzquierda_FuenteALaDerecha()
     {
         var m = Montar();
         var fecha = EnVentana(m.Ventana, Parte<CampoFormulario>(m, "CampoFecha"));
         var monto = EnVentana(m.Ventana, Parte<CampoFormulario>(m, "CampoMonto"));
         var concepto = EnVentana(m.Ventana, Parte<CampoFormulario>(m, "CampoConcepto"));
+        var caja = EnVentana(m.Ventana, Parte<CampoFormulario>(m, "CampoCaja"));
         var fuente = EnVentana(m.Ventana, Parte<CampoFormulario>(m, "CampoFuente"));
 
         Assert.Equal(fecha.Y, monto.Y);
@@ -132,17 +135,20 @@ public class IngresoFormViewV2Tests
         Assert.Equal(fecha.X, concepto.X);
         Assert.Equal(monto.Right, concepto.Right, 1);
         Assert.True(concepto.Y > fecha.Bottom);
-        Assert.Equal(fecha.X, fuente.X);
-        Assert.Equal(fecha.Width, fuente.Width, 1);
-        Assert.True(fuente.Y > concepto.Bottom);
+        Assert.Equal(fecha.X, caja.X);
+        Assert.Equal(fecha.Width, caja.Width, 1);
+        Assert.True(caja.Y > concepto.Bottom);
+        Assert.Equal(caja.Y, fuente.Y);
+        Assert.Equal(caja.Right + 16, fuente.X, 1);
+        Assert.Equal(monto.Right, fuente.Right, 1);
     }
 
     [AvaloniaFact]
-    public void Requeridos_LosCuatro_YMontoALaDerecha()
+    public void Requeridos_LosCinco_YMontoALaDerecha()
     {
         var m = Montar();
 
-        Assert.All(new[] { "CampoFecha", "CampoMonto", "CampoConcepto", "CampoFuente" },
+        Assert.All(new[] { "CampoFecha", "CampoMonto", "CampoConcepto", "CampoCaja", "CampoFuente" },
             n => Assert.True(Parte<CampoFormulario>(m, n).Requerido, n));
         Assert.Equal(Avalonia.Media.TextAlignment.Right, Parte<TextBox>(m, "CajaMonto").TextAlignment);
     }
@@ -156,6 +162,7 @@ public class IngresoFormViewV2Tests
         Assert.False(DataValidationErrors.GetHasErrors(Parte<TextBox>(m, "CajaMonto")));
         Assert.False(DataValidationErrors.GetHasErrors(Parte<TextBox>(m, "CajaConcepto")));
         Assert.False(DataValidationErrors.GetHasErrors(Parte<ComboBox>(m, "ComboFuente")));
+        Assert.False(DataValidationErrors.GetHasErrors(Parte<ComboBox>(m, "ComboCaja")));
         Assert.False(m.Vm.HayErroresDeEntrada);
     }
 
@@ -263,6 +270,8 @@ public class IngresoFormViewV2Tests
     public void AbrirLaListaDeFuentes_NoMarcaLaFuenteEnRojo()
     {
         var m = Montar();
+        m.Vm.CajaSeleccionada = Caja.Local;
+        Dispatcher.UIThread.RunJobs();
         var combo = Parte<ComboBox>(m, "ComboFuente");
         combo.Focus();
         Dispatcher.UIThread.RunJobs();
@@ -279,6 +288,8 @@ public class IngresoFormViewV2Tests
     public void ListaDeFuentesAbierta_NavegarConFlechaAbajo_NoMarcaLaFuenteEnRojo()
     {
         var m = Montar();
+        m.Vm.CajaSeleccionada = Caja.Local;
+        Dispatcher.UIThread.RunJobs();
         var combo = Parte<ComboBox>(m, "ComboFuente");
         Clickear(m.Ventana, combo);
         Assert.True(combo.IsDropDownOpen, "Precondición: el click abre la lista.");
@@ -296,6 +307,8 @@ public class IngresoFormViewV2Tests
     public void ElegirLaFuenteConElMouse_NoParpadeaElErrorEntreElPressYElRelease()
     {
         var m = Montar();
+        m.Vm.CajaSeleccionada = Caja.Local;
+        Dispatcher.UIThread.RunJobs();
         var combo = Parte<ComboBox>(m, "ComboFuente");
         Clickear(m.Ventana, combo);
         var item = Assert.IsAssignableFrom<Control>(combo.ContainerFromIndex(0));
@@ -320,6 +333,8 @@ public class IngresoFormViewV2Tests
     public void ListaAbiertaYCerradaConEscape_SinElegir_AlSalirDelComboQuedaEnRojo()
     {
         var m = Montar();
+        m.Vm.CajaSeleccionada = Caja.Local;
+        Dispatcher.UIThread.RunJobs();
         var combo = Parte<ComboBox>(m, "ComboFuente");
         Clickear(m.Ventana, combo);
         m.Ventana.KeyPress(Key.Down, RawInputModifiers.None, PhysicalKey.ArrowDown, null);
@@ -338,6 +353,8 @@ public class IngresoFormViewV2Tests
     public void ListaConElFocoAdentro_SeCierraYElFocoQuedaAfuera_SinElegir_QuedaEnRojo()
     {
         var m = Montar();
+        m.Vm.CajaSeleccionada = Caja.Local;
+        Dispatcher.UIThread.RunJobs();
         var combo = Parte<ComboBox>(m, "ComboFuente");
         Clickear(m.Ventana, combo);
         m.Ventana.KeyPress(Key.Down, RawInputModifiers.None, PhysicalKey.ArrowDown, null);
@@ -351,6 +368,107 @@ public class IngresoFormViewV2Tests
 
         Assert.False(combo.IsKeyboardFocusWithin, "Precondición: el foco quedó afuera del combo.");
         Assert.Equal(new[] { IngresoFormViewModel.MensajeFuenteObligatoria }, Errores(combo));
+    }
+
+    [AvaloniaFact]
+    public void Alta_ComboCaja_OfreceLocalYPoa_SinPreseleccion()
+    {
+        var m = Montar();
+        var combo = Parte<ComboBox>(m, "ComboCaja");
+
+        Assert.Equal(new[] { Caja.Local, Caja.Poa }, combo.Items.Cast<Caja>().ToArray());
+        Assert.Null(combo.SelectedItem);
+        Assert.Null(m.Vm.CajaSeleccionada);
+        combo.SelectedIndex = 1;
+        Dispatcher.UIThread.RunJobs();
+        var textos = combo.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+        Assert.Equal(Caja.Poa, m.Vm.CajaSeleccionada);
+        Assert.Contains("POA", textos);
+    }
+
+    [AvaloniaFact]
+    public void Alta_SinCaja_GuardarDeshabilitado()
+    {
+        var m = Montar();
+        m.Vm.FuenteSeleccionada = Figm;   // todo lo demás válido: solo la caja falta
+        m.Vm.Concepto = "Partida mensual FIGM octubre";
+        m.Vm.MontoTexto = "1.250.000,00";
+        Dispatcher.UIThread.RunJobs();
+
+        var guardar = Parte<Button>(m, "BotonGuardar");
+        Assert.Null(Parte<ComboBox>(m, "ComboCaja").SelectedItem);
+        Assert.False(guardar.IsEffectivelyEnabled);
+        Assert.False(guardar.Command!.CanExecute(null));
+    }
+
+    [AvaloniaFact]
+    public void SalirDeLaCajaSinElegir_MensajeEnElCombo()
+    {
+        var m = Montar();
+        var combo = Parte<ComboBox>(m, "ComboCaja");
+
+        EnfocarYSalir(m, combo);
+
+        Assert.Equal(new[] { IngresoFormViewModel.MensajeCajaObligatoria }, Errores(combo));
+    }
+
+    [AvaloniaFact]
+    public void CajaPoa_ElComboDeFuenteSoloTieneLiteralesPoa()
+    {
+        var m = Montar(fuentes: new FuentesActivasFake { Activas = [Figm, Poa1] });
+        var fuente = Parte<ComboBox>(m, "ComboFuente");
+        Assert.Empty(fuente.Items);
+
+        Parte<ComboBox>(m, "ComboCaja").SelectedItem = Caja.Poa;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(new[] { Poa1 }, fuente.Items.Cast<FuenteFinanciamiento>().ToArray());
+        Assert.False(Visible(Parte<Alerta>(m, "AlertaSinLiterales")));
+    }
+
+    [AvaloniaFact]
+    public void CajaSinLiterales_AlertaVisibleConElTexto()
+    {
+        var m = Montar();
+
+        Parte<ComboBox>(m, "ComboCaja").SelectedItem = Caja.Poa;
+        Dispatcher.UIThread.RunJobs();
+
+        var alerta = Parte<Alerta>(m, "AlertaSinLiterales");
+        Assert.True(Visible(alerta));
+        Assert.Equal("No hay literales asignados a la caja POA; configuralos en Fuentes de financiamiento", alerta.Texto);
+        Assert.Equal(VarianteAlerta.Advertencia, alerta.Variante);
+    }
+
+    [AvaloniaFact]
+    public void Guardar_ClickReal_EnviaLaCajaElegida()
+    {
+        var m = Montar(fuentes: new FuentesActivasFake { Activas = [Figm, Poa1] });
+        m.Vm.CajaSeleccionada = Caja.Poa;
+        m.Vm.FuenteSeleccionada = Poa1;
+        m.Vm.Concepto = "Aporte POA";
+        m.Vm.MontoTexto = "100";
+        Dispatcher.UIThread.RunJobs();
+
+        Clickear(m.Ventana, Parte<Button>(m, "BotonGuardar"));
+
+        var alta = Assert.Single(m.Servicio.Altas);
+        Assert.Equal(Caja.Poa, alta.Caja);
+        Assert.Equal(4, alta.FuenteFinanciamientoId);
+    }
+
+    [AvaloniaFact]
+    public void Edicion_MuestraLaCajaDelIngreso()
+    {
+        var m = Montar(new IngresoCaja
+        {
+            Id = 8, Fecha = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc), Concepto = "Aporte POA",
+            FuenteFinanciamientoId = 4, FuenteFinanciamiento = Poa1, Monto = 10_000m, Caja = Caja.Poa, Activo = true,
+        }, fuentes: new FuentesActivasFake { Activas = [Figm, Poa1] });
+
+        Assert.Equal(Caja.Poa, Parte<ComboBox>(m, "ComboCaja").SelectedItem);
+        Assert.Same(Poa1, Parte<ComboBox>(m, "ComboFuente").SelectedItem);
+        Assert.True(Parte<Button>(m, "BotonGuardar").IsEffectivelyEnabled);
     }
 
     [AvaloniaFact]

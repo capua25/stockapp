@@ -19,10 +19,11 @@
   .filas { flex: 1 1 0; min-height: 0; overflow: hidden; }
   .pie { margin-top: 12px; }
   /* Anchos medidos en headless con el tema v2 y estos datos (los ocho ingresos): FECHA 90 (ColumnaAuto con
-     FechaCortaConverter, no cede), FUENTE 123 (ColumnaAuto) y MONTO 115 (ColumnaAuto con MonedaConverter). CONCEPTO (*)
+     FechaCortaConverter, no cede), CAJA 69 (ColumnaAuto, "Local"), FUENTE 123 (ColumnaAuto) y MONTO 115 (ColumnaAuto con MonedaConverter). CONCEPTO (*)
      el resto: 620 a 1280 y 706 a 1366, muy por encima de su piso de 240 (sin scroll horizontal). */
   .col-fecha { flex: 0 0 90px; }
   .col-concepto { flex: 1 1 0; min-width: 0; }
+  .col-caja { flex: 0 0 69px; }
   .col-fuente { flex: 0 0 123px; }
   .col-monto { flex: 0 0 115px; }
   /* Insignia Inactivo 8 a la derecha del concepto (Grid *,Auto alineada a la izquierda dentro de la celda). */
@@ -73,6 +74,7 @@
           <div class="v2-grilla-header">
             <div class="v2-grilla-celda col-fecha">FECHA</div>
             <div class="v2-grilla-celda col-concepto">CONCEPTO</div>
+            <div class="v2-grilla-celda col-caja">CAJA</div>
             <div class="v2-grilla-celda col-fuente">FUENTE</div>
             <div class="v2-grilla-celda col-monto">MONTO</div>
           </div>
@@ -80,36 +82,42 @@
             <div class="v2-grilla-fila">
               <div class="v2-grilla-celda col-fecha">06/10/2026</div>
               <div class="v2-grilla-celda col-concepto"><span class="v2-celda-cortada">Partida mensual FIGM octubre</span></div>
+              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">Local</span></div>
               <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">FIGM Literal B</span></div>
               <div class="v2-grilla-celda col-monto v2-num"><span>$ 1.250.000,00</span></div>
             </div>
             <div class="v2-grilla-fila">
               <div class="v2-grilla-celda col-fecha">02/10/2026</div>
               <div class="v2-grilla-celda col-concepto"><span class="v2-celda-cortada">Multas de tránsito setiembre</span></div>
+              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">Local</span></div>
               <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">Rentas generales</span></div>
               <div class="v2-grilla-celda col-monto v2-num"><span>$ 48.300,00</span></div>
             </div>
             <div class="v2-grilla-fila">
               <div class="v2-grilla-celda col-fecha">15/09/2026</div>
               <div class="v2-grilla-celda col-concepto"><span class="v2-celda-cortada">Préstamo BROU obras de pluviales</span></div>
+              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">Local</span></div>
               <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">Préstamo BROU</span></div>
               <div class="v2-grilla-celda col-monto v2-num"><span>$ 2.000.000,00</span></div>
             </div>
             <div class="v2-grilla-fila">
               <div class="v2-grilla-celda col-fecha">05/09/2026</div>
               <div class="v2-grilla-celda col-concepto"><span class="v2-celda-cortada">Partida mensual FIGM setiembre</span></div>
+              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">Local</span></div>
               <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">FIGM Literal B</span></div>
               <div class="v2-grilla-celda col-monto v2-num"><span>$ 1.250.000,00</span></div>
             </div>
             <div class="v2-grilla-fila">
               <div class="v2-grilla-celda col-fecha">05/08/2026</div>
               <div class="v2-grilla-celda col-concepto"><span class="v2-celda-cortada">Partida mensual FIGM agosto</span></div>
+              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">Local</span></div>
               <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">FIGM Literal B</span></div>
               <div class="v2-grilla-celda col-monto v2-num"><span>$ 1.250.000,00</span></div>
             </div>
             <div class="v2-grilla-fila">
               <div class="v2-grilla-celda col-fecha">02/01/2026</div>
               <div class="v2-grilla-celda col-concepto"><span class="v2-celda-cortada">Saldo inicial del ejercicio</span></div>
+              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">Local</span></div>
               <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">Rentas generales</span></div>
               <div class="v2-grilla-celda col-monto v2-num"><span>$ 812.430,55</span></div>
             </div>

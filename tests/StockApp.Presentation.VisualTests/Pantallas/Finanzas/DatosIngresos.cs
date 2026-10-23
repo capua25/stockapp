@@ -63,7 +63,8 @@ public static class DatosIngresos
         return new IngresosViewModel(servicio.Object, Sesion(soloLectura), Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>());
     }
 
-    /// <summary>Formulario con las tres fuentes y la fecha del alta fija (el VM arranca en "hoy").</summary>
+    /// <summary>Formulario con las tres fuentes (todas de la caja Local) y la fecha del alta fija (el VM arranca en "hoy").
+    /// El alta no trae caja elegida: el combo muestra su placeholder y el de fuente queda vacío hasta elegirla.</summary>
     public static IngresoFormViewModel Formulario(bool fuentesConPermiso = true)
     {
         var fuentes = new Mock<IFuenteFinanciamientoService>();
@@ -130,6 +131,7 @@ public static class DatosIngresos
         var vm = Formulario();
         vm.Concepto = "Partida mensual FIGM octubre";
         vm.MontoTexto = "0,00";
+        vm.CajaSeleccionada = Caja.Local;
         vm.FuenteSeleccionada = Fuentes[0];
         vm.MensajeError = "El monto del ingreso debe ser mayor a cero.";
         return EnShell(vm);

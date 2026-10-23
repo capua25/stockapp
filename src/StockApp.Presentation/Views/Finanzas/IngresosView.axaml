@@ -147,6 +147,15 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="CAJA" Width="Auto" SortMemberPath="Caja"
+                                                b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="e:IngresoCaja">
+                                    <TextBlock Text="{Binding Caja, Converter={x:Static conv:CajaNombreConverter.Instance}}"
+                                               Classes.inactivo="{Binding !Activo}" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTemplateColumn Header="FUENTE" Width="Auto" SortMemberPath="FuenteFinanciamiento.Nombre"
                                                 b:ColumnaAuto.Medir="True">
                             <DataGridTemplateColumn.CellTemplate>

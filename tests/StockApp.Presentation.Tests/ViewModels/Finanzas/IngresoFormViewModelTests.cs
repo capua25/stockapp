@@ -31,7 +31,8 @@ public class IngresoFormViewModelTests
         var fuentes = new Mock<IFuenteFinanciamientoService>();
         fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>
         {
-            new() { Id = 2, Nombre = "Literal B", Activo = true },
+            new() { Id = 2, Nombre = "Literal B", Activo = true, Caja = Caja.Local },
+            new() { Id = 5, Nombre = "Literal POA 1", Activo = true, Caja = Caja.Poa },
         });
 
         var session = new Mock<ICurrentSession>();
@@ -47,6 +48,7 @@ public class IngresoFormViewModelTests
     private static async Task CompletarFormularioValidoAsync(IngresoFormViewModel vm)
     {
         await vm.InicializarAsync();
+        vm.CajaSeleccionada = Caja.Local;
         vm.FuenteSeleccionada = vm.FuentesDisponibles[0];
         vm.Concepto = "Partida mensual";
         vm.MontoTexto = "1.500,50";   // es-UY: miles con punto, decimales con coma
@@ -92,6 +94,7 @@ public class IngresoFormViewModelTests
         // Solo cuenta la notificación de InicializarAsync: con la carga fallida ningún setter de campo corrió todavía.
         Assert.True(notificado);
 
+        vm.CajaSeleccionada = Caja.Local;
         vm.FuenteSeleccionada = new FuenteFinanciamiento { Id = 2, Nombre = "Literal B", Activo = true };
         vm.Concepto = "Partida mensual";
         vm.MontoTexto = "1.500,50";
@@ -132,6 +135,7 @@ public class IngresoFormViewModelTests
         var (vm, _, _) = Crear();
 
         await vm.InicializarAsync();
+        vm.CajaSeleccionada = Caja.Local;
 
         var fuente = Assert.Single(vm.FuentesDisponibles);
         Assert.Equal("Literal B", fuente.Nombre);
@@ -236,7 +240,7 @@ public class IngresoFormViewModelTests
         {
             Id = 9, Concepto = "Histórico",
             Fecha = new DateTime(2026, 2, 10, 0, 0, 0, DateTimeKind.Utc),
-            FuenteFinanciamientoId = 2, Monto = 800m,
+            FuenteFinanciamientoId = 2, Monto = 800m, Caja = Caja.Local,
         };
         vm.CargarParaEditar(ingreso);
         await vm.InicializarAsync();
@@ -249,6 +253,128 @@ public class IngresoFormViewModelTests
 
         svc.Verify(s => s.ModificarAsync(It.Is<IngresoCaja>(i =>
             i.Id == 9 && i.Fecha == new DateTime(2026, 2, 10, 0, 0, 0, DateTimeKind.Utc))), Times.Once);
+    }
+
+    // ── Caja: sin preselección en el alta (decisión del usuario), literales filtrados por caja ─────
+
+    [Fact]
+    public async Task Alta_SinCaja_GuardarDeshabilitado()
+    {
+        var (vm, svc, _) = Crear();
+        await vm.InicializarAsync();
+        vm.CajaSeleccionada = Caja.Local;
+        vm.FuenteSeleccionada = vm.FuentesDisponibles[0];
+        vm.Concepto = "Partida mensual";
+        vm.MontoTexto = "1.500,50";
+        var fuente = vm.FuenteSeleccionada;
+        vm.CajaSeleccionada = null;
+        vm.FuenteSeleccionada = fuente;   // todo lo demás válido: solo la caja falta
+
+        Assert.Null(vm.CajaSeleccionada);
+        Assert.Null(vm.ErrorDe(nameof(IngresoFormViewModel.FuenteSeleccionada)));
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+        Assert.Equal(IngresoFormViewModel.MensajeCajaObligatoria, vm.ErrorDe(nameof(IngresoFormViewModel.CajaSeleccionada)));
+        svc.Verify(s => s.AltaAsync(It.IsAny<IngresoCaja>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Alta_AlAbrir_LaCajaNoVieneElegida_NiAvisoNiFuentes()
+    {
+        var (vm, _, _) = Crear();
+
+        await vm.InicializarAsync();
+
+        Assert.Null(vm.CajaSeleccionada);
+        Assert.Empty(vm.FuentesDisponibles);
+        Assert.Null(vm.AvisoSinLiterales);
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Guardar_EnviaLaCajaElegida()
+    {
+        var (vm, svc, _) = Crear();
+        await vm.InicializarAsync();
+        vm.CajaSeleccionada = Caja.Poa;
+        vm.FuenteSeleccionada = Assert.Single(vm.FuentesDisponibles);
+        vm.Concepto = "Aporte POA";
+        vm.MontoTexto = "100";
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.AltaAsync(It.Is<IngresoCaja>(i => i.Caja == Caja.Poa && i.FuenteFinanciamientoId == 5)), Times.Once);
+    }
+
+    [Fact]
+    public async Task CambiarAPoa_FiltraLasFuentesYLimpiaLaLocalElegida()
+    {
+        var (vm, _, _) = Crear();
+        await CompletarFormularioValidoAsync(vm);
+        Assert.Equal(2, vm.FuenteSeleccionada!.Id);
+
+        vm.CajaSeleccionada = Caja.Poa;
+
+        Assert.Equal(new[] { 5 }, vm.FuentesDisponibles.Select(f => f.Id));
+        Assert.Null(vm.FuenteSeleccionada);
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task CajaPoaSinLiterales_AvisoConElTextoExacto()
+    {
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>
+        {
+            new() { Id = 2, Nombre = "Literal B", Activo = true, Caja = Caja.Local },
+        });
+        var sesion = new Mock<ICurrentSession>();
+        sesion.Setup(s => s.RolActual).Returns(RolUsuario.Admin);
+        sesion.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+        var vm = new IngresoFormViewModel(Mock.Of<IIngresoCajaService>(), fuentes.Object, sesion.Object, Mock.Of<INavigationService>());
+        await vm.InicializarAsync();
+
+        vm.CajaSeleccionada = Caja.Poa;
+
+        Assert.Equal("No hay literales asignados a la caja POA; configuralos en Fuentes de financiamiento", vm.AvisoSinLiterales);
+        vm.CajaSeleccionada = Caja.Local;
+        Assert.Null(vm.AvisoSinLiterales);
+    }
+
+    [Fact]
+    public async Task Editar_PrecargaCajaYFuente()
+    {
+        var (vm, svc, _) = Crear();
+        vm.CargarParaEditar(new IngresoCaja
+        {
+            Id = 11, Concepto = "Aporte", Fecha = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            FuenteFinanciamientoId = 5, Monto = 10m, Caja = Caja.Poa,
+        });
+        await vm.InicializarAsync();
+
+        Assert.Equal(Caja.Poa, vm.CajaSeleccionada);
+        Assert.Equal(5, vm.FuenteSeleccionada!.Id);
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.ModificarAsync(It.Is<IngresoCaja>(i => i.Id == 11 && i.Caja == Caja.Poa && i.FuenteFinanciamientoId == 5)), Times.Once);
+    }
+
+    [Fact]
+    public async Task Editar_FuenteDadaDeBaja_SigueSeleccionadaEnElComboDeSuCaja()
+    {
+        var (vm, _, _) = Crear();
+        var deBaja = new FuenteFinanciamiento { Id = 9, Nombre = "Fondo viejo", Activo = false, Caja = Caja.Local };
+        vm.CargarParaEditar(new IngresoCaja
+        {
+            Id = 12, Concepto = "Histórico", Fecha = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            FuenteFinanciamientoId = 9, FuenteFinanciamiento = deBaja, Monto = 10m, Caja = Caja.Local,
+        });
+
+        await vm.InicializarAsync();
+
+        Assert.Same(deBaja, vm.FuenteSeleccionada);
+        Assert.Contains(deBaja, vm.FuentesDisponibles);
+        Assert.True(vm.GuardarCommand.CanExecute(null));
     }
 
     // ── PuedeRegistrarIngresos: gating del botón "Guardar" (bugfix 2026-08-15) ─────────────
@@ -304,6 +430,7 @@ public class IngresoFormViewModelTests
     {
         nameof(IngresoFormViewModel.FechaSeleccionada), nameof(IngresoFormViewModel.MontoTexto),
         nameof(IngresoFormViewModel.Concepto), nameof(IngresoFormViewModel.FuenteSeleccionada),
+        nameof(IngresoFormViewModel.CajaSeleccionada),
     };
 
     [Fact]
@@ -325,7 +452,7 @@ public class IngresoFormViewModelTests
         vm.CargarParaEditar(new IngresoCaja
         {
             Id = 5, Fecha = new DateTime(2026, 10, 2, 0, 0, 0, DateTimeKind.Utc), Concepto = "Multas",
-            FuenteFinanciamientoId = 2, Monto = 48_300m,
+            FuenteFinanciamientoId = 2, Monto = 48_300m, Caja = Caja.Local,
         });
 
         await vm.InicializarAsync();

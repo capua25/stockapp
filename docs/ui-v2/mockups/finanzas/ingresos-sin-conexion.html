@@ -19,10 +19,11 @@
   .filas { flex: 1 1 0; min-height: 0; overflow: hidden; }
   .pie { margin-top: 12px; }
   /* Anchos medidos en headless con el tema v2 y estos datos (los ocho ingresos): FECHA 90 (ColumnaAuto con
-     FechaCortaConverter, no cede), FUENTE 123 (ColumnaAuto) y MONTO 115 (ColumnaAuto con MonedaConverter). CONCEPTO (*)
+     FechaCortaConverter, no cede), CAJA 69 (ColumnaAuto, "Local"), FUENTE 123 (ColumnaAuto) y MONTO 115 (ColumnaAuto con MonedaConverter). CONCEPTO (*)
      el resto: 620 a 1280 y 706 a 1366, muy por encima de su piso de 240 (sin scroll horizontal). */
   .col-fecha { flex: 0 0 90px; }
   .col-concepto { flex: 1 1 0; min-width: 0; }
+  .col-caja { flex: 0 0 69px; }
   .col-fuente { flex: 0 0 123px; }
   .col-monto { flex: 0 0 115px; }
   /* Insignia Inactivo 8 a la derecha del concepto (Grid *,Auto alineada a la izquierda dentro de la celda). */

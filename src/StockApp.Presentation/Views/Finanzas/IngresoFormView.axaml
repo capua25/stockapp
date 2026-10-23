@@ -3,6 +3,8 @@
              xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
              xmlns:e="using:StockApp.Domain.Entities"
+             xmlns:en="using:StockApp.Domain.Enums"
+             xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -53,7 +55,21 @@
                                                 Etiqueta="Concepto" Requerido="True">
                                 <TextBox x:Name="CajaConcepto" Text="{Binding Concepto}" PlaceholderText="Ej.: Partida mensual FIGM julio" />
                             </v2:CampoFormulario>
-                            <v2:CampoFormulario x:Name="CampoFuente" Grid.Row="4" Grid.Column="0"
+                            <v2:CampoFormulario x:Name="CampoCaja" Grid.Row="4" Grid.Column="0"
+                                                Etiqueta="Caja" Requerido="True">
+                                <ComboBox x:Name="ComboCaja"
+                                          ItemsSource="{Binding Cajas}"
+                                          SelectedItem="{Binding CajaSeleccionada}"
+                                          PlaceholderText="Elegí la caja"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="en:Caja">
+                                            <TextBlock Text="{Binding ., Converter={x:Static conv:CajaNombreConverter.Instance}}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoFuente" Grid.Row="4" Grid.Column="2"
                                                 Etiqueta="Fuente de financiamiento" Requerido="True">
                                 <ComboBox x:Name="ComboFuente"
                                           ItemsSource="{Binding FuentesDisponibles}"
@@ -68,6 +84,11 @@
                                 </ComboBox>
                             </v2:CampoFormulario>
                         </Grid>
+
+                        <!-- La caja elegida no tiene literales activos: se avisa dónde configurarlos. -->
+                        <v2:Alerta x:Name="AlertaSinLiterales" Margin="0,8,0,0" Variante="Advertencia"
+                                   Texto="{Binding AvisoSinLiterales}"
+                                   IsVisible="{Binding AvisoSinLiterales, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
                         <!-- La carga de fuentes respondió 403: se perdió finanzas.ver con el formulario abierto. Los campos
                              quedan a la vista y Guardar deshabilitado (el VM lo bloquea). -->
