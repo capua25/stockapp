@@ -35,6 +35,24 @@ public class IngresoCajaApiClientTests
     }
 
     [Fact]
+    public async Task ListarTodos_IngresoPoa_LaFuenteNavegableConservaLaCajaDelIngreso()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(new[]
+        {
+            new
+            {
+                id = 2, fecha = Hoy, concepto = "POA", fuenteFinanciamientoId = 5, fuenteNombre = "Literal POA 1",
+                monto = 2m, activo = true, caja = 1,
+            },
+        }));
+        var client = new IngresoCajaApiClient(TestHttp.CrearCliente(fake));
+
+        var ingreso = Assert.Single(await client.ListarTodosAsync());
+
+        Assert.Equal(Caja.Poa, ingreso.FuenteFinanciamiento!.Caja);
+    }
+
+    [Fact]
     public async Task Alta_POSTFinanzasIngresos_DevuelveElId()
     {
         var fake = new FakeHttpHandler(_ => TestHttp.Json(new { id = 7 }, HttpStatusCode.Created));

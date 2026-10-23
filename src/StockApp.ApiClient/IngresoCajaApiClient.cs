@@ -62,9 +62,11 @@ public sealed class IngresoCajaApiClient : IIngresoCajaService
         Fecha = dto.Fecha,
         Concepto = dto.Concepto,
         FuenteFinanciamientoId = dto.FuenteFinanciamientoId,
+        // La Caja de la fuente no viaja en el wire: se toma de la del ingreso. Es válida porque el servidor
+        // exige que ambas coincidan (ValidarFuenteAsync) y bloquea cambiar la caja de una fuente en uso.
         FuenteFinanciamiento = dto.FuenteNombre is null
             ? null
-            : new FuenteFinanciamiento { Id = dto.FuenteFinanciamientoId, Nombre = dto.FuenteNombre },
+            : new FuenteFinanciamiento { Id = dto.FuenteFinanciamientoId, Nombre = dto.FuenteNombre, Caja = dto.Caja },
         Monto = dto.Monto,
         Activo = dto.Activo,
         Caja = dto.Caja,

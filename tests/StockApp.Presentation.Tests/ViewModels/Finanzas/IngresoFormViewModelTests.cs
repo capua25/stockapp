@@ -2,6 +2,10 @@ using System;
 using System.ComponentModel;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Moq;
 using StockApp.ApiClient;
@@ -375,6 +379,41 @@ public class IngresoFormViewModelTests
         Assert.Same(deBaja, vm.FuenteSeleccionada);
         Assert.Contains(deBaja, vm.FuentesDisponibles);
         Assert.True(vm.GuardarCommand.CanExecute(null));
+    }
+
+    // La fuente histórica llega con la forma REAL que produce el cliente HTTP (pasa por IngresoCajaApiClient.AEntidad),
+    // no armada a mano con la Caja ya seteada: ese stub ocultaba que el mapeo la perdía.
+    private sealed class HandlerFijo : HttpMessageHandler
+    {
+        private readonly string _json;
+        public HandlerFijo(string json) => _json = json;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(_json, Encoding.UTF8, "application/json"),
+            });
+    }
+
+    [Fact]
+    public async Task Editar_IngresoPoaConFuenteDadaDeBajaLeidoPorElClienteHttp_QuedaEnElComboDePoaYPuedeGuardar()
+    {
+        var http = new HttpClient(new HandlerFijo(
+            """[{"id":13,"fecha":"2026-03-01T00:00:00Z","concepto":"Histórico POA","fuenteFinanciamientoId":9,"fuenteNombre":"Literal POA viejo","monto":10,"activo":true,"caja":1}]"""))
+        { BaseAddress = new Uri("http://localhost/") };
+        var ingreso = (await new IngresoCajaApiClient(http).ListarTodosAsync()).Single();
+
+        var (vm, _, _) = Crear();
+        vm.CargarParaEditar(ingreso);
+        await vm.InicializarAsync();
+
+        Assert.Equal(Caja.Poa, vm.CajaSeleccionada);
+        Assert.Equal(9, vm.FuenteSeleccionada?.Id);
+        Assert.Contains(vm.FuentesDisponibles, f => f.Id == 9);
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+
+        vm.CajaSeleccionada = Caja.Local;
+        Assert.DoesNotContain(vm.FuentesDisponibles, f => f.Id == 9);
     }
 
     // ── PuedeRegistrarIngresos: gating del botón "Guardar" (bugfix 2026-08-15) ─────────────
