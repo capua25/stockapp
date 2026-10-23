@@ -70,12 +70,16 @@ public partial class PagosGastoViewModel : ViewModelBase, INotifyDataErrorInfo
         _session.RolActual == RolUsuario.Admin ||
         _session.PermisosActuales.Contains(Permisos.RegistrarPagos);
 
-    /// <summary>Solo lectura por permiso (<see cref="PuedeRegistrarPagos"/>) o por estado del registro (gasto anulado):
-    /// con cualquiera de los dos no se registra ni se anula (convención 36). Getter sobre la sesión, no un valor calculado una
-    /// vez: <see cref="NotificarPermisosActualizados"/> lo re-evalúa.</summary>
-    public bool PuedeRegistrar => PuedeRegistrarPagos && !EsAnulado;
+    /// <summary>Solo lectura por permiso (<see cref="PuedeRegistrarPagos"/>) o por estado del registro (gasto anulado o gasto
+    /// POA al contado, cuyo pago manual rechaza el servidor): con cualquiera no se registra ni se anula (convención 36). Getter
+    /// sobre la sesión, no un valor calculado una vez: <see cref="NotificarPermisosActualizados"/> lo re-evalúa.</summary>
+    public bool PuedeRegistrar => PuedeRegistrarPagos && !EsAnulado && !EsGastoPoaAlContado;
 
     public bool SoloLectura => !PuedeRegistrar;
+
+    /// <summary>Por qué no se ofrece registrar en un gasto POA al contado: el texto del rechazo del servidor. Null si no aplica;
+    /// un gasto anulado ya tiene su propia alerta ("anulalo" sobre un gasto anulado confunde).</summary>
+    public string? AvisoGastoPoa => EsGastoPoaAlContado && !EsAnulado ? CajaYLiteral.MensajePagoManualEnGastoPoa : null;
 
     public const string MensajeSinPermisoPagos =
         "No tenés permiso para ver finanzas, así que no se pueden abrir los pagos de la factura.";
@@ -105,10 +109,17 @@ public partial class PagosGastoViewModel : ViewModelBase, INotifyDataErrorInfo
 
     /// <summary>Gasto anulado: la pantalla se puede consultar pero no registra ni anula pagos.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(PuedeRegistrar), nameof(SoloLectura), nameof(TextoSaldo))]
+    [NotifyPropertyChangedFor(nameof(PuedeRegistrar), nameof(SoloLectura), nameof(TextoSaldo), nameof(AvisoGastoPoa))]
     [NotifyCanExecuteChangedFor(nameof(RegistrarPagoCommand))]
     [NotifyCanExecuteChangedFor(nameof(AnularPagoCommand))]
     private bool _esAnulado;
+
+    /// <summary>Mismo criterio que GastoService.RegistrarPagoAsync: <see cref="Gasto.PagoAutomatico"/> (ignora Activo) en caja POA.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PuedeRegistrar), nameof(SoloLectura), nameof(AvisoGastoPoa))]
+    [NotifyCanExecuteChangedFor(nameof(RegistrarPagoCommand))]
+    [NotifyCanExecuteChangedFor(nameof(AnularPagoCommand))]
+    private bool _esGastoPoaAlContado;
 
     /// <summary>De dónde se llegó: lo muestra el breadcrumb y es a donde vuelve <see cref="VolverCommand"/>.</summary>
     [ObservableProperty] private string _textoOrigen = "Gastos y facturas";
@@ -124,7 +135,7 @@ public partial class PagosGastoViewModel : ViewModelBase, INotifyDataErrorInfo
     [ObservableProperty] private string? _nota;
 
     /// <summary>Literal que paga el pago. Arranca nulo y no se preselecciona: el usuario lo elige (el pago manual sale
-    /// siempre de la caja Local, así que no hay selector de caja). Tras registrar se conserva.</summary>
+    /// siempre de la caja Local, así que no hay selector de caja). Tras registrar se limpia: cada pago vuelve a elegirlo.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(RegistrarPagoCommand))]
     private FuenteFinanciamiento? _fuenteSeleccionada;
@@ -221,7 +232,7 @@ public partial class PagosGastoViewModel : ViewModelBase, INotifyDataErrorInfo
         AvisoSinLiterales = LiteralesPorCaja.Aviso(Caja.Local, FuentesDisponibles.Count);
     }
 
-    /// <summary>Trae el gasto fresco; tras registrar o anular se llama solo esto (la fuente elegida no se toca).</summary>
+    /// <summary>Trae el gasto fresco; tras registrar o anular se llama solo esto.</summary>
     private async Task RefrescarAsync()
     {
         var gasto = await _service.ObtenerPorIdAsync(_gastoId);
@@ -233,6 +244,7 @@ public partial class PagosGastoViewModel : ViewModelBase, INotifyDataErrorInfo
         SaldoPendiente = gasto.SaldoPendiente;
         Estado         = gasto.CalcularEstado(DateTime.UtcNow).ToString();
         EsAnulado      = !gasto.Activo;
+        EsGastoPoaAlContado = gasto.PagoAutomatico is { Caja: Caja.Poa };
 
         // El pago elegido deja de existir con la lista nueva: se suelta y la card de adjuntos vuelve a pedir uno.
         PagoSeleccionado = null;
@@ -332,6 +344,7 @@ public partial class PagosGastoViewModel : ViewModelBase, INotifyDataErrorInfo
 
             MontoTexto = string.Empty;
             Nota = null;
+            FuenteSeleccionada = null;
             SoltarTocados();
             await RefrescarAsync();
         }

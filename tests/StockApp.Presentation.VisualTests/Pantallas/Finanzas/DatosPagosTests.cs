@@ -1,3 +1,4 @@
+using StockApp.Domain.Enums;
 using StockApp.Domain.Formato;
 using StockApp.Presentation.Converters;
 using StockApp.Presentation.ViewModels;
@@ -140,6 +141,24 @@ public class DatosPagosTests
         Assert.Equal("Anulada", vm.Estado);
         var pago = Assert.Single(vm.Pagos);
         Assert.Equal(("10/10/2026", "Pago contado (automático)", false), (Texto(pago.Fecha), pago.Nota, pago.Activo));
+    }
+
+    [Fact]
+    public async Task GastoPoaAlContadoPantalla_ElCombustibleDeLaPoa_SinRegistroYConElAviso()
+    {
+        var vm = Vm(DatosPagos.GastoPoaAlContadoPantalla());
+
+        await vm.InicializarAsync();
+
+        Assert.False(vm.EsAnulado);
+        Assert.False(vm.PuedeRegistrar);
+        Assert.Equal("Un gasto de la caja POA no admite pagos manuales: anulalo y cargalo de nuevo.", vm.AvisoGastoPoa);
+        Assert.Equal("Combustible de la flota municipal — factura B-0012877 (Ancap Distribuidora)", vm.TituloGasto);
+        Assert.Equal("$ 92.300,00", FormatoEsUy.Moneda(vm.TotalPagado));
+        Assert.Equal("$ 0,00", vm.TextoSaldo);
+        Assert.Equal("Pagada", vm.Estado);
+        var pago = Assert.Single(vm.Pagos);
+        Assert.Equal(("08/10/2026", "Pago contado (automático)", Caja.Poa, "FIGM"), (Texto(pago.Fecha), pago.Nota, pago.Caja, pago.FuenteFinanciamiento!.Nombre));
     }
 
     [Fact]

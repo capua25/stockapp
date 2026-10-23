@@ -64,6 +64,18 @@ public static class DatosPagos
     public static readonly Gasto GastoAnulado = Copia(DatosGastos.Anulado,
         Pago(80, 8, Dia(2026, 10, 10), 92_300m, "Pago contado (automático)", activo: false));
 
+    /// <summary>El combustible pagado de contado desde la caja POA: su pago automático es de la POA, así que no admite pagos manuales.</summary>
+    public static readonly Gasto GastoPoaAlContado = Copia(DatosGastos.Gastos[2],
+        ConId(PagoGasto.Automatico(Dia(2026, 10, 8), 92_300m, "Pago contado (automático)", Caja.Poa, Figm.Id), 50, Figm));
+
+    private static PagoGasto ConId(PagoGasto pago, int id, FuenteFinanciamiento fuente)
+    {
+        pago.Id = id;
+        pago.GastoId = 5;
+        pago.FuenteFinanciamiento = fuente;
+        return pago;
+    }
+
     public static readonly AdjuntoDto ReciboDelPago61 =
         new(1, "recibo-2231.pdf", "application/pdf", 96_300, null, 61, new DateTime(2026, 10, 12, 15, 20, 0, DateTimeKind.Utc));
 
@@ -115,6 +127,9 @@ public static class DatosPagos
         DatosShell.Crear(DatosIngresos.UsuarioOperador, [Permisos.VerFinanzas], "Gastos", Pantalla(Gasto, soloLectura: true));
 
     public static ShellMainViewModel GastoAnuladoPantalla() => EnShell(Pantalla(GastoAnulado));
+
+    /// <summary>Admin con un gasto POA al contado: la card de registrar se reemplaza por el aviso.</summary>
+    public static ShellMainViewModel GastoPoaAlContadoPantalla() => EnShell(Pantalla(GastoPoaAlContado));
 
     /// <summary>Mismo gasto que <see cref="ConPagos"/>: la comparación selecciona el pago 62 (anulado) con la vista cargada.</summary>
     public static ShellMainViewModel PagoAnulado() => EnShell(Pantalla(Gasto));

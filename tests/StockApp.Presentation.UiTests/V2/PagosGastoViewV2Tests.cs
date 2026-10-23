@@ -495,6 +495,34 @@ public class PagosGastoViewV2Tests
     }
 
     [AvaloniaFact]
+    public void GastoPoaAlContado_ConPermisoDeRegistrar_OcultaElRegistroYAvisa()
+    {
+        // Permiso que SÍ permite registrar (no Admin): lo oculta la regla del gasto, no el permiso.
+        var gasto = UnGasto(conPagos: false);
+        gasto.CondicionPago = CondicionPago.Contado;
+        gasto.Pagos.Add(PagoGasto.Automatico(new DateTime(2026, 10, 12, 0, 0, 0, DateTimeKind.Utc), 310_000m, "Pago contado", Caja.Poa, 3));
+        var m = Montar(gasto, sesion: ConPermiso());
+
+        Assert.True(m.Vm.PuedeRegistrarPagos);
+        Assert.False(Visible(Parte<TarjetaContenido>(m, "TarjetaRegistrar")));
+        var aviso = Parte<Alerta>(m, "AlertaGastoPoa");
+        Assert.True(Visible(aviso));
+        Assert.Equal("Un gasto de la caja POA no admite pagos manuales: anulalo y cargalo de nuevo.", aviso.Texto);
+    }
+
+    [AvaloniaFact]
+    public void GastoLocalAlContado_ConPermisoDeRegistrar_MuestraElRegistroSinAviso()
+    {
+        var gasto = UnGasto(conPagos: false);
+        gasto.CondicionPago = CondicionPago.Contado;
+        gasto.Pagos.Add(PagoGasto.Automatico(new DateTime(2026, 10, 12, 0, 0, 0, DateTimeKind.Utc), 310_000m, "Pago contado", Caja.Local, 1));
+        var m = Montar(gasto, sesion: ConPermiso());
+
+        Assert.True(Visible(Parte<TarjetaContenido>(m, "TarjetaRegistrar")));
+        Assert.False(Visible(Parte<Alerta>(m, "AlertaGastoPoa")));
+    }
+
+    [AvaloniaFact]
     public void GastoActivo_SinInsigniasNiAlerta()
     {
         var m = Montar();
@@ -562,7 +590,8 @@ public class PagosGastoViewV2Tests
 
         var pago = Assert.Single(m.Servicio.Registrados);
         Assert.Equal((100m, "saldo", 2, Caja.Local), (pago.Monto, pago.Nota, pago.FuenteFinanciamientoId, pago.Caja));
-        Assert.Same(Tributos, Parte<ComboBox>(m, "ComboFuente").SelectedItem);   // tras registrar la fuente se conserva
+        Assert.Null(Parte<ComboBox>(m, "ComboFuente").SelectedItem);   // tras registrar el literal se vuelve a elegir
+        Assert.False(Parte<Button>(m, "BotonRegistrar").IsEffectivelyEnabled);
         Assert.Equal(string.Empty, Parte<TextBox>(m, "CajaMonto").Text ?? string.Empty);
         Assert.Empty(Errores(Parte<TextBox>(m, "CajaMonto")));
     }

@@ -62,6 +62,11 @@
                 <v2:Alerta x:Name="AlertaAnulado" Variante="Info" IsVisible="{Binding EsAnulado}"
                            Texto="Este gasto está anulado: se pueden consultar sus pagos, pero no registrar ni anular." />
 
+                <!-- Gasto de la caja POA al contado: el servidor rechaza el pago manual, así que la card de registrar se oculta y esto
+                     explica por qué. -->
+                <v2:Alerta x:Name="AlertaGastoPoa" Variante="Info" Texto="{Binding AvisoGastoPoa}"
+                           IsVisible="{Binding AvisoGastoPoa, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
                 <!-- Resumen: cuatro columnas iguales; el saldo de un gasto anulado es "—". -->
                 <v2:TarjetaContenido x:Name="TarjetaResumen">
                     <Grid ColumnDefinitions="*,*,*,*">

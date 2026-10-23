@@ -60,6 +60,9 @@ public class PagosComparacionTests
     [AvaloniaFact] public void PagosGastoAnulado_IgualAlMockup() => Comparar(DatosPagos.GastoAnuladoPantalla(), "finanzas/pagos-gasto-anulado.html");
     [AvaloniaFact] public void PagosGastoAnulado_IgualAlMockup_1366x768() =>
         Comparar(DatosPagos.GastoAnuladoPantalla(), "finanzas/pagos-gasto-anulado.html", TamanoLienzo.Municipio);
+    [AvaloniaFact] public void PagosGastoPoa_IgualAlMockup() => Comparar(DatosPagos.GastoPoaAlContadoPantalla(), "finanzas/pagos-gasto-poa.html");
+    [AvaloniaFact] public void PagosGastoPoa_IgualAlMockup_1366x768() =>
+        Comparar(DatosPagos.GastoPoaAlContadoPantalla(), "finanzas/pagos-gasto-poa.html", TamanoLienzo.Municipio);
     [AvaloniaFact] public void PagosPagoAnulado_IgualAlMockup() =>
         Comparar(DatosPagos.PagoAnulado(), "finanzas/pagos-pago-anulado.html", preparar: OcultarSidebarYSeleccionar(62), aprobado: Aprobacion(17, "importes del resumen, aviso y nombre del adjunto", MutacionPalida));
     [AvaloniaFact] public void PagosPagoAnulado_IgualAlMockup_1366x768() =>

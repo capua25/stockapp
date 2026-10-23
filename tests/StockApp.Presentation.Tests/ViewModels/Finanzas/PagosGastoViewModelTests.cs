@@ -548,8 +548,9 @@ public class PagosGastoViewModelTests
     }
 
     [Fact]
-    public async Task RegistrarPago_TrasGuardar_ConservaLaFuente()
+    public async Task RegistrarPago_TrasGuardar_LimpiaLaFuente()
     {
+        // Decisión del usuario (se aparta del plan, que la conservaba): cada pago vuelve a elegir su literal.
         var (vm, _, _, _, _) = Crear();
         vm.CargarParaGasto(GastoConPago());
         await vm.InicializarAsync();
@@ -561,8 +562,67 @@ public class PagosGastoViewModelTests
 
         Assert.Equal(string.Empty, vm.MontoTexto);
         Assert.Null(vm.Nota);
-        Assert.Same(Tributos, vm.FuenteSeleccionada);
-        Assert.Null(vm.ErrorDe(nameof(PagosGastoViewModel.FuenteSeleccionada)));
+        Assert.Null(vm.FuenteSeleccionada);
+        Assert.False(vm.RegistrarPagoCommand.CanExecute(null));
+        Assert.Null(vm.ErrorDe(nameof(PagosGastoViewModel.FuenteSeleccionada)));   // los tocados se sueltan: no aparece "Elegí la fuente"
+    }
+
+    // ── Gasto POA al contado: el pago manual lo rechaza el servidor, así que no se ofrece ──────────────
+
+    private static Gasto GastoPoaAlContado() => new()
+    {
+        Id = 5, ProveedorId = 1, Detalle = "Obra POA", Fecha = Hoy, MontoTotal = 1000m,
+        FuenteFinanciamientoId = 3, RubroGastoId = 3, CondicionPago = CondicionPago.Contado,
+        Pagos = { PagoGasto.Automatico(Hoy, 1000m, "Pago contado", Caja.Poa, 3) },
+    };
+
+    private static Gasto GastoLocalAlContado() => new()
+    {
+        Id = 5, ProveedorId = 1, Detalle = "Compra local", Fecha = Hoy, MontoTotal = 1000m,
+        FuenteFinanciamientoId = 1, RubroGastoId = 3, CondicionPago = CondicionPago.Contado,
+        Pagos = { PagoGasto.Automatico(Hoy, 1000m, "Pago contado", Caja.Local, 1) },
+    };
+
+    [Fact]
+    public async Task GastoPoaAlContado_NoSePuedeRegistrar_YAvisaConElMensajeDelServidor()
+    {
+        var (vm, _, _, _, _) = Crear(gasto: GastoPoaAlContado());
+        vm.CargarParaGasto(GastoPoaAlContado());
+        await vm.InicializarAsync();
+        vm.MontoTexto = "10";
+        vm.FuenteSeleccionada = Rentas;
+
+        Assert.False(vm.PuedeRegistrar);
+        Assert.True(vm.SoloLectura);
+        Assert.False(vm.RegistrarPagoCommand.CanExecute(null));
+        Assert.Equal(CajaYLiteral.MensajePagoManualEnGastoPoa, vm.AvisoGastoPoa);
+    }
+
+    [Fact]
+    public async Task GastoLocalAlContado_SinAviso_YRegistraComoSiempre()
+    {
+        var (vm, _, _, _, _) = Crear(gasto: GastoLocalAlContado());
+        vm.CargarParaGasto(GastoLocalAlContado());
+        await vm.InicializarAsync();
+        vm.MontoTexto = "10";
+        vm.FuenteSeleccionada = Rentas;
+
+        Assert.True(vm.PuedeRegistrar);
+        Assert.False(vm.SoloLectura);
+        Assert.Null(vm.AvisoGastoPoa);
+        Assert.True(vm.RegistrarPagoCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task GastoPoaAlContado_Anulado_NoRepiteElAvisoDeAnulacion()
+    {
+        var anulado = GastoPoaAlContado();
+        anulado.Activo = false;
+        var (vm, _, _, _, _) = Crear(gasto: anulado);
+        vm.CargarParaGasto(anulado);
+        await vm.InicializarAsync();
+
+        Assert.Null(vm.AvisoGastoPoa);   // "anulalo y cargalo de nuevo" sobre un gasto ya anulado confunde; manda la alerta de anulado
     }
 
     [Fact]
