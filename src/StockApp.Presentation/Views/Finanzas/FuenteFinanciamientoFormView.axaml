@@ -2,6 +2,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
              xmlns:v2="using:StockApp.Presentation.Controls.V2"
+             xmlns:en="using:StockApp.Domain.Enums"
+             xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
@@ -32,6 +34,19 @@
                         <v2:CampoFormulario Etiqueta="Nombre" Requerido="True">
                                 <TextBox x:Name="CajaNombre" Text="{Binding Nombre}" PlaceholderText="Ej.: Literal B" />
                             </v2:CampoFormulario>
+
+                        <v2:CampoFormulario x:Name="CampoCaja" Etiqueta="Caja" Requerido="True" Margin="0,16,0,0">
+                            <ComboBox x:Name="ComboCaja" HorizontalAlignment="Stretch"
+                                      ItemsSource="{Binding Cajas}"
+                                      SelectedItem="{Binding CajaSeleccionada}"
+                                      PlaceholderText="Elegí la caja">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="en:Caja">
+                                        <TextBlock Text="{Binding ., Converter={x:Static conv:CajaNombreConverter.Instance}}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </v2:CampoFormulario>
 
                         <v2:Alerta x:Name="AlertaError" Margin="0,16,0,0" Variante="Error"
                                    Texto="{Binding MensajeError}"

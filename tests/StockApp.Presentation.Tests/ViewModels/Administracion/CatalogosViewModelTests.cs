@@ -261,7 +261,7 @@ public class CatalogosViewModelTests
             }),
             new(ClaveCatalogo.FuentesFinanciamiento, nav =>
             {
-                var f = new FuenteFinanciamientoFormViewModel(Mock.Of<IFuenteFinanciamientoService>(), nav) { Nombre = "X" };
+                var f = new FuenteFinanciamientoFormViewModel(Mock.Of<IFuenteFinanciamientoService>(), nav) { Nombre = "X", CajaSeleccionada = Domain.Enums.Caja.Local };
                 return (f.CancelarCommand, f.GuardarCommand);
             }),
             new(ClaveCatalogo.RubrosGasto, nav =>

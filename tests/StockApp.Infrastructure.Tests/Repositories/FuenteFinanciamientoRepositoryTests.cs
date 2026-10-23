@@ -1,4 +1,5 @@
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Repositories;
 using StockApp.Infrastructure.Tests.Fixtures;
 using Xunit;
@@ -71,5 +72,58 @@ public class FuenteFinanciamientoRepositoryTests : PostgresRepositoryTestBase
 
         var updated = await _repo.ObtenerPorIdAsync(id);
         Assert.False(updated!.Activo);
+    }
+
+    private async Task<(int fuenteId, int proveedorId, int rubroId)> SeedFuenteConMaestrosAsync()
+    {
+        var fuente    = new FuenteFinanciamiento { Nombre = $"Fuente {Guid.NewGuid():N}" };
+        var proveedor = new Proveedor { Nombre = $"Proveedor {Guid.NewGuid():N}" };
+        var rubro     = new RubroGasto { Codigo = Random.Shared.Next(1, 1_000_000), Nombre = "Rubro test" };
+        Context.AddRange(fuente, proveedor, rubro);
+        await Context.SaveChangesAsync();
+        return (fuente.Id, proveedor.Id, rubro.Id);
+    }
+
+    [Fact]
+    public async Task EstaEnUsoAsync_SinMovimientos_False()
+    {
+        var (fuenteId, _, _) = await SeedFuenteConMaestrosAsync();
+
+        Assert.False(await _repo.EstaEnUsoAsync(fuenteId));
+    }
+
+    [Fact]
+    public async Task EstaEnUsoAsync_ConIngresoDadoDeBaja_True()
+    {
+        var (fuenteId, _, _) = await SeedFuenteConMaestrosAsync();
+        Context.Add(new IngresoCaja
+        {
+            Fecha = DateTime.UtcNow, Concepto = "Baja", FuenteFinanciamientoId = fuenteId, Monto = 1m, Activo = false,
+        });
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        Assert.True(await _repo.EstaEnUsoAsync(fuenteId));
+    }
+
+    [Fact]
+    public async Task EstaEnUsoAsync_ConPagoAnulado_True()
+    {
+        var (fuenteId, proveedorId, rubroId) = await SeedFuenteConMaestrosAsync();
+        var gasto = new Gasto
+        {
+            ProveedorId = proveedorId, Detalle = "Gasto de prueba", Fecha = DateTime.UtcNow, MontoTotal = 1000m,
+            RubroGastoId = rubroId, CondicionPago = CondicionPago.Credito, FechaVencimiento = DateTime.UtcNow.AddDays(30),
+            FuenteFinanciamientoId = fuenteId,
+        };
+        gasto.Pagos.Add(new PagoGasto
+        {
+            Fecha = DateTime.UtcNow, Monto = 100m, Activo = false, FuenteFinanciamientoId = fuenteId,
+        });
+        Context.Add(gasto);
+        await Context.SaveChangesAsync();
+        Context.ChangeTracker.Clear();
+
+        Assert.True(await _repo.EstaEnUsoAsync(fuenteId));
     }
 }

@@ -106,6 +106,8 @@ public sealed class FuenteFinanciamientoRepositoryFake : IFuenteFinanciamientoRe
         Task.FromResult(_fuentes.Any(f =>
             f.Nombre == nombre && (excluyendoId is null || f.Id != excluyendoId.Value)));
 
+    public Task<bool> EstaEnUsoAsync(int fuenteFinanciamientoId) => Task.FromResult(false);
+
     public Task<int> AgregarAsync(FuenteFinanciamiento fuente)
     {
         fuente.Id = _siguienteId++;

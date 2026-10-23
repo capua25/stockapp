@@ -1,7 +1,9 @@
 using System.Net;
 using StockApp.ApiClient;
 using StockApp.ApiClient.Tests.TestInfra;
+using System.Text.Json;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 
 namespace StockApp.ApiClient.Tests;
@@ -100,5 +102,33 @@ public class FuenteFinanciamientoApiClientTests
         var client = new FuenteFinanciamientoApiClient(TestHttp.CrearCliente(fake));
 
         await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => client.BajaLogicaAsync(99));
+    }
+
+    [Fact]
+    public async Task AltaAsync_EnviaLaCajaComoNumero()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(new { id = 9 }, HttpStatusCode.Created));
+        var client = new FuenteFinanciamientoApiClient(TestHttp.CrearCliente(fake));
+
+        await client.AltaAsync(new FuenteFinanciamiento { Nombre = "Literal POA", Caja = Caja.Poa });
+
+        using var doc = JsonDocument.Parse(fake.UltimoBody!);
+        Assert.Equal(1, doc.RootElement.GetProperty("caja").GetInt32());
+    }
+
+    [Fact]
+    public async Task ListarActivasAsync_LeeLaCaja()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(new[]
+        {
+            new { id = 1, nombre = "Literal A", activo = true, caja = 0 },
+            new { id = 2, nombre = "Literal P", activo = true, caja = 1 },
+        }));
+        var client = new FuenteFinanciamientoApiClient(TestHttp.CrearCliente(fake));
+
+        var fuentes = await client.ListarActivasAsync();
+
+        Assert.Equal(Caja.Local, fuentes[0].Caja);
+        Assert.Equal(Caja.Poa, fuentes[1].Caja);
     }
 }

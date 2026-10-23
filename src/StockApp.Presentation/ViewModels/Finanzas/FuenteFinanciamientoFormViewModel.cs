@@ -1,8 +1,10 @@
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.ViewModels.Administracion;
@@ -22,12 +24,19 @@ public partial class FuenteFinanciamientoFormViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
     private string _nombre = string.Empty;
 
+    /// <summary>Sin default: la caja se elige explícitamente al dar de alta un literal.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
+    private Caja? _cajaSeleccionada;
+
     [ObservableProperty]
     private string? _mensajeError;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Titulo))]
     private bool _esEdicion;
+
+    public IReadOnlyList<Caja> Cajas => CajaExtensions.Todas;
 
     public string Titulo => EsEdicion ? "Editar fuente de financiamiento" : "Nueva fuente de financiamiento";
 
@@ -42,10 +51,11 @@ public partial class FuenteFinanciamientoFormViewModel : ViewModelBase
     {
         _idEdicion = fuente.Id;
         Nombre     = fuente.Nombre;
+        CajaSeleccionada = fuente.Caja;
         EsEdicion  = true;
     }
 
-    private bool PuedeGuardar() => !string.IsNullOrWhiteSpace(Nombre);
+    private bool PuedeGuardar() => !string.IsNullOrWhiteSpace(Nombre) && CajaSeleccionada is not null;
 
     public IAsyncRelayCommand GuardarCommand => field ??= ComandoDeGuardado(GuardarAsync, PuedeGuardar);
 
@@ -55,9 +65,9 @@ public partial class FuenteFinanciamientoFormViewModel : ViewModelBase
         try
         {
             if (EsEdicion)
-                await _service.ModificarAsync(new FuenteFinanciamiento { Id = _idEdicion, Nombre = Nombre });
+                await _service.ModificarAsync(new FuenteFinanciamiento { Id = _idEdicion, Nombre = Nombre, Caja = CajaSeleccionada!.Value });
             else
-                await _service.AltaAsync(new FuenteFinanciamiento { Nombre = Nombre });
+                await _service.AltaAsync(new FuenteFinanciamiento { Nombre = Nombre, Caja = CajaSeleccionada!.Value });
 
             _navigation.Navegar<CatalogosViewModel>(vm => vm.Seleccionar(ClaveCatalogo.FuentesFinanciamiento));
         }

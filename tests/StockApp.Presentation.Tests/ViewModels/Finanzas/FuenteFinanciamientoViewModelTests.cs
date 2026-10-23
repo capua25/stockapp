@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Moq;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
@@ -161,6 +162,7 @@ public class FuenteFinanciamientoFormViewModelTests
     {
         var (vm, svcMock, navMock) = Crear();
         vm.Nombre = "Literal B";
+        vm.CajaSeleccionada = Caja.Local;
 
         await vm.GuardarCommand.ExecuteAsync(null);
 
@@ -189,6 +191,7 @@ public class FuenteFinanciamientoFormViewModelTests
         svcMock.Setup(s => s.AltaAsync(It.IsAny<FuenteFinanciamiento>()))
             .ThrowsAsync(new ReglaDeNegocioException("Ya existe una fuente de financiamiento con el nombre 'Multas'."));
         vm.Nombre = "Multas";
+        vm.CajaSeleccionada = Caja.Local;
 
         await vm.GuardarCommand.ExecuteAsync(null);
 
@@ -202,5 +205,46 @@ public class FuenteFinanciamientoFormViewModelTests
         var (vm, _, _) = Crear();
 
         Assert.False(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void Alta_SinCaja_GuardarDeshabilitado()
+    {
+        var (vm, _, _) = Crear();
+        vm.Nombre = "Literal B";
+
+        Assert.Null(vm.CajaSeleccionada);
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+
+        vm.CajaSeleccionada = Caja.Poa;
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Alta_ConCajaPoa_EnviaPoa()
+    {
+        var (vm, svcMock, _) = Crear();
+        vm.Nombre = "Literal P";
+        vm.CajaSeleccionada = Caja.Poa;
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.AltaAsync(
+            It.Is<FuenteFinanciamiento>(f => f.Nombre == "Literal P" && f.Caja == Caja.Poa)), Times.Once);
+    }
+
+    [Fact]
+    public async Task Editar_PrecargaLaCaja()
+    {
+        var (vm, svcMock, _) = Crear();
+        vm.CargarParaEditar(new FuenteFinanciamiento { Id = 3, Nombre = "Literal P", Caja = Caja.Poa });
+
+        Assert.Equal(Caja.Poa, vm.CajaSeleccionada);
+        Assert.Equal(new[] { Caja.Local, Caja.Poa }, vm.Cajas);
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svcMock.Verify(s => s.ModificarAsync(
+            It.Is<FuenteFinanciamiento>(f => f.Id == 3 && f.Caja == Caja.Poa)), Times.Once);
     }
 }

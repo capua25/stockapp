@@ -93,6 +93,9 @@ public class ComandosDeGuardadoGuardianTests
             padre.UsuarioSeleccionado = new UsuarioDto(2, "prueba", null, RolUsuario.Operador, true, DateTime.Today);
             panel.MensajeError = null;
         },
+        // Guardar exige elegir la caja (sin default) y LlenarCampos no completa un enum nulo.
+        [nameof(FuenteFinanciamientoFormViewModel)] = vm =>
+            ((FuenteFinanciamientoFormViewModel)vm).CajaSeleccionada = Caja.Local,
         // Guardar exige al menos un renglón cargado.
         [nameof(IngresoPorFacturaViewModel)] = vm =>
             ((IngresoPorFacturaViewModel)vm).Renglones.Add(new FilaRenglonFacturaVm()),

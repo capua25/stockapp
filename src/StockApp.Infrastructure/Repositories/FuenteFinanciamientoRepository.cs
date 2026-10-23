@@ -22,6 +22,10 @@ public class FuenteFinanciamientoRepository : IFuenteFinanciamientoRepository
             ? _ctx.FuentesFinanciamiento.AnyAsync(f => f.Nombre == nombre && f.Id != excluyendoId.Value)
             : _ctx.FuentesFinanciamiento.AnyAsync(f => f.Nombre == nombre);
 
+    public async Task<bool> EstaEnUsoAsync(int fuenteFinanciamientoId)
+        => await _ctx.IngresosCaja.AnyAsync(i => i.FuenteFinanciamientoId == fuenteFinanciamientoId)
+           || await _ctx.PagosGasto.AnyAsync(p => p.FuenteFinanciamientoId == fuenteFinanciamientoId);
+
     public async Task<int> AgregarAsync(FuenteFinanciamiento fuente)
     {
         _ctx.FuentesFinanciamiento.Add(fuente);

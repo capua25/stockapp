@@ -10,6 +10,7 @@ using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Presentation.Controls.V2;
 using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Administracion;
@@ -49,7 +50,8 @@ public class FormulariosCatalogoV2Tests
             "Unidades de medida", vm => ((UnidadMedidaFormViewModel)vm).CargarParaEditar(new UnidadMedida { Id = 1, Nombre = "Kilogramo", Abreviatura = "kg" }),
             new() { ["Nombre"] = ("Nombre", "Algo"), ["Abreviatura"] = ("Abreviatura", "x") }),
         new("FuenteFinanciamiento", n => { var vm = new FuenteFinanciamientoFormViewModel(new FuenteFinanciamientoServicioFake(), n); return (new FuenteFinanciamientoFormView { DataContext = vm }, vm); },
-            "Fuentes de financiamiento", vm => ((FuenteFinanciamientoFormViewModel)vm).CargarParaEditar(new FuenteFinanciamiento { Id = 1, Nombre = "FIGM" }), Nombre()),
+            "Fuentes de financiamiento", vm => ((FuenteFinanciamientoFormViewModel)vm).CargarParaEditar(new FuenteFinanciamiento { Id = 1, Nombre = "FIGM" }),
+            new() { ["Nombre"] = ("Nombre", "Algo"), ["Caja"] = ("CajaSeleccionada", "POA") }),
         new("RubroGasto", n => { var vm = new RubroGastoFormViewModel(new RubroGastoServicioFake(), n); return (new RubroGastoFormView { DataContext = vm }, vm); },
             "Rubros de gasto", vm => ((RubroGastoFormViewModel)vm).CargarParaEditar(new RubroGasto { Id = 1, Codigo = 12, Nombre = "Combustibles" }),
             new() { ["Código"] = ("CodigoTexto", "12"), ["Nombre"] = ("Nombre", "Algo") }),
@@ -85,7 +87,11 @@ public class FormulariosCatalogoV2Tests
     private static Rect EnVentana(Window ventana, Control c) => new(c.TranslatePoint(new Point(0, 0), ventana)!.Value, c.Bounds.Size);
 
     private static void Poner(object vm, string propiedad, string valor)
-        => vm.GetType().GetProperty(propiedad)!.SetValue(vm, valor);
+    {
+        var prop = vm.GetType().GetProperty(propiedad)!;
+        // Campo de combo de caja (Caja?): el texto "" es sin elegir, cualquier otro es una caja elegida.
+        prop.SetValue(vm, prop.PropertyType == typeof(Caja?) ? (valor == "" ? null : Caja.Poa) : valor);
+    }
 
     private static void Clickear(Window ventana, Control control)
     {
@@ -215,6 +221,35 @@ public class FormulariosCatalogoV2Tests
         Assert.Equal(nombre.Width, notas.Width);
         Assert.True(tel.Y > nombre.Y && dir.Y > tel.Y && notas.Y > dir.Y);
         Assert.Equal(60, m.Vista.GetVisualDescendants().OfType<TextBox>().Single(t => t.Name == "CajaNotas").Height);
+    }
+
+    [AvaloniaFact]
+    public void FuenteForm_ComboCaja_OfreceLocalYPoa_SinPreseleccion()
+    {
+        var m = Montar(De("FuenteFinanciamiento"));
+        var combo = Parte<ComboBox>(m, "ComboCaja");
+
+        Assert.Equal(2, combo.ItemCount);
+        Assert.Equal(new[] { Caja.Local, Caja.Poa }, combo.Items.Cast<Caja>().ToArray());
+        Assert.Null(combo.SelectedItem);
+        combo.SelectedIndex = 1;
+        Dispatcher.UIThread.RunJobs();
+        var textos = combo.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+        Assert.Equal(Caja.Poa, ((FuenteFinanciamientoFormViewModel)m.Vm).CajaSeleccionada);
+        Assert.Contains("POA", textos);
+    }
+
+    [AvaloniaFact]
+    public void FuenteForm_SinCaja_GuardarDeshabilitado()
+    {
+        var m = Montar(De("FuenteFinanciamiento"));
+        var guardar = Parte<Button>(m, "BotonGuardar");
+
+        ((FuenteFinanciamientoFormViewModel)m.Vm).Nombre = "Literal Nuevo";
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(guardar.IsEffectivelyEnabled);
+        Assert.False(guardar.Command!.CanExecute(null));
     }
 
     [AvaloniaFact]

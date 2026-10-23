@@ -1,10 +1,12 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using StockApp.Api.Auth;
 using StockApp.Api.Endpoints;
+using StockApp.Application.Finanzas;
 using StockApp.Api.Tests.Fixtures;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
@@ -65,7 +67,7 @@ public class FuentesFinanciamientoEndpointTests : ApiTestBase
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
 
         var response = await client.PostAsJsonAsync("/finanzas/fuentes",
-            new CrearFuenteFinanciamientoRequest("Multas"));
+            new CrearFuenteFinanciamientoRequest("Multas", Caja.Local));
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.Null(response.Headers.Location); // no existe GET /finanzas/fuentes/{id}
@@ -86,7 +88,7 @@ public class FuentesFinanciamientoEndpointTests : ApiTestBase
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
 
         var response = await client.PostAsJsonAsync("/finanzas/fuentes",
-            new CrearFuenteFinanciamientoRequest("Literal C"));
+            new CrearFuenteFinanciamientoRequest("Literal C", Caja.Local));
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
@@ -104,7 +106,7 @@ public class FuentesFinanciamientoEndpointTests : ApiTestBase
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
 
         var response = await client.PutAsJsonAsync($"/finanzas/fuentes/{fuente.Id}",
-            new ModificarFuenteFinanciamientoRequest("Modificada"));
+            new ModificarFuenteFinanciamientoRequest("Modificada", Caja.Local));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
@@ -151,5 +153,68 @@ public class FuentesFinanciamientoEndpointTests : ApiTestBase
         var fuentes = await response.Content.ReadFromJsonAsync<List<FuenteFinanciamientoDto>>();
         Assert.Contains(fuentes!, f => f.Nombre == "Activa");
         Assert.DoesNotContain(fuentes!, f => f.Nombre == "Inactiva");
+    }
+
+    [Fact]
+    public async Task Post_SinCaja_Devuelve400()
+    {
+        await using var ctx = Factory.CrearContexto();
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.test", "Secreta123!", RolUsuario.Admin);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.PostAsJsonAsync("/finanzas/fuentes",
+            new CrearFuenteFinanciamientoRequest("Sin caja", null));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(FuenteFinanciamientoService.MensajeCajaObligatoria, doc.RootElement.GetProperty("detail").GetString());
+    }
+
+    [Fact]
+    public async Task Post_ConCaja1_ElListadoLaDevuelveComoNumero()
+    {
+        await using var ctx = Factory.CrearContexto();
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.test", "Secreta123!", RolUsuario.Admin);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var alta = await client.PostAsJsonAsync("/finanzas/fuentes",
+            new CrearFuenteFinanciamientoRequest("Literal POA", Caja.Poa));
+        Assert.Equal(HttpStatusCode.Created, alta.StatusCode);
+
+        var listado = await client.GetAsync("/finanzas/fuentes");
+        using var doc = JsonDocument.Parse(await listado.Content.ReadAsStringAsync());
+        var fuente = doc.RootElement.EnumerateArray().Single(f => f.GetProperty("nombre").GetString() == "Literal POA");
+        var caja = fuente.GetProperty("caja");
+        Assert.Equal(JsonValueKind.Number, caja.ValueKind);
+        Assert.Equal(1, caja.GetInt32());
+    }
+
+    [Fact]
+    public async Task Put_CambiaLaCajaDeUnaFuenteConPagos_Devuelve409()
+    {
+        await using var ctx = Factory.CrearContexto();
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.test", "Secreta123!", RolUsuario.Admin);
+        var fuente = new FuenteFinanciamiento { Nombre = "Con ingresos", Activo = true, Caja = Caja.Local };
+        ctx.FuentesFinanciamiento.Add(fuente);
+        await ctx.SaveChangesAsync();
+        ctx.IngresosCaja.Add(new IngresoCaja
+        {
+            Fecha = DateTime.UtcNow, Concepto = "Partida", FuenteFinanciamientoId = fuente.Id, Monto = 10m,
+        });
+        await ctx.SaveChangesAsync();
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
+
+        var response = await client.PutAsJsonAsync($"/finanzas/fuentes/{fuente.Id}",
+            new ModificarFuenteFinanciamientoRequest("Con ingresos", Caja.Poa));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        await using var verificacion = Factory.CrearContexto();
+        Assert.Equal(Caja.Local, (await verificacion.FuentesFinanciamiento.SingleAsync(f => f.Id == fuente.Id)).Caja);
     }
 }

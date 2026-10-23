@@ -1,11 +1,12 @@
 using System.Net.Http.Json;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 
 namespace StockApp.ApiClient;
 
-internal sealed record FuenteFinanciamientoWire(int Id, string Nombre, bool Activo);
-internal sealed record FuenteFinanciamientoBody(string Nombre);
+internal sealed record FuenteFinanciamientoWire(int Id, string Nombre, bool Activo, Caja Caja);
+internal sealed record FuenteFinanciamientoBody(string Nombre, Caja Caja);
 
 /// <summary>
 /// IFuenteFinanciamientoService contra /finanzas/fuentes. La interfaz habla en entidades
@@ -20,7 +21,7 @@ public sealed class FuenteFinanciamientoApiClient : IFuenteFinanciamientoService
     public async Task<int> AltaAsync(FuenteFinanciamiento fuente)
     {
         var response = await ApiErrores.EnviarAsync(() =>
-            _http.PostAsJsonAsync("finanzas/fuentes", new FuenteFinanciamientoBody(fuente.Nombre)));
+            _http.PostAsJsonAsync("finanzas/fuentes", new FuenteFinanciamientoBody(fuente.Nombre, fuente.Caja)));
         await ApiErrores.AsegurarExitoAsync(response);
 
         var creado = await response.Content.ReadFromJsonAsync<IdCreado>()
@@ -32,7 +33,7 @@ public sealed class FuenteFinanciamientoApiClient : IFuenteFinanciamientoService
     {
         // El id de ruta es la única fuente; el body no lleva Id (3a, D1).
         var response = await ApiErrores.EnviarAsync(() =>
-            _http.PutAsJsonAsync($"finanzas/fuentes/{fuente.Id}", new FuenteFinanciamientoBody(fuente.Nombre)));
+            _http.PutAsJsonAsync($"finanzas/fuentes/{fuente.Id}", new FuenteFinanciamientoBody(fuente.Nombre, fuente.Caja)));
         await ApiErrores.AsegurarExitoAsync(response);
     }
 
@@ -56,5 +57,5 @@ public sealed class FuenteFinanciamientoApiClient : IFuenteFinanciamientoService
     }
 
     private static FuenteFinanciamiento AEntidad(FuenteFinanciamientoWire dto)
-        => new() { Id = dto.Id, Nombre = dto.Nombre, Activo = dto.Activo };
+        => new() { Id = dto.Id, Nombre = dto.Nombre, Activo = dto.Activo, Caja = dto.Caja };
 }

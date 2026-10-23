@@ -12,6 +12,11 @@ namespace StockApp.Application.Finanzas;
 /// </summary>
 public class FuenteFinanciamientoService : IFuenteFinanciamientoService
 {
+    public const string MensajeCajaObligatoria = "La caja de la fuente de financiamiento es obligatoria.";
+
+    public static string MensajeCambioDeCajaEnUso(string nombre)
+        => $"No se puede cambiar la caja de la fuente '{nombre}': ya tiene ingresos o pagos registrados.";
+
     private readonly IFuenteFinanciamientoRepository _repo;
     private readonly ICurrentSession                 _session;
     private readonly IAuthorizationService           _auth;
@@ -36,6 +41,8 @@ public class FuenteFinanciamientoService : IFuenteFinanciamientoService
         if (string.IsNullOrWhiteSpace(fuente.Nombre))
             throw new ArgumentException("El nombre de la fuente de financiamiento es obligatorio.");
 
+        CajaYLiteral.ValidarCaja(fuente.Caja);
+
         if (await _repo.ExisteNombreAsync(fuente.Nombre, null))
             throw new ReglaDeNegocioException(
                 $"Ya existe una fuente de financiamiento con el nombre '{fuente.Nombre}'.");
@@ -46,7 +53,7 @@ public class FuenteFinanciamientoService : IFuenteFinanciamientoService
             _session.UsuarioActual!.Id,
             AccionAuditada.AltaFuenteFinanciamiento,
             "FuenteFinanciamiento", id,
-            $"Nombre: {fuente.Nombre}");
+            $"Nombre: {fuente.Nombre}; Caja: {fuente.Caja.Nombre()}");
 
         return id;
     }
@@ -70,10 +77,21 @@ public class FuenteFinanciamientoService : IFuenteFinanciamientoService
         if (original.Nombre != fuente.Nombre)
             cambios.Add($"Nombre: {original.Nombre} → {fuente.Nombre}");
 
+        if (original.Caja != fuente.Caja)
+        {
+            CajaYLiteral.ValidarCaja(fuente.Caja);
+
+            if (await _repo.EstaEnUsoAsync(original.Id))
+                throw new ReglaDeNegocioException(MensajeCambioDeCajaEnUso(original.Nombre));
+
+            cambios.Add($"Caja: {original.Caja.Nombre()} → {fuente.Caja.Nombre()}");
+        }
+
         if (cambios.Count == 0)
             return;
 
         original.Nombre = fuente.Nombre;
+        original.Caja   = fuente.Caja;
         await _repo.ActualizarAsync(original);
 
         await _audit.RegistrarAsync(

@@ -2,12 +2,13 @@ using System.Linq;
 using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 
 namespace StockApp.Api.Endpoints;
 
-public record CrearFuenteFinanciamientoRequest(string Nombre);
-public record ModificarFuenteFinanciamientoRequest(string Nombre);
-public record FuenteFinanciamientoDto(int Id, string Nombre, bool Activo);
+public record CrearFuenteFinanciamientoRequest(string Nombre, Caja? Caja);
+public record ModificarFuenteFinanciamientoRequest(string Nombre, Caja? Caja);
+public record FuenteFinanciamientoDto(int Id, string Nombre, bool Activo, Caja Caja);
 
 public static class FuentesFinanciamientoEndpoints
 {
@@ -21,7 +22,7 @@ public static class FuentesFinanciamientoEndpoints
 
         group.MapPost("/", async (CrearFuenteFinanciamientoRequest request, IFuenteFinanciamientoService fuentes) =>
         {
-            var id = await fuentes.AltaAsync(new FuenteFinanciamiento { Nombre = request.Nombre });
+            var id = await fuentes.AltaAsync(new FuenteFinanciamiento { Nombre = request.Nombre, Caja = CajaObligatoria(request.Caja) });
             // Sin Location: no existe GET /finanzas/fuentes/{id} (mismo criterio que /categorias).
             return Results.Created((string?)null, new { id });
         })
@@ -29,7 +30,7 @@ public static class FuentesFinanciamientoEndpoints
 
         group.MapPut("/{id:int}", async (int id, ModificarFuenteFinanciamientoRequest request, IFuenteFinanciamientoService fuentes) =>
         {
-            await fuentes.ModificarAsync(new FuenteFinanciamiento { Id = id, Nombre = request.Nombre });
+            await fuentes.ModificarAsync(new FuenteFinanciamiento { Id = id, Nombre = request.Nombre, Caja = CajaObligatoria(request.Caja) });
             return Results.Ok();
         })
         .RequireAuthorization(Permisos.GestionarMaestrosFinanzas);
@@ -48,5 +49,8 @@ public static class FuentesFinanciamientoEndpoints
         return app;
     }
 
-    private static FuenteFinanciamientoDto ADto(FuenteFinanciamiento f) => new(f.Id, f.Nombre, f.Activo);
+    private static Caja CajaObligatoria(Caja? caja)
+        => caja ?? throw new ArgumentException(FuenteFinanciamientoService.MensajeCajaObligatoria);
+
+    private static FuenteFinanciamientoDto ADto(FuenteFinanciamiento f) => new(f.Id, f.Nombre, f.Activo, f.Caja);
 }

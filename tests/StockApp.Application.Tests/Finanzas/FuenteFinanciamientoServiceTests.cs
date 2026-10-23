@@ -106,6 +106,75 @@ public class FuenteFinanciamientoServiceTests
     }
 
     [Fact]
+    public async Task AltaAsync_CajaInexistente_LanzaArgumentException()
+    {
+        var (svc, repo, _) = Crear();
+
+        var ex = await Assert.ThrowsAsync<ArgumentException>(
+            () => svc.AltaAsync(new FuenteFinanciamiento { Nombre = "Literal Z", Caja = (Caja)7 }));
+
+        Assert.Equal(CajaYLiteral.MensajeCajaInexistente, ex.Message);
+        repo.Verify(r => r.AgregarAsync(It.IsAny<FuenteFinanciamiento>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AltaAsync_AuditaLaCaja()
+    {
+        var (svc, repo, audit) = Crear();
+        repo.Setup(r => r.AgregarAsync(It.IsAny<FuenteFinanciamiento>())).ReturnsAsync(8);
+
+        await svc.AltaAsync(new FuenteFinanciamiento { Nombre = "Literal P", Caja = Caja.Poa });
+
+        audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.AltaFuenteFinanciamiento,
+            "FuenteFinanciamiento", 8, It.Is<string>(d => d.Contains("Caja: POA"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_CambiaCaja_SinUso_GuardaYAudita()
+    {
+        var original = new FuenteFinanciamiento { Id = 1, Nombre = "Literal A", Activo = true, Caja = Caja.Local };
+        var (svc, repo, audit) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        repo.Setup(r => r.EstaEnUsoAsync(1)).ReturnsAsync(false);
+
+        await svc.ModificarAsync(new FuenteFinanciamiento { Id = 1, Nombre = "Literal A", Caja = Caja.Poa });
+
+        Assert.Equal(Caja.Poa, original.Caja);
+        repo.Verify(r => r.ActualizarAsync(It.Is<FuenteFinanciamiento>(f => f.Caja == Caja.Poa)), Times.Once);
+        audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.ModificacionFuenteFinanciamiento,
+            "FuenteFinanciamiento", 1, It.Is<string>(d => d.Contains("Caja: Local → POA"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_CambiaCaja_ConUso_LanzaReglaDeNegocio()
+    {
+        var original = new FuenteFinanciamiento { Id = 1, Nombre = "Literal A", Activo = true, Caja = Caja.Local };
+        var (svc, repo, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        repo.Setup(r => r.EstaEnUsoAsync(1)).ReturnsAsync(true);
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => svc.ModificarAsync(new FuenteFinanciamiento { Id = 1, Nombre = "Literal A", Caja = Caja.Poa }));
+
+        Assert.Equal(FuenteFinanciamientoService.MensajeCambioDeCajaEnUso("Literal A"), ex.Message);
+        repo.Verify(r => r.ActualizarAsync(It.IsAny<FuenteFinanciamiento>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_MismaCaja_NoConsultaElUso()
+    {
+        var original = new FuenteFinanciamiento { Id = 1, Nombre = "Literal A", Activo = true, Caja = Caja.Poa };
+        var (svc, repo, _) = Crear();
+        repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+
+        await svc.ModificarAsync(new FuenteFinanciamiento { Id = 1, Nombre = "Literal B", Caja = Caja.Poa });
+
+        repo.Verify(r => r.EstaEnUsoAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
     public async Task BajaLogicaAsync_ActivoFalse_RegistraBaja()
     {
         var fuente = new FuenteFinanciamiento { Id = 2, Nombre = "Multas", Activo = true };
