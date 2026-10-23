@@ -416,7 +416,7 @@ public class IngresoPorFacturaServiceTests
     {
         var (svc, movRepo, gastoRepo, _, _, _, _, _, _, _, _, audit) = Crear();
         var gasto = new Gasto { Id = 11, Activo = true };
-        var pago20 = PagoGasto.Automatico(DateTime.UtcNow, 500m, "Pago contado (automático)");
+        var pago20 = PagoGasto.Automatico(DateTime.UtcNow, 500m, "Pago contado (automático)", Caja.Local, 1);
         pago20.Id = 20;
         pago20.GastoId = 11;
         gasto.Pagos.Add(pago20);
@@ -441,7 +441,7 @@ public class IngresoPorFacturaServiceTests
     {
         var (svc, movRepo, gastoRepo, _, _, _, _, _, _, _, _, audit) = Crear();
         var gasto = new Gasto { Id = 12, Activo = true };
-        var pago21 = PagoGasto.Automatico(DateTime.UtcNow, 500m, "Pago contado (automático)");
+        var pago21 = PagoGasto.Automatico(DateTime.UtcNow, 500m, "Pago contado (automático)", Caja.Local, 1);
         pago21.Id = 21;
         pago21.GastoId = 12;
         gasto.Pagos.Add(pago21);
@@ -482,7 +482,7 @@ public class IngresoPorFacturaServiceTests
     {
         var (svc, movRepo, gastoRepo, _, _, _, _, _, _, _, _, _) = Crear();
         var gasto = new Gasto { Id = 14, Activo = true };
-        var pago23 = PagoGasto.Automatico(DateTime.UtcNow, 500m, "Pago contado (automático)");
+        var pago23 = PagoGasto.Automatico(DateTime.UtcNow, 500m, "Pago contado (automático)", Caja.Local, 1);
         pago23.Id = 23;
         pago23.GastoId = 14;
         gasto.Pagos.Add(pago23);

@@ -296,6 +296,9 @@ public class AppDbContext : DbContext
             e.HasIndex(p => p.GastoId);
             e.HasOne(p => p.Gasto).WithMany(g => g.Pagos)
                 .HasForeignKey(p => p.GastoId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(p => p.FuenteFinanciamientoId);
+            e.HasOne(p => p.FuenteFinanciamiento).WithMany()
+                .HasForeignKey(p => p.FuenteFinanciamientoId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(p => p.IdImportacion);
             // Ver comentario de Gasto.IdImportacion más arriba: misma FK real + misma razón
             // (orden de inserción dentro del único SaveChangesAsync de ConfirmarAsync).

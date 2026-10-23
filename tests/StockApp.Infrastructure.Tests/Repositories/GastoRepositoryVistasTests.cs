@@ -48,7 +48,7 @@ public class GastoRepositoryVistasTests : PostgresRepositoryTestBase
             MontoTotal = 1000m, CondicionPago = CondicionPago.Credito,
             FechaVencimiento = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
         };
-        gasto.Pagos.Add(new PagoGasto { Fecha = new DateTime(2026, 7, 10, 0, 0, 0, DateTimeKind.Utc), Monto = 1000m });
+        gasto.Pagos.Add(new PagoGasto { Fecha = new DateTime(2026, 7, 10, 0, 0, 0, DateTimeKind.Utc), Monto = 1000m, FuenteFinanciamientoId = fuenteId });
         await _repo.AgregarAsync(gasto);
         Context.ChangeTracker.Clear();
 
@@ -77,7 +77,7 @@ public class GastoRepositoryVistasTests : PostgresRepositoryTestBase
             MontoTotal = 500m, CondicionPago = CondicionPago.Credito,
             FechaVencimiento = new DateTime(2026, 7, 5, 0, 0, 0, DateTimeKind.Utc),
         };
-        gasto.Pagos.Add(new PagoGasto { Fecha = new DateTime(2026, 7, 3, 0, 0, 0, DateTimeKind.Utc), Monto = 500m }); // pago de JULIO
+        gasto.Pagos.Add(new PagoGasto { Fecha = new DateTime(2026, 7, 3, 0, 0, 0, DateTimeKind.Utc), Monto = 500m, FuenteFinanciamientoId = fuenteId }); // pago de JULIO
         await _repo.AgregarAsync(gasto);
         Context.ChangeTracker.Clear();
 
@@ -104,7 +104,7 @@ public class GastoRepositoryVistasTests : PostgresRepositoryTestBase
             ProveedorId = proveedorId, FuenteFinanciamientoId = fuenteId, RubroGastoId = rubroId,
             Detalle = "Pago anulado", Fecha = fecha, MontoTotal = 100m, CondicionPago = CondicionPago.Contado,
         };
-        gastoConPagoAnulado.Pagos.Add(new PagoGasto { Fecha = fecha, Monto = 100m, Activo = false });
+        gastoConPagoAnulado.Pagos.Add(new PagoGasto { Fecha = fecha, Monto = 100m, Activo = false, FuenteFinanciamientoId = fuenteId });
         await _repo.AgregarAsync(gastoConPagoAnulado);
 
         var gastoAnulado = new Gasto
@@ -113,7 +113,7 @@ public class GastoRepositoryVistasTests : PostgresRepositoryTestBase
             Detalle = "Gasto anulado", Fecha = fecha, MontoTotal = 200m, CondicionPago = CondicionPago.Contado,
             Activo = false,
         };
-        gastoAnulado.Pagos.Add(new PagoGasto { Fecha = fecha, Monto = 200m });
+        gastoAnulado.Pagos.Add(new PagoGasto { Fecha = fecha, Monto = 200m, FuenteFinanciamientoId = fuenteId });
         await _repo.AgregarAsync(gastoAnulado);
         Context.ChangeTracker.Clear();
 
@@ -133,7 +133,7 @@ public class GastoRepositoryVistasTests : PostgresRepositoryTestBase
             Detalle = "Compra", Fecha = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
             MontoTotal = 300m, CondicionPago = CondicionPago.Contado,
         };
-        gasto.Pagos.Add(new PagoGasto { Fecha = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc), Monto = 300m });
+        gasto.Pagos.Add(new PagoGasto { Fecha = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc), Monto = 300m, FuenteFinanciamientoId = fuenteId });
         await _repo.AgregarAsync(gasto);
         Context.ChangeTracker.Clear();
 

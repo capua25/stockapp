@@ -58,6 +58,21 @@ public sealed class BackfillLotesImportacionMigrationTests
         return builder.ConnectionString;
     }
 
+    /// <summary>
+    /// Siembra por SQL crudo: en el punto intermedio de la migración el esquema no tiene las
+    /// columnas que el modelo actual mapea (Caja, PagosGasto.FuenteFinanciamientoId), y EF las
+    /// insertaría igual. Parámetros posicionales @p0, @p1... Devuelve el Id generado.
+    /// </summary>
+    private static async Task<int> InsertarAsync(string connectionString, string sql, params object[] valores)
+    {
+        await using var con = new NpgsqlConnection(connectionString);
+        await con.OpenAsync();
+        await using var cmd = new NpgsqlCommand(sql, con);
+        for (var i = 0; i < valores.Length; i++)
+            cmd.Parameters.AddWithValue($"p{i}", valores[i]);
+        return (int)(await cmd.ExecuteScalarAsync())!;
+    }
+
     private static AppDbContext CrearContexto(string connectionString)
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connectionString).Options;
@@ -104,10 +119,10 @@ public sealed class BackfillLotesImportacionMigrationTests
             usuarioId = usuario.Id;
 
             var proveedor = new Proveedor { Nombre = "Proveedor Backfill" };
-            var fuente = new FuenteFinanciamiento { Nombre = "Fuente Backfill" };
+            var fuenteId = await InsertarAsync(connectionString,
+                "INSERT INTO \"FuentesFinanciamiento\" (\"Nombre\") VALUES (@p0) RETURNING \"Id\"", "Fuente Backfill");
             var rubro = new RubroGasto { Codigo = 1, Nombre = "Rubro Backfill" };
             ctx.Proveedores.Add(proveedor);
-            ctx.FuentesFinanciamiento.Add(fuente);
             ctx.RubrosGasto.Add(rubro);
             await ctx.SaveChangesAsync();
 
@@ -119,13 +134,8 @@ public sealed class BackfillLotesImportacionMigrationTests
             ctx.Gastos.Add(new Gasto
             {
                 Proveedor = proveedor, Detalle = "Gasto del lote normal", Fecha = fechaLoteNormal,
-                MontoTotal = 1000m, FuenteFinanciamiento = fuente, RubroGasto = rubro,
+                MontoTotal = 1000m, FuenteFinanciamientoId = fuenteId, RubroGasto = rubro,
                 CondicionPago = CondicionPago.Contado, IdImportacion = idLoteNormal,
-            });
-            ctx.IngresosCaja.Add(new IngresoCaja
-            {
-                Fecha = fechaLoteNormal, Concepto = "Ingreso del lote normal", Monto = 500m,
-                FuenteFinanciamiento = fuente, IdImportacion = idLoteNormal,
             });
             ctx.LogsAuditoria.Add(new LogAuditoria
             {
@@ -140,7 +150,7 @@ public sealed class BackfillLotesImportacionMigrationTests
             ctx.Gastos.Add(new Gasto
             {
                 Proveedor = proveedor, Detalle = "Gasto del lote revertido", Fecha = fechaConfirmacionRevertido,
-                MontoTotal = 2000m, FuenteFinanciamiento = fuente, RubroGasto = rubro,
+                MontoTotal = 2000m, FuenteFinanciamientoId = fuenteId, RubroGasto = rubro,
                 CondicionPago = CondicionPago.Contado, IdImportacion = idLoteRevertido,
             });
             ctx.LogsAuditoria.Add(new LogAuditoria
@@ -164,7 +174,7 @@ public sealed class BackfillLotesImportacionMigrationTests
             ctx.Gastos.Add(new Gasto
             {
                 Proveedor = proveedor, Detalle = "Gasto huérfano sin log", Fecha = fechaGastoHuerfano,
-                MontoTotal = 300m, FuenteFinanciamiento = fuente, RubroGasto = rubro,
+                MontoTotal = 300m, FuenteFinanciamientoId = fuenteId, RubroGasto = rubro,
                 CondicionPago = CondicionPago.Contado, IdImportacion = idLoteHuerfano,
             });
 
@@ -188,16 +198,11 @@ public sealed class BackfillLotesImportacionMigrationTests
             {
                 Proveedor = proveedor, Detalle = "Gasto manual con pago de lote huérfano",
                 Fecha = new DateTime(2026, 3, 10, 0, 0, 0, DateTimeKind.Utc),
-                MontoTotal = 400m, FuenteFinanciamiento = fuente, RubroGasto = rubro,
+                MontoTotal = 400m, FuenteFinanciamientoId = fuenteId, RubroGasto = rubro,
                 CondicionPago = CondicionPago.Credito, IdImportacion = null,
             };
             ctx.Gastos.Add(gastoParaPagoHuerfano);
             fechaPagoHuerfanoEsperada = new DateTime(2026, 3, 12, 15, 0, 0, DateTimeKind.Utc);
-            ctx.PagosGasto.Add(new PagoGasto
-            {
-                Gasto = gastoParaPagoHuerfano, Fecha = fechaPagoHuerfanoEsperada, Monto = 400m,
-                IdImportacion = idLoteSoloPago,
-            });
 
             // Lote presente en las 4 tablas a la vez, SIN LogAuditoria (Menor 5): prueba que
             // "guids" (UNION, no UNION ALL) no duplica la fila pese a aparecer 4 veces, que
@@ -212,15 +217,10 @@ public sealed class BackfillLotesImportacionMigrationTests
             var gastoTodas = new Gasto
             {
                 Proveedor = proveedor, Detalle = "Gasto del lote en las 4 tablas", Fecha = fechaGastoTodas,
-                MontoTotal = 900m, FuenteFinanciamiento = fuente, RubroGasto = rubro,
+                MontoTotal = 900m, FuenteFinanciamientoId = fuenteId, RubroGasto = rubro,
                 CondicionPago = CondicionPago.Contado, IdImportacion = idLoteEnTodasLasTablas,
             };
             ctx.Gastos.Add(gastoTodas);
-            ctx.IngresosCaja.Add(new IngresoCaja
-            {
-                Fecha = fechaIngresoTodasEsperada, Concepto = "Ingreso del lote en las 4 tablas", Monto = 300m,
-                FuenteFinanciamiento = fuente, IdImportacion = idLoteEnTodasLasTablas,
-            });
             ctx.LineasPoa.Add(new LineaPoa
             {
                 // Primera de las dos -- Id más chico (insertada primero) -- tiene que ser la que
@@ -233,10 +233,6 @@ public sealed class BackfillLotesImportacionMigrationTests
                 Nombre = "Linea B del lote en las 4 tablas", Programa = "Ambiente", Ejercicio = 2099,
                 IdImportacion = idLoteEnTodasLasTablas,
             });
-            ctx.PagosGasto.Add(new PagoGasto
-            {
-                Gasto = gastoTodas, Fecha = fechaPagoTodas, Monto = 900m, IdImportacion = idLoteEnTodasLasTablas,
-            });
 
             // Lote con DOS LogAuditoria Accion=42 para el mismo IdLote (Menor 5): documenta/fija
             // el comportamiento actual -- DISTINCT ON ("IdLote") ... ORDER BY "IdLote", "Fecha"
@@ -246,7 +242,7 @@ public sealed class BackfillLotesImportacionMigrationTests
             {
                 Proveedor = proveedor, Detalle = "Gasto con doble log de confirmación",
                 Fecha = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc), MontoTotal = 150m,
-                FuenteFinanciamiento = fuente, RubroGasto = rubro, CondicionPago = CondicionPago.Contado,
+                FuenteFinanciamientoId = fuenteId, RubroGasto = rubro, CondicionPago = CondicionPago.Contado,
                 IdImportacion = idLoteDobleLogConfirmacion,
             });
             ctx.LogsAuditoria.Add(new LogAuditoria
@@ -263,6 +259,24 @@ public sealed class BackfillLotesImportacionMigrationTests
             });
 
             await ctx.SaveChangesAsync();
+
+            // IngresosCaja y PagosGasto por SQL crudo: el modelo actual ya mapea columnas que en
+            // este punto de la migración todavía no existen (ver InsertarAsync).
+            const string insertIngreso =
+                "INSERT INTO \"IngresosCaja\" (\"Fecha\", \"Concepto\", \"Monto\", \"FuenteFinanciamientoId\", \"IdImportacion\") " +
+                "VALUES (@p0, @p1, @p2, @p3, @p4) RETURNING \"Id\"";
+            await InsertarAsync(connectionString, insertIngreso,
+                fechaLoteNormal, "Ingreso del lote normal", 500m, fuenteId, idLoteNormal);
+            await InsertarAsync(connectionString, insertIngreso,
+                fechaIngresoTodasEsperada, "Ingreso del lote en las 4 tablas", 300m, fuenteId, idLoteEnTodasLasTablas);
+
+            const string insertPago =
+                "INSERT INTO \"PagosGasto\" (\"GastoId\", \"Fecha\", \"Monto\", \"IdImportacion\") " +
+                "VALUES (@p0, @p1, @p2, @p3) RETURNING \"Id\"";
+            await InsertarAsync(connectionString, insertPago,
+                gastoParaPagoHuerfano.Id, fechaPagoHuerfanoEsperada, 400m, idLoteSoloPago);
+            await InsertarAsync(connectionString, insertPago,
+                gastoTodas.Id, fechaPagoTodas, 900m, idLoteEnTodasLasTablas);
         }
 
         // ── 3. Migrar hasta HEAD: acá es donde, SIN el fix, tira 23503 ──────────────────────
@@ -383,10 +397,10 @@ public sealed class BackfillLotesImportacionMigrationTests
             usuarioId = usuario.Id;
 
             var proveedor = new Proveedor { Nombre = "Proveedor Idempotencia" };
-            var fuente = new FuenteFinanciamiento { Nombre = "Fuente Idempotencia" };
+            var fuenteId = await InsertarAsync(connectionString,
+                "INSERT INTO \"FuentesFinanciamiento\" (\"Nombre\") VALUES (@p0) RETURNING \"Id\"", "Fuente Idempotencia");
             var rubro = new RubroGasto { Codigo = 3, Nombre = "Rubro Idempotencia" };
             ctx.Proveedores.Add(proveedor);
-            ctx.FuentesFinanciamiento.Add(fuente);
             ctx.RubrosGasto.Add(rubro);
             await ctx.SaveChangesAsync();
 
@@ -395,7 +409,7 @@ public sealed class BackfillLotesImportacionMigrationTests
             ctx.Gastos.Add(new Gasto
             {
                 Proveedor = proveedor, Detalle = "Gasto idempotencia", Fecha = fecha, MontoTotal = 250m,
-                FuenteFinanciamiento = fuente, RubroGasto = rubro, CondicionPago = CondicionPago.Contado,
+                FuenteFinanciamientoId = fuenteId, RubroGasto = rubro, CondicionPago = CondicionPago.Contado,
                 IdImportacion = idLote,
             });
             ctx.LogsAuditoria.Add(new LogAuditoria
@@ -490,10 +504,10 @@ public sealed class BackfillLotesImportacionMigrationTests
             usuarioId = usuario.Id;
 
             var proveedor = new Proveedor { Nombre = "Proveedor Down/Up" };
-            var fuente = new FuenteFinanciamiento { Nombre = "Fuente Down/Up" };
+            var fuenteId = await InsertarAsync(connectionString,
+                "INSERT INTO \"FuentesFinanciamiento\" (\"Nombre\") VALUES (@p0) RETURNING \"Id\"", "Fuente Down/Up");
             var rubro = new RubroGasto { Codigo = 2, Nombre = "Rubro Down/Up" };
             ctx.Proveedores.Add(proveedor);
-            ctx.FuentesFinanciamiento.Add(fuente);
             ctx.RubrosGasto.Add(rubro);
             await ctx.SaveChangesAsync();
 
@@ -502,7 +516,7 @@ public sealed class BackfillLotesImportacionMigrationTests
             ctx.Gastos.Add(new Gasto
             {
                 Proveedor = proveedor, Detalle = "Gasto Down/Up", Fecha = fecha, MontoTotal = 700m,
-                FuenteFinanciamiento = fuente, RubroGasto = rubro, CondicionPago = CondicionPago.Contado,
+                FuenteFinanciamientoId = fuenteId, RubroGasto = rubro, CondicionPago = CondicionPago.Contado,
                 IdImportacion = idLote,
             });
             ctx.LogsAuditoria.Add(new LogAuditoria

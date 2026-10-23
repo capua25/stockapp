@@ -589,7 +589,7 @@ public class GastoServiceTests
         var m = Crear();
         var gasto = GastoValido(CondicionPago.Contado);
         gasto.Id = 1;
-        var pago9 = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)");
+        var pago9 = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)", Caja.Local, 1);
         pago9.Id = 9;
         pago9.GastoId = 1;
         gasto.Pagos.Add(pago9);
@@ -617,7 +617,7 @@ public class GastoServiceTests
         var m = Crear();
         var gasto = GastoValido(CondicionPago.Contado);
         gasto.Id = 1;
-        var pagoAutomatico = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)");
+        var pagoAutomatico = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)", Caja.Local, 1);
         pagoAutomatico.Id = 9;
         pagoAutomatico.GastoId = 1;
         gasto.Pagos.Add(pagoAutomatico);
@@ -662,7 +662,7 @@ public class GastoServiceTests
         var m = Crear();
         var gasto = GastoValido(CondicionPago.Contado);
         gasto.Id = 1;
-        var pago9 = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)");
+        var pago9 = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)", Caja.Local, 1);
         pago9.Id = 9;
         pago9.GastoId = 1;
         gasto.Pagos.Add(pago9);

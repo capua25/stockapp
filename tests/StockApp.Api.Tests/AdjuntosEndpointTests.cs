@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using StockApp.Api.Auth;
 using StockApp.Api.Tests.Fixtures;
@@ -68,7 +69,11 @@ public class AdjuntosEndpointTests : ApiTestBase
     {
         var gastoId = await SembrarGastoAsync();
         using var ctx = Factory.CrearContexto();
-        var pago = new PagoGasto { GastoId = gastoId, Fecha = DateTime.UtcNow, Monto = 100m, Activo = activo };
+        var fuenteId = await ctx.Gastos.Where(g => g.Id == gastoId).Select(g => g.FuenteFinanciamientoId).SingleAsync();
+        var pago = new PagoGasto
+        {
+            GastoId = gastoId, Fecha = DateTime.UtcNow, Monto = 100m, Activo = activo, FuenteFinanciamientoId = fuenteId,
+        };
         ctx.Add(pago);
         await ctx.SaveChangesAsync();
         return pago.Id;

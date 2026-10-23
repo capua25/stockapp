@@ -1,3 +1,5 @@
+using StockApp.Domain.Enums;
+
 namespace StockApp.Domain.Entities;
 
 /// <summary>
@@ -16,6 +18,8 @@ public class PagoGasto
     /// consultas que arrancan en PagosGasto (ej. libro caja, que necesita Proveedor/Rubro/
     /// Fuente del gasto dueño de cada pago). Mismo FK GastoId que ya existía — sin
     /// migración nueva, solo se reconfigura la relación en AppDbContext.OnModelCreating.
+    /// La caja y el literal que pagan viven en el propio pago (<see cref="Caja"/> y
+    /// <see cref="FuenteFinanciamientoId"/>), no en el gasto.
     /// </summary>
     public Gasto? Gasto { get; set; }
 
@@ -23,6 +27,13 @@ public class PagoGasto
     public decimal Monto { get; set; }         // precisión 18,4
     public string? Nota { get; set; }
     public bool Activo { get; set; } = true;   // false = pago anulado
+
+    /// <summary>Caja de la que sale el pago. Default Local (todo lo existente migra a Local).</summary>
+    public Caja Caja { get; set; } = Caja.Local;
+
+    /// <summary>Literal (fuente de financiamiento) que paga este pago.</summary>
+    public int FuenteFinanciamientoId { get; set; }
+    public FuenteFinanciamiento? FuenteFinanciamiento { get; set; }
 
     /// <summary>
     /// True si el pago lo creó el propio sistema (Contado ⇒ pago automático por el total,
@@ -54,6 +65,11 @@ public class PagoGasto
     /// bloqueaba la anulación individual del gasto. Centralizar la construcción acá hace que
     /// EsAutomatico=true sea imposible de olvidar en un cuarto origen futuro.
     /// </summary>
-    public static PagoGasto Automatico(DateTime fecha, decimal monto, string nota, Guid? idImportacion = null)
-        => new() { Fecha = fecha, Monto = monto, Nota = nota, IdImportacion = idImportacion, EsAutomatico = true };
+    public static PagoGasto Automatico(DateTime fecha, decimal monto, string nota,
+        Caja caja, int fuenteFinanciamientoId, Guid? idImportacion = null)
+        => new()
+        {
+            Fecha = fecha, Monto = monto, Nota = nota, Caja = caja,
+            FuenteFinanciamientoId = fuenteFinanciamientoId, IdImportacion = idImportacion, EsAutomatico = true,
+        };
 }

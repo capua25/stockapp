@@ -1,3 +1,5 @@
+using StockApp.Domain.Enums;
+
 namespace StockApp.Domain.Entities;
 
 /// <summary>
@@ -9,4 +11,5 @@ public class FuenteFinanciamiento
     public int Id { get; set; }
     public string Nombre { get; set; } = string.Empty;  // obligatorio, único
     public bool Activo { get; set; } = true;             // baja lógica
+    public Caja Caja { get; set; } = Caja.Local;         // caja a la que pertenece el literal
 }

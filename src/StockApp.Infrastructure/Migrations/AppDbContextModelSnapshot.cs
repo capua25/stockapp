@@ -376,6 +376,9 @@ namespace StockApp.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
 
+                    b.Property<int>("Caja")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Nombre")
                         .IsRequired()
                         .HasColumnType("text");
@@ -475,6 +478,9 @@ namespace StockApp.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
+
+                    b.Property<int>("Caja")
+                        .HasColumnType("integer");
 
                     b.Property<string>("Concepto")
                         .IsRequired()
@@ -757,11 +763,17 @@ namespace StockApp.Infrastructure.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
 
+                    b.Property<int>("Caja")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("EsAutomatico")
                         .HasColumnType("boolean");
 
                     b.Property<DateTime>("Fecha")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("FuenteFinanciamientoId")
+                        .HasColumnType("integer");
 
                     b.Property<int>("GastoId")
                         .HasColumnType("integer");
@@ -777,6 +789,8 @@ namespace StockApp.Infrastructure.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("FuenteFinanciamientoId");
 
                     b.HasIndex("GastoId");
 
@@ -1370,6 +1384,12 @@ namespace StockApp.Infrastructure.Migrations
 
             modelBuilder.Entity("StockApp.Domain.Entities.PagoGasto", b =>
                 {
+                    b.HasOne("StockApp.Domain.Entities.FuenteFinanciamiento", "FuenteFinanciamiento")
+                        .WithMany()
+                        .HasForeignKey("FuenteFinanciamientoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("StockApp.Domain.Entities.Gasto", "Gasto")
                         .WithMany("Pagos")
                         .HasForeignKey("GastoId")
@@ -1380,6 +1400,8 @@ namespace StockApp.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("IdImportacion")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("FuenteFinanciamiento");
 
                     b.Navigation("Gasto");
                 });

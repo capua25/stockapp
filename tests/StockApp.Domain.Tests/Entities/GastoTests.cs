@@ -27,7 +27,7 @@ public class GastoTests
     public void PagosAutomaticosADarDeBajaEnAnulacion_SinPagosActivos_DevuelveVacio()
     {
         var gasto = NuevoGasto();
-        var pagoInactivo = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)");
+        var pagoInactivo = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)", Caja.Local, 1);
         pagoInactivo.Id = 1;
         pagoInactivo.Activo = false;
         gasto.Pagos.Add(pagoInactivo);
@@ -57,7 +57,7 @@ public class GastoTests
         // exponga como extensión del problem+json y el cliente distinga este 409 de uno
         // genérico sin tener que parsear el texto del mensaje.
         var gasto = NuevoGasto();
-        var pago = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)");
+        var pago = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)", Caja.Local, 1);
         pago.Id = 1;
         gasto.Pagos.Add(pago);
 
@@ -73,7 +73,7 @@ public class GastoTests
     public void PagosAutomaticosADarDeBajaEnAnulacion_ConPagoAutomaticoActivoConfirmando_DevuelveElPagoAutomatico()
     {
         var gasto = NuevoGasto();
-        var pago = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)");
+        var pago = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)", Caja.Local, 1);
         pago.Id = 1;
         gasto.Pagos.Add(pago);
 
@@ -89,12 +89,25 @@ public class GastoTests
         // Protege plata real: si además del pago automático hay un pago manual activo, la
         // confirmación de "anular el pago automático" NO alcanza para destrabar la anulación.
         var gasto = NuevoGasto();
-        var pagoAutomatico = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)");
+        var pagoAutomatico = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)", Caja.Local, 1);
         pagoAutomatico.Id = 1;
         gasto.Pagos.Add(pagoAutomatico);
         gasto.Pagos.Add(new PagoGasto { Id = 2, Monto = 200m, Activo = true });
 
         Assert.Throws<ReglaDeNegocioException>(
             () => gasto.PagosAutomaticosADarDeBajaEnAnulacion(confirmarAnulacionDePagoAutomatico: true));
+    }
+
+    [Fact]
+    public void PagoAutomatico_DevuelveElAutomatico_ONullSiNoHay()
+    {
+        var gasto = NuevoGasto();
+        gasto.Pagos.Add(new PagoGasto { Id = 1, Monto = 300m });
+        Assert.Null(gasto.PagoAutomatico);
+
+        var automatico = PagoGasto.Automatico(Hoy, 700m, "Pago contado (automático)", Caja.Poa, 3);
+        gasto.Pagos.Add(automatico);
+
+        Assert.Same(automatico, gasto.PagoAutomatico);
     }
 }

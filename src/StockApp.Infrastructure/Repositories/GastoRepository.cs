@@ -160,6 +160,9 @@ public class GastoRepository : IGastoRepository
             throw new ReglaDeNegocioException("No se pueden registrar pagos sobre un gasto anulado.");
         }
 
+        // Transitorio: el pago manual todavía no trae literal, hereda el del gasto.
+        if (pago.FuenteFinanciamientoId == 0) pago.FuenteFinanciamientoId = gasto.FuenteFinanciamientoId;
+
         var totalPagado = await _ctx.PagosGasto
             .Where(p => p.GastoId == pago.GastoId && p.Activo)
             .SumAsync(p => (decimal?)p.Monto) ?? 0m;

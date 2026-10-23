@@ -52,6 +52,9 @@ public class Gasto
 
     public List<PagoGasto> Pagos { get; set; } = new();
 
+    /// <summary>Pago automático del contado, o null (crédito, o dato viejo sin pago automático).</summary>
+    public PagoGasto? PagoAutomatico => Pagos.FirstOrDefault(p => p.EsAutomatico);
+
     /// <summary>Suma de los pagos ACTIVOS (los anulados no cuentan).</summary>
     public decimal TotalPagado => Pagos.Where(p => p.Activo).Sum(p => p.Monto);
 

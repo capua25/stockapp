@@ -67,7 +67,7 @@ public class GastoRepositoryTests : PostgresRepositoryTestBase
         var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
         var fecha = DateTime.UtcNow;
         var gasto = NuevoGasto(proveedorId, fuenteId, rubroId, fecha, factura: "A-0001");
-        gasto.Pagos.Add(new PagoGasto { Fecha = fecha, Monto = 400.5000m, Nota = "seña" });
+        gasto.Pagos.Add(new PagoGasto { Fecha = fecha, Monto = 400.5000m, Nota = "seña", FuenteFinanciamientoId = fuenteId });
 
         var id = await _repo.AgregarAsync(gasto);
         Context.ChangeTracker.Clear();
@@ -210,6 +210,22 @@ public class GastoRepositoryTests : PostgresRepositoryTestBase
     }
 
     [Fact]
+    public async Task RegistrarPagoAtomico_SinFuente_HeredaLaDelGasto()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var id = await _repo.AgregarAsync(NuevoGasto(proveedorId, fuenteId, rubroId, DateTime.UtcNow));
+        Context.ChangeTracker.Clear();
+
+        var pagoId = await _repo.RegistrarPagoAtomicoAsync(
+            new PagoGasto { GastoId = id, Fecha = DateTime.UtcNow, Monto = 100m });
+        Context.ChangeTracker.Clear();
+
+        var leido = await _repo.ObtenerPagoPorIdAsync(pagoId);
+        Assert.Equal(fuenteId, leido!.FuenteFinanciamientoId);
+        Assert.Equal(Caja.Local, leido.Caja);
+    }
+
+    [Fact]
     public async Task AgregarPago_Y_AnularPago_Roundtrip()
     {
         var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
@@ -218,7 +234,7 @@ public class GastoRepositoryTests : PostgresRepositoryTestBase
 
         var nuevoPago = new PagoGasto
         {
-            GastoId = id, Fecha = DateTime.UtcNow, Monto = 300m, Nota = "primer pago",
+            GastoId = id, Fecha = DateTime.UtcNow, Monto = 300m, Nota = "primer pago", FuenteFinanciamientoId = fuenteId,
         };
         Context.Add(nuevoPago);
         await Context.SaveChangesAsync();
@@ -243,7 +259,7 @@ public class GastoRepositoryTests : PostgresRepositoryTestBase
     {
         var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
         var id = await _repo.AgregarAsync(NuevoGasto(proveedorId, fuenteId, rubroId, DateTime.UtcNow));
-        var pago = new PagoGasto { GastoId = id, Fecha = DateTime.UtcNow, Monto = 300m, Activo = false };
+        var pago = new PagoGasto { GastoId = id, Fecha = DateTime.UtcNow, Monto = 300m, Activo = false, FuenteFinanciamientoId = fuenteId };
         Context.Add(pago);
         await Context.SaveChangesAsync();
         Context.ChangeTracker.Clear();

@@ -1,3 +1,5 @@
+using StockApp.Domain.Enums;
+
 namespace StockApp.Domain.Entities;
 
 /// <summary>
@@ -9,6 +11,7 @@ public class IngresoCaja
     public int Id { get; set; }
     public DateTime Fecha { get; set; }                    // UTC
     public string Concepto { get; set; } = string.Empty;   // obligatorio
+    public Caja Caja { get; set; } = Caja.Local;           // caja que recibe el ingreso
     public int FuenteFinanciamientoId { get; set; }
     public FuenteFinanciamiento? FuenteFinanciamiento { get; set; }
     public decimal Monto { get; set; }                     // precisión 18,4

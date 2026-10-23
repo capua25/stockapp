@@ -1,4 +1,5 @@
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using Xunit;
 
 namespace StockApp.Domain.Tests.Entities;
@@ -16,7 +17,7 @@ public class PagoGastoTests
     public void Automatico_SiempreDevuelveEsAutomaticoTrue()
     {
         var pago = PagoGasto.Automatico(
-            new DateTime(2026, 8, 6, 0, 0, 0, DateTimeKind.Utc), 1000m, "Pago contado (automático)");
+            new DateTime(2026, 8, 6, 0, 0, 0, DateTimeKind.Utc), 1000m, "Pago contado (automático)", Caja.Local, 1);
 
         Assert.True(pago.EsAutomatico);
     }
@@ -26,7 +27,7 @@ public class PagoGastoTests
     {
         var fecha = new DateTime(2026, 8, 6, 0, 0, 0, DateTimeKind.Utc);
 
-        var pago = PagoGasto.Automatico(fecha, 1000m, "Pago contado (importación)");
+        var pago = PagoGasto.Automatico(fecha, 1000m, "Pago contado (importación)", Caja.Local, 1);
 
         Assert.Equal(fecha, pago.Fecha);
         Assert.Equal(1000m, pago.Monto);
@@ -39,9 +40,19 @@ public class PagoGastoTests
     {
         var idImportacion = Guid.NewGuid();
 
-        var pago = PagoGasto.Automatico(DateTime.UtcNow, 500m, "Pago contado (importación)", idImportacion);
+        var pago = PagoGasto.Automatico(DateTime.UtcNow, 500m, "Pago contado (importación)", Caja.Local, 1, idImportacion);
 
         Assert.Equal(idImportacion, pago.IdImportacion);
         Assert.True(pago.EsAutomatico);
+    }
+
+    [Fact]
+    public void Automatico_GuardaCajaYFuente()
+    {
+        var p = PagoGasto.Automatico(new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc), 100m, "x", Caja.Poa, 7);
+
+        Assert.True(p.EsAutomatico);
+        Assert.Equal(Caja.Poa, p.Caja);
+        Assert.Equal(7, p.FuenteFinanciamientoId);
     }
 }
