@@ -87,13 +87,14 @@
                     </Grid>
                 </v2:TarjetaContenido>
 
-                <!-- Registrar pago: Fecha 140, Monto 160, Nota (*) y el botón, con 8 de separación. El botón queda arriba,
+                <!-- Registrar pago: Fecha 140, Monto 160, Fuente 220, Nota (*) y el botón, con 8 de separación. El pago manual
+                     sale siempre de la caja Local: sin selector de caja, solo el literal (arranca sin elegir). El botón queda arriba,
                      alineado con los inputs (19 = alto de la etiqueta con su separación), para que un error bajo un campo
                      no lo baje. -->
                 <v2:TarjetaContenido x:Name="TarjetaRegistrar" IsVisible="{Binding PuedeRegistrar}">
                     <StackPanel>
                         <TextBlock Classes="titulo-seccion" Text="Registrar pago" Margin="0,0,0,12" />
-                        <Grid ColumnDefinitions="140,8,160,8,*,8,Auto">
+                        <Grid ColumnDefinitions="140,8,160,8,220,8,*,8,Auto">
                             <v2:CampoFormulario x:Name="CampoFecha" Etiqueta="Fecha" Requerido="True">
                                 <CalendarDatePicker x:Name="SelectorFecha" SelectedDate="{Binding FechaSeleccionada}"
                                                     PlaceholderText="dd/mm/aaaa" SelectedDateFormat="Custom"
@@ -103,12 +104,29 @@
                             <v2:CampoFormulario x:Name="CampoMonto" Grid.Column="2" Etiqueta="Monto" Requerido="True">
                                 <TextBox x:Name="CajaMonto" Text="{Binding MontoTexto}" PlaceholderText="Ej.: 500,00" TextAlignment="Right" />
                             </v2:CampoFormulario>
-                            <v2:CampoFormulario x:Name="CampoNota" Grid.Column="4" Etiqueta="Nota (opcional)">
+                            <v2:CampoFormulario x:Name="CampoFuente" Grid.Column="4" Etiqueta="Fuente" Requerido="True">
+                                <ComboBox x:Name="ComboFuente"
+                                          ItemsSource="{Binding FuentesDisponibles}"
+                                          SelectedItem="{Binding FuenteSeleccionada}"
+                                          PlaceholderText="Elegí la fuente"
+                                          HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="e:FuenteFinanciamiento">
+                                            <TextBlock Text="{Binding Nombre}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </v2:CampoFormulario>
+                            <v2:CampoFormulario x:Name="CampoNota" Grid.Column="6" Etiqueta="Nota (opcional)">
                                 <TextBox x:Name="CajaNota" Text="{Binding Nota}" PlaceholderText="Ej.: recibo 123" />
                             </v2:CampoFormulario>
-                            <Button x:Name="BotonRegistrar" Grid.Column="6" Classes="primario" Content="Registrar pago"
+                            <Button x:Name="BotonRegistrar" Grid.Column="8" Classes="primario" Content="Registrar pago"
                                     Command="{Binding RegistrarPagoCommand}" VerticalAlignment="Top" Margin="0,19,0,0" />
                         </Grid>
+                        <!-- La caja Local no tiene literales activos: se avisa dónde configurarlos. -->
+                        <v2:Alerta x:Name="AlertaSinLiterales" Margin="0,12,0,0" Variante="Advertencia"
+                                   Texto="{Binding AvisoSinLiterales}"
+                                   IsVisible="{Binding AvisoSinLiterales, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                         <v2:Alerta x:Name="AlertaError" Margin="0,12,0,0" Variante="Error" Texto="{Binding MensajeError}"
                                    IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                     </StackPanel>
@@ -150,6 +168,27 @@
                                         <DataTemplate x:DataType="e:PagoGasto">
                                             <TextBlock Text="{Binding Monto, Converter={x:Static conv:MonedaConverter.Instance}}"
                                                        Classes.inactivo="{Binding !Activo}" VerticalAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="CAJA" Width="Auto" SortMemberPath="Caja"
+                                                        b:ColumnaAuto.Medir="True">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="e:PagoGasto">
+                                            <TextBlock Text="{Binding Caja, Converter={x:Static conv:CajaNombreConverter.Instance}}"
+                                                       Classes.inactivo="{Binding !Activo}" VerticalAlignment="Center" />
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="FUENTE" Width="Auto" SortMemberPath="FuenteFinanciamiento.Nombre"
+                                                        b:ColumnaAuto.Medir="True">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate x:DataType="e:PagoGasto">
+                                            <TextBlock Text="{Binding FuenteFinanciamiento.Nombre, FallbackValue='—', TargetNullValue='—'}"
+                                                       Classes.inactivo="{Binding !Activo}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip.Tip="{Binding FuenteFinanciamiento.Nombre, FallbackValue='—', TargetNullValue='—'}"
+                                                       b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
                                         </DataTemplate>
                                     </DataGridTemplateColumn.CellTemplate>
                                 </DataGridTemplateColumn>

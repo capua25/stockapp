@@ -3,6 +3,7 @@ using StockApp.Application.Authorization;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels;
@@ -36,8 +37,19 @@ public static class DatosPagos
         return gasto;
     }
 
-    private static PagoGasto Pago(int id, int gastoId, DateTime fecha, decimal monto, string nota, bool activo = true) =>
-        new() { Id = id, GastoId = gastoId, Fecha = fecha, Monto = monto, Nota = nota, Activo = activo };
+    /// <summary>Literales fijos de los mockups: dos de la caja Local y uno de la POA (el combo del formulario solo ofrece los Local).</summary>
+    public static readonly FuenteFinanciamiento RentasGenerales = new() { Id = 1, Nombre = "Rentas Generales", Caja = Caja.Local, Activo = true };
+    public static readonly FuenteFinanciamiento Tributos = new() { Id = 2, Nombre = "Tributos", Caja = Caja.Local, Activo = true };
+    public static readonly FuenteFinanciamiento Figm = new() { Id = 3, Nombre = "FIGM", Caja = Caja.Poa, Activo = true };
+
+    private static PagoGasto Pago(int id, int gastoId, DateTime fecha, decimal monto, string nota, bool activo = true,
+        FuenteFinanciamiento? fuente = null) =>
+        new()
+        {
+            Id = id, GastoId = gastoId, Fecha = fecha, Monto = monto, Nota = nota, Activo = activo,
+            Caja = (fuente ?? RentasGenerales).Caja, FuenteFinanciamientoId = (fuente ?? RentasGenerales).Id,
+            FuenteFinanciamiento = fuente ?? RentasGenerales,
+        };
 
     /// <summary>D8: pagos 61 (activo), 62 (anulado) y 63 (activo): pagado 150.000, saldo 160.000, Parcial.</summary>
     public static readonly Gasto Gasto = Copia(DatosGastos.Gastos[1],
@@ -79,7 +91,9 @@ public static class DatosPagos
         adjuntos.Setup(a => a.ListarPorPagoAsync(62)).ReturnsAsync(new List<AdjuntoDto> { ComprobanteDuplicadoDelPago62 });
         var panel = new AdjuntosPanelViewModel(adjuntos.Object, Mock.Of<IServicioSeleccionArchivo>(),
             Mock.Of<IServicioAperturaArchivo>(), Mock.Of<IConfirmacionService>(), sesion);
-        var vm = new PagosGastoViewModel(servicio.Object, sesion, Mock.Of<INavigationService>(),
+        var fuentes = new Mock<IFuenteFinanciamientoService>();
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento> { RentasGenerales, Tributos, Figm });
+        var vm = new PagosGastoViewModel(servicio.Object, fuentes.Object, sesion, Mock.Of<INavigationService>(),
             Mock.Of<IConfirmacionService>(), panel);
         vm.CargarParaGasto(gasto);
         vm.FechaSeleccionada = new DateTime(2026, 10, 17);

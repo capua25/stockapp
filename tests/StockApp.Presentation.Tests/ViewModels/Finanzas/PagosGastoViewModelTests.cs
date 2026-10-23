@@ -21,6 +21,11 @@ public class PagosGastoViewModelTests
 {
     private static readonly DateTime Hoy = DateTime.UtcNow;
 
+    private static readonly FuenteFinanciamiento Rentas = new() { Id = 1, Nombre = "Rentas Generales", Caja = Caja.Local, Activo = true };
+    private static readonly FuenteFinanciamiento Tributos = new() { Id = 2, Nombre = "Tributos", Caja = Caja.Local, Activo = true };
+    private static readonly FuenteFinanciamiento Figm = new() { Id = 3, Nombre = "FIGM", Caja = Caja.Poa, Activo = true };
+    private static readonly FuenteFinanciamiento[] FuentesDeLaCaja = [Rentas, Tributos, Figm];
+
     private static Gasto GastoConPago() => new()
     {
         Id = 5, ProveedorId = 1, Detalle = "Materiales", Fecha = Hoy, MontoTotal = 1000m,
@@ -35,7 +40,8 @@ public class PagosGastoViewModelTests
                     Mock<IConfirmacionService> confirmMock,
                     Mock<IAdjuntoService> adjuntosSvcMock)
         Crear(RolUsuario rol = RolUsuario.Admin, IEnumerable<string>? permisos = null,
-              HashSet<string>? permisosMutables = null, Gasto? gasto = null, Mock<IGastoService>? svc = null)
+              HashSet<string>? permisosMutables = null, Gasto? gasto = null, Mock<IGastoService>? svc = null,
+              IReadOnlyList<FuenteFinanciamiento>? fuentes = null)
     {
         if (svc is null)
         {
@@ -43,6 +49,9 @@ public class PagosGastoViewModelTests
             svc.Setup(s => s.ObtenerPorIdAsync(5)).ReturnsAsync(gasto ?? GastoConPago());
         }
         svc.Setup(s => s.RegistrarPagoAsync(It.IsAny<PagoGasto>())).ReturnsAsync(22);
+
+        var fuentesSvc = new Mock<IFuenteFinanciamientoService>();
+        fuentesSvc.Setup(f => f.ListarActivasAsync()).ReturnsAsync(fuentes ?? FuentesDeLaCaja);
 
         var nav = new Mock<INavigationService>();
         var confirm = new Mock<IConfirmacionService>();
@@ -61,7 +70,7 @@ public class PagosGastoViewModelTests
             confirm.Object,
             session.Object);
 
-        var vm = new PagosGastoViewModel(svc.Object, session.Object, nav.Object, confirm.Object, adjuntosPanel);
+        var vm = new PagosGastoViewModel(svc.Object, fuentesSvc.Object, session.Object, nav.Object, confirm.Object, adjuntosPanel);
         return (vm, svc, nav, confirm, adjuntosSvc);
     }
 
@@ -109,7 +118,8 @@ public class PagosGastoViewModelTests
             confirm.Object,
             session.Object);
 
-        var vm = new PagosGastoViewModel(svc.Object, session.Object, nav.Object, confirm.Object, adjuntosPanel);
+        var fuentesSvc = new Mock<IFuenteFinanciamientoService>();
+        var vm = new PagosGastoViewModel(svc.Object, fuentesSvc.Object, session.Object, nav.Object, confirm.Object, adjuntosPanel);
         vm.CargarParaGasto(GastoConPago());
 
         var excepcion = await Record.ExceptionAsync(() => vm.InicializarAsync());
@@ -159,6 +169,7 @@ public class PagosGastoViewModelTests
         var (vm, svc, _, _, _) = Crear();
         vm.CargarParaGasto(GastoConPago());
         await vm.InicializarAsync();
+        vm.FuenteSeleccionada = Rentas;
         vm.MontoTexto = "600,00";
         vm.Nota = "saldo final";
 
@@ -178,6 +189,7 @@ public class PagosGastoViewModelTests
         var (vm, svc, _, _, _) = Crear();
         vm.CargarParaGasto(GastoConPago());
         await vm.InicializarAsync();
+        vm.FuenteSeleccionada = Rentas;
         vm.MontoTexto = "100,00";
         vm.FechaSeleccionada = new DateTime(2026, 5, 10);
 
@@ -193,6 +205,7 @@ public class PagosGastoViewModelTests
         var (vm, svc, _, _, _) = Crear();
         vm.CargarParaGasto(GastoConPago());
         await vm.InicializarAsync();
+        vm.FuenteSeleccionada = Rentas;
         vm.MontoTexto = "no-es-numero";
 
         await vm.RegistrarPagoCommand.ExecuteAsync(null);
@@ -209,6 +222,7 @@ public class PagosGastoViewModelTests
             .ThrowsAsync(new ReglaDeNegocioException("El pago supera el saldo pendiente."));
         vm.CargarParaGasto(GastoConPago());
         await vm.InicializarAsync();
+        vm.FuenteSeleccionada = Rentas;
         vm.MontoTexto = "9999";
 
         await vm.RegistrarPagoCommand.ExecuteAsync(null);
@@ -295,6 +309,7 @@ public class PagosGastoViewModelTests
         var (vm, svc, _, _, _) = Crear();
         vm.CargarParaGasto(GastoConPago());
         await vm.InicializarAsync();
+        vm.FuenteSeleccionada = Rentas;
         vm.MontoTexto = "12.34";   // con NumberStyles.Number + es-UY se registraba como 1234
 
         await vm.RegistrarPagoCommand.ExecuteAsync(null);
@@ -310,6 +325,7 @@ public class PagosGastoViewModelTests
         var (vm, svc, _, _, _) = Crear();
         vm.CargarParaGasto(GastoConPago());
         await vm.InicializarAsync();
+        vm.FuenteSeleccionada = Rentas;
         vm.MontoTexto = "1.500,50";
 
         await vm.RegistrarPagoCommand.ExecuteAsync(null);
@@ -396,6 +412,7 @@ public class PagosGastoViewModelTests
         var (vm, _, _, _, _) = Crear();
         vm.CargarParaGasto(GastoConPago());
         await vm.InicializarAsync();
+        vm.FuenteSeleccionada = Rentas;
         var levantado = 0;
         vm.RegistrarPagoCommand.CanExecuteChanged += (_, _) => levantado++;
 
@@ -412,6 +429,7 @@ public class PagosGastoViewModelTests
         var (vm, svc, _, _, _) = Crear();
         vm.CargarParaGasto(GastoConPago());
         await vm.InicializarAsync();
+        vm.FuenteSeleccionada = Rentas;
         vm.MontoTexto = "10";
         var levantado = 0;
         vm.RegistrarPagoCommand.CanExecuteChanged += (_, _) => levantado++;
@@ -431,6 +449,7 @@ public class PagosGastoViewModelTests
         var (vm, _, _, _, _) = Crear();
         vm.CargarParaGasto(GastoConPago());
         await vm.InicializarAsync();
+        vm.FuenteSeleccionada = Rentas;
         vm.MontoTexto = "100";
         vm.Nota = "x";
 
@@ -440,6 +459,132 @@ public class PagosGastoViewModelTests
         Assert.Null(vm.Nota);
         Assert.Null(vm.ErrorDe(Monto));
         Assert.False(vm.HasErrors);
+    }
+
+    // ── Caja POA (2026-10-21): el pago manual siempre sale de la caja Local y elige su literal ──────────
+
+    [Fact]
+    public async Task Inicializar_FuentesSoloLocalesActivas()
+    {
+        var (vm, _, _, _, _) = Crear(fuentes: [Rentas, Tributos, Figm]);
+        vm.CargarParaGasto(GastoConPago());
+
+        await vm.InicializarAsync();
+
+        // El servicio ya devuelve solo activas; el filtro del VM deja solo las de caja Local.
+        Assert.Equal(new[] { "Rentas Generales", "Tributos" }, vm.FuentesDisponibles.Select(f => f.Nombre));
+        Assert.DoesNotContain(vm.FuentesDisponibles, f => f.Caja == Caja.Poa);
+    }
+
+    [Fact]
+    public async Task Inicializar_NoPreseleccionaLaFuente_NiConUnaSolaLocal()
+    {
+        var (vm, _, _, _, _) = Crear(fuentes: [Rentas, Figm]);
+        vm.CargarParaGasto(GastoConPago());
+
+        await vm.InicializarAsync();
+
+        Assert.Single(vm.FuentesDisponibles);
+        Assert.Null(vm.FuenteSeleccionada);
+    }
+
+    [Fact]
+    public async Task RegistrarPago_EnviaLaFuenteElegida()
+    {
+        var (vm, svc, _, _, _) = Crear();
+        vm.CargarParaGasto(GastoConPago());
+        await vm.InicializarAsync();
+        vm.MontoTexto = "100";
+        vm.FuenteSeleccionada = Tributos;
+
+        await vm.RegistrarPagoCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.RegistrarPagoAsync(It.Is<PagoGasto>(p => p.FuenteFinanciamientoId == 2)), Times.Once);
+    }
+
+    [Fact]
+    public async Task SinFuente_RegistrarDeshabilitado()
+    {
+        // Todo lo demás válido (fecha de hoy, monto legible, permiso, gasto activo): falta SOLO la fuente.
+        var (vm, svc, _, _, _) = Crear();
+        vm.CargarParaGasto(GastoConPago());
+        await vm.InicializarAsync();
+        vm.MontoTexto = "100";
+
+        Assert.False(vm.RegistrarPagoCommand.CanExecute(null));
+        await vm.RegistrarPagoCommand.ExecuteAsync(null);
+        svc.Verify(s => s.RegistrarPagoAsync(It.IsAny<PagoGasto>()), Times.Never);
+        Assert.Equal(PagosGastoViewModel.MensajeFuenteObligatoria, vm.ErrorDe(nameof(PagosGastoViewModel.FuenteSeleccionada)));
+
+        vm.FuenteSeleccionada = Rentas;   // control: con la fuente elegida, el mismo formulario se habilita
+        Assert.True(vm.RegistrarPagoCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void MensajeFuenteObligatoria_ConElTextoDelPlan()
+        => Assert.Equal("Elegí la fuente de financiamiento.", PagosGastoViewModel.MensajeFuenteObligatoria);
+
+    [Fact]
+    public async Task SinLiteralesLocales_AvisoConElTexto()
+    {
+        var (vm, _, _, _, _) = Crear(fuentes: [Figm]);
+        vm.CargarParaGasto(GastoConPago());
+
+        await vm.InicializarAsync();
+
+        Assert.Empty(vm.FuentesDisponibles);
+        Assert.Equal("No hay literales asignados a la caja Local; configuralos en Fuentes de financiamiento", vm.AvisoSinLiterales);
+    }
+
+    [Fact]
+    public async Task ConLiteralesLocales_SinAviso()
+    {
+        var (vm, _, _, _, _) = Crear();
+        vm.CargarParaGasto(GastoConPago());
+
+        await vm.InicializarAsync();
+
+        Assert.Null(vm.AvisoSinLiterales);
+    }
+
+    [Fact]
+    public async Task RegistrarPago_TrasGuardar_ConservaLaFuente()
+    {
+        var (vm, _, _, _, _) = Crear();
+        vm.CargarParaGasto(GastoConPago());
+        await vm.InicializarAsync();
+        vm.MontoTexto = "100";
+        vm.Nota = "x";
+        vm.FuenteSeleccionada = Tributos;
+
+        await vm.RegistrarPagoCommand.ExecuteAsync(null);
+
+        Assert.Equal(string.Empty, vm.MontoTexto);
+        Assert.Null(vm.Nota);
+        Assert.Same(Tributos, vm.FuenteSeleccionada);
+        Assert.Null(vm.ErrorDe(nameof(PagosGastoViewModel.FuenteSeleccionada)));
+    }
+
+    [Fact]
+    public async Task Inicializar_FuentesQueRespondeUn403_MarcaSinPermisoSinPropagar()
+    {
+        // Las fuentes van dentro de la MISMA carga protegida que el gasto: un 403 acá no escala.
+        var fuentesSvc = new Mock<IFuenteFinanciamientoService>();
+        fuentesSvc.Setup(f => f.ListarActivasAsync()).ThrowsAsync(new UnauthorizedAccessException());
+        var svc = new Mock<IGastoService>();
+        svc.Setup(s => s.ObtenerPorIdAsync(5)).ReturnsAsync(GastoConPago());
+        var confirm = new Mock<IConfirmacionService>();
+        var session = new Mock<ICurrentSession>();
+        session.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());
+        var panel = new AdjuntosPanelViewModel(new Mock<IAdjuntoService>().Object, new Mock<IServicioSeleccionArchivo>().Object,
+            new Mock<IServicioAperturaArchivo>().Object, confirm.Object, session.Object);
+        var vm = new PagosGastoViewModel(svc.Object, fuentesSvc.Object, session.Object, new Mock<INavigationService>().Object, confirm.Object, panel);
+        vm.CargarParaGasto(GastoConPago());
+
+        var excepcion = await Record.ExceptionAsync(() => vm.InicializarAsync());
+
+        Assert.Null(excepcion);
+        Assert.True(vm.SinPermiso);
     }
 
     // ── Solo lectura por permiso o por gasto anulado (Q-3 A) ─────────────────────────────────────────
@@ -494,6 +639,7 @@ public class PagosGastoViewModelTests
         var (vm, _, _, _, _) = Crear(rol: RolUsuario.Operador, permisosMutables: permisos);
         vm.CargarParaGasto(GastoConPago());
         await vm.InicializarAsync();
+        vm.FuenteSeleccionada = Rentas;
         vm.MontoTexto = "10";
         var pago = new PagoGasto { Id = 1, Activo = true };
         Assert.True(vm.RegistrarPagoCommand.CanExecute(null));
@@ -574,6 +720,7 @@ public class PagosGastoViewModelTests
         var (vm, _, _, _, _) = Crear();
         vm.CargarParaGasto(GastoConPago());
         await vm.InicializarAsync();
+        vm.FuenteSeleccionada = Rentas;
         vm.PagoSeleccionado = vm.Pagos[0];
         vm.MontoTexto = "100";
 
@@ -653,6 +800,7 @@ public class PagosGastoViewModelTests
         var (vm, _, _, _, _) = Crear(svc: svc);
         vm.CargarParaGasto(antes);
         await vm.InicializarAsync();
+        vm.FuenteSeleccionada = Rentas;
         string? ultimoLeido = null;
         vm.PropertyChanged += (_, e) =>
         {

@@ -116,7 +116,7 @@ public class CalendarioPagosViewModelTests
                     pagosConfirm.Object,
                     new Mock<ICurrentSession>().Object);
                 var pagosSession = new Mock<ICurrentSession>();
-                pagosVm = new PagosGastoViewModel(pagosSvc.Object, pagosSession.Object, pagosNav.Object, pagosConfirm.Object, pagosAdjuntosPanel);
+                pagosVm = new PagosGastoViewModel(pagosSvc.Object, new Mock<IFuenteFinanciamientoService>().Object, pagosSession.Object, pagosNav.Object, pagosConfirm.Object, pagosAdjuntosPanel);
                 cb(pagosVm);
             });
 

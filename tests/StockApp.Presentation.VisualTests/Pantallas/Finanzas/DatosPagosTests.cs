@@ -51,6 +51,19 @@ public class DatosPagosTests
     }
 
     [Fact]
+    public async Task ConPagos_CajaYFuenteDeCadaPago_LasDelMockup_YElComboSoloOfreceLosLocales()
+    {
+        var vm = Vm(DatosPagos.ConPagos());
+
+        await vm.InicializarAsync();
+
+        Assert.All(vm.Pagos, p => Assert.Equal(("Local", "Rentas Generales"), (p.Caja.ToString(), p.FuenteFinanciamiento!.Nombre)));
+        Assert.Equal(new[] { "Rentas Generales", "Tributos" }, vm.FuentesDisponibles.Select(f => f.Nombre));
+        Assert.Null(vm.FuenteSeleccionada);   // el mockup muestra el combo con "Elegí la fuente"
+        Assert.Null(vm.AvisoSinLiterales);
+    }
+
+    [Fact]
     public async Task ConPagos_ElAdjuntoDelPago61Y_ElDelPago62_SonLosDelMockup()
     {
         var vm = Vm(DatosPagos.ConPagos());

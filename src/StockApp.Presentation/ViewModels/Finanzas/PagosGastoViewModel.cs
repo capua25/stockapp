@@ -30,6 +30,7 @@ namespace StockApp.Presentation.ViewModels.Finanzas;
 public partial class PagosGastoViewModel : ViewModelBase, INotifyDataErrorInfo
 {
     private readonly IGastoService        _service;
+    private readonly IFuenteFinanciamientoService _fuentesService;
     private readonly ICurrentSession      _session;
     private readonly INavigationService   _navigation;
     private readonly IConfirmacionService _confirmacion;
@@ -81,6 +82,7 @@ public partial class PagosGastoViewModel : ViewModelBase, INotifyDataErrorInfo
     public const string MensajeFechaObligatoria = "La fecha del pago es obligatoria.";
     public const string MensajeMontoObligatorio = "El monto del pago es obligatorio.";
     public const string MensajeMontoInvalido = "El monto del pago no es un número válido.";
+    public const string MensajeFuenteObligatoria = "Elegí la fuente de financiamiento.";
     public const string AvisoPagoAnulado = "Pago anulado: los adjuntos son solo de consulta";
 
     protected override bool AvisaSinConexionEnLinea => true;
@@ -120,6 +122,18 @@ public partial class PagosGastoViewModel : ViewModelBase, INotifyDataErrorInfo
     private string _montoTexto = string.Empty;
 
     [ObservableProperty] private string? _nota;
+
+    /// <summary>Literal que paga el pago. Arranca nulo y no se preselecciona: el usuario lo elige (el pago manual sale
+    /// siempre de la caja Local, así que no hay selector de caja). Tras registrar se conserva.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(RegistrarPagoCommand))]
+    private FuenteFinanciamiento? _fuenteSeleccionada;
+
+    /// <summary>Literales activos de la caja Local.</summary>
+    public ObservableCollection<FuenteFinanciamiento> FuentesDisponibles { get; } = new();
+
+    /// <summary>La caja Local no tiene literales activos: se avisa dónde configurarlos. Null si hay al menos uno.</summary>
+    [ObservableProperty] private string? _avisoSinLiterales;
     [ObservableProperty] private string? _mensajeError;
 
     [ObservableProperty]
@@ -138,12 +152,14 @@ public partial class PagosGastoViewModel : ViewModelBase, INotifyDataErrorInfo
 
     public PagosGastoViewModel(
         IGastoService service,
+        IFuenteFinanciamientoService fuentesService,
         ICurrentSession session,
         INavigationService navigation,
         IConfirmacionService confirmacion,
         AdjuntosPanelViewModel adjuntosPanel)
     {
         _service       = service;
+        _fuentesService = fuentesService;
         _session       = session;
         _navigation    = navigation;
         _confirmacion  = confirmacion;
@@ -187,7 +203,7 @@ public partial class PagosGastoViewModel : ViewModelBase, INotifyDataErrorInfo
     {
         try
         {
-            await EjecutarCargaProtegidaAsync(RefrescarAsync, MensajeSinPermisoPagos);
+            await EjecutarCargaProtegidaAsync(CargarAsync, MensajeSinPermisoPagos);
         }
         catch (Exception ex) when (ex is ReglaDeNegocioException or EntidadNoEncontradaException)
         {
@@ -195,6 +211,17 @@ public partial class PagosGastoViewModel : ViewModelBase, INotifyDataErrorInfo
         }
     }
 
+    /// <summary>La carga protegida: el gasto y los literales de la caja Local, juntos (un solo 403 / sin conexión).</summary>
+    private async Task CargarAsync()
+    {
+        await RefrescarAsync();
+
+        var activas = await _fuentesService.ListarActivasAsync();
+        LiteralesPorCaja.Refrescar(FuentesDisponibles, activas, Caja.Local);
+        AvisoSinLiterales = LiteralesPorCaja.Aviso(Caja.Local, FuentesDisponibles.Count);
+    }
+
+    /// <summary>Trae el gasto fresco; tras registrar o anular se llama solo esto (la fuente elegida no se toca).</summary>
     private async Task RefrescarAsync()
     {
         var gasto = await _service.ObtenerPorIdAsync(_gastoId);
@@ -217,7 +244,7 @@ public partial class PagosGastoViewModel : ViewModelBase, INotifyDataErrorInfo
     // ── Errores por campo (Q-4 B, convención 31): Fecha y Monto ─────────────────────────────────────────
 
     /// <summary>Propiedades bindeadas que se validan en el cliente: ErrorsChanged se levanta con estos nombres.</summary>
-    private static readonly string[] CamposValidados = [nameof(FechaSeleccionada), nameof(MontoTexto)];
+    private static readonly string[] CamposValidados = [nameof(FechaSeleccionada), nameof(MontoTexto), nameof(FuenteSeleccionada)];
 
     /// <summary>Campos que el usuario ya tocó (cambió el valor, salió del campo o intentó registrar).</summary>
     private readonly HashSet<string> _tocados = new();
@@ -247,11 +274,13 @@ public partial class PagosGastoViewModel : ViewModelBase, INotifyDataErrorInfo
 
     partial void OnFechaSeleccionadaChanged(DateTime? value) => AlCambiarCampo(nameof(FechaSeleccionada));
     partial void OnMontoTextoChanged(string value) => AlCambiarCampo(nameof(MontoTexto));
+    partial void OnFuenteSeleccionadaChanged(FuenteFinanciamiento? value) => AlCambiarCampo(nameof(FuenteSeleccionada));
 
     private string? ReglaDe(string propiedad) => propiedad switch
     {
         nameof(FechaSeleccionada) => FechaSeleccionada is null ? MensajeFechaObligatoria : null,
         nameof(MontoTexto) => ReglaDelMonto(),
+        nameof(FuenteSeleccionada) => FuenteSeleccionada is null ? MensajeFuenteObligatoria : null,
         _ => null,
     };
 
@@ -297,6 +326,8 @@ public partial class PagosGastoViewModel : ViewModelBase, INotifyDataErrorInfo
                 Fecha = DateTime.SpecifyKind(FechaSeleccionada!.Value.Date, DateTimeKind.Utc),
                 Monto = monto,
                 Nota = string.IsNullOrWhiteSpace(Nota) ? null : Nota,
+                Caja = Caja.Local,
+                FuenteFinanciamientoId = FuenteSeleccionada!.Id,
             });
 
             MontoTexto = string.Empty;

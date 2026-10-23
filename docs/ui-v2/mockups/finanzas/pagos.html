@@ -24,10 +24,10 @@
   .resumen { display: grid; grid-template-columns: round(nearest, 25%, 1px) round(nearest, 25%, 1px) calc(round(nearest, 75%, 1px) - 2 * round(nearest, 25%, 1px)) minmax(0, 1fr); }
   /* Los valores del resumen llevan cifras tabulares (+tnum): los importes de una fila de cards alinean y Skia y Chromium coinciden pixel a pixel. */
   .resumen-valor { display: block; font-variant-numeric: tabular-nums; }
-  /* Registrar pago: Grid 140,8,160,8,*,8,Auto. MEDIDO: Fecha 140, Monto 160, Nota * (499 a 1280, 585 a 1366), botón 127. El botón
+  /* Registrar pago: Grid 140,8,160,8,220,8,*,8,Auto. Fuente 220: el combo de literales Local (sin caja: el pago manual sale siempre de la Local). Fecha 140, Monto 160; Nota * y botón 127 se re-miden. El botón
      queda arriba, alineado con los inputs (margen de 19 = alto de la etiqueta con su separación), para que un error bajo un campo
      no lo baje. */
-  .registrar { display: grid; grid-template-columns: 140px 160px 1fr auto; column-gap: 8px; align-items: start; }
+  .registrar { display: grid; grid-template-columns: 140px 160px 220px 1fr auto; column-gap: 8px; align-items: start; }
   .registrar .v2-boton { margin-top: 19px; }
   .monto { justify-content: flex-end; }
   /* Anchos MEDIDOS en headless (ColumnaAuto con FechaCortaConverter y MonedaConverter, headers en mayúsculas) sobre los tres pagos
@@ -35,6 +35,8 @@
      NOTA (*) el resto: 589 a 1280 y 675 a 1366 (con la acción; sin ella, 92 más). */
   .col-fecha { flex: 0 0 86px; }
   .col-monto { flex: 0 0 var(--monto-w, 103px); }
+  .col-caja { flex: 0 0 69px; }
+  .col-fuente { flex: 0 0 124px; }
   .col-nota { flex: 1 1 0; min-width: 0; }
   .col-estado { flex: 0 0 80px; }
   .col-accion { flex: 0 0 92px; }
@@ -117,6 +119,7 @@
             <div class="registrar">
               <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Fecha</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input"><span>17/10/2026</span><svg class="v2-icono v2-glifo-fecha" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19 3H18V1H16V3H8V1H6V3H5C3.89 3 3 3.9 3 5V19C3 20.11 3.9 21 5 21H19C20.11 21 21 20.11 21 19V5C21 3.9 20.11 3 19 3M19 19H5V9H19V19M19 7H5V5H19V7Z"/></svg></div></div></div>
               <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Monto</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input monto"><span class="v2-input-placeholder">Ej.: 500,00</span></div></div></div>
+              <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Fuente</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input"><span class="v2-input-placeholder">Elegí la fuente</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
               <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Nota (opcional)</span></div><div><div class="v2-input"><span class="v2-input-placeholder">Ej.: recibo 123</span></div></div></div>
               <span class="v2-boton v2-boton--primario v2-boton--deshabilitado">Registrar pago</span>
             </div>
@@ -127,6 +130,8 @@
               <div class="v2-grilla-header">
                 <div class="v2-grilla-celda col-fecha">FECHA</div>
                 <div class="v2-grilla-celda col-monto">MONTO</div>
+                <div class="v2-grilla-celda col-caja">CAJA</div>
+                <div class="v2-grilla-celda col-fuente">FUENTE</div>
                 <div class="v2-grilla-celda col-nota">NOTA</div>
                 <div class="v2-grilla-celda col-estado">ESTADO</div>
                 <div class="v2-grilla-celda col-accion"></div>
@@ -134,6 +139,8 @@
               <div class="v2-grilla-fila">
                 <div class="v2-grilla-celda col-fecha">12/10/2026</div>
                 <div class="v2-grilla-celda col-monto v2-num"><span>$ 100.000,00</span></div>
+                <div class="v2-grilla-celda col-caja">Local</div>
+                <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">Rentas Generales</span></div>
                 <div class="v2-grilla-celda col-nota"><span class="v2-celda-cortada">Recibo 2231</span></div>
                 <div class="v2-grilla-celda col-estado"></div>
                 <div class="v2-grilla-celda col-accion"><span class="v2-boton v2-boton--secundario">Anular</span></div>
@@ -141,6 +148,8 @@
               <div class="v2-grilla-fila v2-grilla-fila--inactiva">
                 <div class="v2-grilla-celda col-fecha">13/10/2026</div>
                 <div class="v2-grilla-celda col-monto v2-num"><span>$ 50.000,00</span></div>
+                <div class="v2-grilla-celda col-caja">Local</div>
+                <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">Rentas Generales</span></div>
                 <div class="v2-grilla-celda col-nota"><span class="v2-celda-cortada">Cargado dos veces</span></div>
                 <div class="v2-grilla-celda col-estado"><span class="v2-insignia">Anulado</span></div>
                 <div class="v2-grilla-celda col-accion"></div>
@@ -148,6 +157,8 @@
               <div class="v2-grilla-fila">
                 <div class="v2-grilla-celda col-fecha">14/10/2026</div>
                 <div class="v2-grilla-celda col-monto v2-num"><span>$ 50.000,00</span></div>
+                <div class="v2-grilla-celda col-caja">Local</div>
+                <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">Rentas Generales</span></div>
                 <div class="v2-grilla-celda col-nota"><span class="v2-celda-cortada">Recibo 2240</span></div>
                 <div class="v2-grilla-celda col-estado"></div>
                 <div class="v2-grilla-celda col-accion"><span class="v2-boton v2-boton--secundario">Anular</span></div>

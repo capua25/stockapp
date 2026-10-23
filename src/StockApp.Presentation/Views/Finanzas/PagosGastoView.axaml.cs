@@ -20,6 +20,8 @@ public partial class PagosGastoView : UserControl
         // el monto vacío está deshabilitado, así que nunca se llegaría a ver). Fecha no lo necesita: arranca en hoy y
         // vaciarla ya la marca como tocada (el cambio de valor), así que no hay salida de foco que cubrir.
         TocarAlSalir(CajaMonto, nameof(PagosGastoViewModel.MontoTexto));
+        // La fuente arranca sin elegir (no se preselecciona): salir del combo sin elegir muestra su obligatorio.
+        TocarAlSalir(ComboFuente, nameof(PagosGastoViewModel.FuenteSeleccionada));
     }
 
     /// <summary>Marca el campo como tocado cuando el foco sale del control.</summary>

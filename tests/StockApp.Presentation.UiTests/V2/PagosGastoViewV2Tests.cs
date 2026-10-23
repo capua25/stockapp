@@ -36,6 +36,10 @@ public class PagosGastoViewV2Tests
 {
     private static readonly Proveedor ElectroSur = new() { Id = 3, Nombre = "Electro Sur S.R.L.", Activo = true };
 
+    private static readonly FuenteFinanciamiento Rentas = new() { Id = 1, Nombre = "Rentas Generales", Caja = Caja.Local, Activo = true };
+    private static readonly FuenteFinanciamiento Tributos = new() { Id = 2, Nombre = "Tributos", Caja = Caja.Local, Activo = true };
+    private static readonly FuenteFinanciamiento Figm = new() { Id = 3, Nombre = "FIGM", Caja = Caja.Poa, Activo = true };
+
     private static Gasto UnGasto(bool activo = true, bool conPagos = true)
     {
         var gasto = new Gasto
@@ -69,22 +73,24 @@ public class PagosGastoViewV2Tests
     private sealed record Montaje(Window Ventana, PagosGastoView Vista, PagosGastoViewModel Vm, PagosFake Servicio,
         AdjuntosPorPagoFake Adjuntos, NavigationRecorderFake Navegacion);
 
-    private static PagosGastoViewModel NuevoVm(PagosFake servicio, ICurrentSession sesion, INavigationService navegacion, AdjuntosPorPagoFake adjuntos)
+    private static PagosGastoViewModel NuevoVm(PagosFake servicio, ICurrentSession sesion, INavigationService navegacion, AdjuntosPorPagoFake adjuntos,
+        FuentesActivasFake? fuentes = null)
     {
         var confirmacion = new ConfirmacionServiceFake();
         var panel = new AdjuntosPanelViewModel(adjuntos, new ServicioSeleccionArchivoFake(), new ServicioAperturaArchivoFake(), confirmacion, sesion);
-        var vm = new PagosGastoViewModel(servicio, sesion, navegacion, confirmacion, panel);
+        var vm = new PagosGastoViewModel(servicio, fuentes ?? new FuentesActivasFake { Activas = [Rentas, Tributos, Figm] }, sesion, navegacion, confirmacion, panel);
         vm.CargarParaGasto(new Gasto { Id = 6 });
         return vm;
     }
 
     private static Montaje Montar(Gasto? gasto = null, ICurrentSession? sesion = null, double ancho = 1040, double alto = 760,
-        Action<PagosGastoViewModel>? preparar = null, PagosFake? servicio = null, AdjuntosPorPagoFake? adjuntos = null)
+        Action<PagosGastoViewModel>? preparar = null, PagosFake? servicio = null, AdjuntosPorPagoFake? adjuntos = null,
+        FuentesActivasFake? fuentes = null)
     {
         servicio ??= new PagosFake { Gasto = gasto ?? UnGasto() };
         adjuntos ??= ConAdjuntos();
         var navegacion = new NavigationRecorderFake();
-        var vm = NuevoVm(servicio, sesion ?? Admin(), navegacion, adjuntos);
+        var vm = NuevoVm(servicio, sesion ?? Admin(), navegacion, adjuntos, fuentes);
         preparar?.Invoke(vm);
         var vista = new PagosGastoView { DataContext = vm };
         var ventana = new Window { Width = ancho, Height = alto, Content = vista };
@@ -206,7 +212,7 @@ public class PagosGastoViewV2Tests
     [AvaloniaTheory]
     [InlineData(1040.0)]
     [InlineData(1126.0)]
-    public void FilaRegistrar_FechaMontoNotaYBoton_ConSusAnchos_ElBotonAlineadoConLosInputs(double ancho)
+    public void FilaRegistrar_FechaMontoFuenteNotaYBoton_ConSusAnchos_ElBotonAlineadoConLosInputs(double ancho)
     {
         var m = Montar(ancho: ancho);
         Rect R(string n) => EnVentana(m.Ventana, Parte<Control>(m, n));
@@ -214,7 +220,9 @@ public class PagosGastoViewV2Tests
         Assert.Equal(140, R("SelectorFecha").Width, 1);
         Assert.Equal(160, R("CajaMonto").Width, 1);
         Assert.Equal(R("SelectorFecha").Right + 8, R("CajaMonto").X, 1);
-        Assert.Equal(R("CajaMonto").Right + 8, R("CajaNota").X, 1);
+        Assert.Equal(R("CajaMonto").Right + 8, R("ComboFuente").X, 1);
+        Assert.Equal(220, R("ComboFuente").Width, 1);
+        Assert.Equal(R("ComboFuente").Right + 8, R("CajaNota").X, 1);
         Assert.Equal(R("CajaNota").Right + 8, R("BotonRegistrar").X, 1);
         Assert.Equal(R("CajaMonto").Y, R("BotonRegistrar").Y, 1);   // alineado arriba con los inputs
         Assert.Equal(36, R("BotonRegistrar").Height, 1);
@@ -450,6 +458,7 @@ public class PagosGastoViewV2Tests
         var m = Montar(sesion: SoloVer());
 
         Assert.False(Visible(Parte<TarjetaContenido>(m, "TarjetaRegistrar")));
+        Assert.DoesNotContain(m.Vista.GetVisualDescendants().OfType<ComboBox>(), c => c.Name == "ComboFuente" && Visible(c));
         Assert.True(Visible(Parte<Insignia>(m, "InsigniaSoloLectura")));
         Assert.False(Visible(Parte<Insignia>(m, "InsigniaAnulado")));
         Assert.False(Visible(BotonAnularDe(m, 61)!));
@@ -465,6 +474,7 @@ public class PagosGastoViewV2Tests
         var m = Montar(sesion: ConPermiso());
 
         Assert.True(Visible(Parte<TarjetaContenido>(m, "TarjetaRegistrar")));
+        Assert.True(Visible(Parte<ComboBox>(m, "ComboFuente")));
         Assert.False(Visible(Parte<Insignia>(m, "InsigniaSoloLectura")));
         Assert.True(Visible(BotonAnularDe(m, 61)!));
         Assert.False(Visible(BotonAnularDe(m, 62)!));
@@ -525,11 +535,12 @@ public class PagosGastoViewV2Tests
     }
 
     [AvaloniaFact]
-    public void MontoValido_HabilitaRegistrar()
+    public void MontoValidoYFuenteElegida_HabilitaRegistrar()
     {
         var m = Montar();
 
         m.Vm.MontoTexto = "100";
+        Parte<ComboBox>(m, "ComboFuente").SelectedItem = Rentas;
         Dispatcher.UIThread.RunJobs();
 
         Assert.True(Parte<Button>(m, "BotonRegistrar").IsEffectivelyEnabled);
@@ -542,6 +553,7 @@ public class PagosGastoViewV2Tests
         var m = Montar();
         m.Vm.MontoTexto = "100";
         m.Vm.Nota = "saldo";
+        Parte<ComboBox>(m, "ComboFuente").SelectedItem = Tributos;
         Dispatcher.UIThread.RunJobs();
 
         Clickear(m.Ventana, Parte<Button>(m, "BotonRegistrar"));
@@ -549,7 +561,8 @@ public class PagosGastoViewV2Tests
         Dispatcher.UIThread.RunJobs();
 
         var pago = Assert.Single(m.Servicio.Registrados);
-        Assert.Equal((100m, "saldo"), (pago.Monto, pago.Nota));
+        Assert.Equal((100m, "saldo", 2, Caja.Local), (pago.Monto, pago.Nota, pago.FuenteFinanciamientoId, pago.Caja));
+        Assert.Same(Tributos, Parte<ComboBox>(m, "ComboFuente").SelectedItem);   // tras registrar la fuente se conserva
         Assert.Equal(string.Empty, Parte<TextBox>(m, "CajaMonto").Text ?? string.Empty);
         Assert.Empty(Errores(Parte<TextBox>(m, "CajaMonto")));
     }
@@ -560,6 +573,7 @@ public class PagosGastoViewV2Tests
         var m = Montar();
         m.Servicio.FallaAlRegistrar = new ReglaDeNegocioException("El pago supera el saldo pendiente.");
         m.Vm.MontoTexto = "999999";
+        m.Vm.FuenteSeleccionada = Rentas;
         Dispatcher.UIThread.RunJobs();
 
         Clickear(m.Ventana, Parte<Button>(m, "BotonRegistrar"));
@@ -582,6 +596,99 @@ public class PagosGastoViewV2Tests
         Dispatcher.UIThread.RunJobs();
 
         Assert.Equal((6, 61), Assert.Single(m.Servicio.AnuladosPagos));
+    }
+
+    // ── Caja POA (2026-10-21): literal Local obligatorio, sin selector de caja ───────────────────────────
+
+    [AvaloniaFact]
+    public void ComboFuente_SoloLiteralesLocales_SinPreseleccion()
+    {
+        var m = Montar();
+        var combo = Parte<ComboBox>(m, "ComboFuente");
+
+        Assert.Equal(new[] { Rentas, Tributos }, combo.Items.Cast<FuenteFinanciamiento>().ToArray());
+        Assert.Null(combo.SelectedItem);
+        Assert.False(Visible(Parte<Alerta>(m, "AlertaSinLiterales")));
+    }
+
+    [AvaloniaFact]
+    public void SinComboDeCaja_ElPagoManualSiempreEsLocal()
+    {
+        var m = Montar();
+
+        Assert.Throws<InvalidOperationException>(() => Parte<ComboBox>(m, "ComboCaja"));
+    }
+
+    [AvaloniaFact]
+    public void SinFuente_RegistrarDeshabilitado_ConTodoLoDemasValido_YSeHabilitaAlElegirla()
+    {
+        var m = Montar();
+        m.Vm.MontoTexto = "100";   // fecha de hoy, monto legible: falta SOLO la fuente
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(Parte<Button>(m, "BotonRegistrar").IsEffectivelyEnabled);
+
+        Parte<ComboBox>(m, "ComboFuente").SelectedItem = Rentas;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(Parte<Button>(m, "BotonRegistrar").IsEffectivelyEnabled);
+    }
+
+    [AvaloniaFact]
+    public void SalirDeLaFuenteSinElegir_MensajeEnElCombo()
+    {
+        var m = Montar();
+        var combo = Parte<ComboBox>(m, "ComboFuente");
+        combo.Focus();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(combo.IsKeyboardFocusWithin, "Precondición: el combo tiene el foco.");
+
+        Parte<TextBox>(m, "CajaMonto").Focus();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(new[] { PagosGastoViewModel.MensajeFuenteObligatoria }, Errores(combo));
+    }
+
+    [AvaloniaFact]
+    public void SinLiteralesLocales_AlertaVisibleConElTexto()
+    {
+        var m = Montar(fuentes: new FuentesActivasFake { Activas = [Figm] });
+
+        var alerta = Parte<Alerta>(m, "AlertaSinLiterales");
+        Assert.True(Visible(alerta));
+        Assert.Equal("No hay literales asignados a la caja Local; configuralos en Fuentes de financiamiento", alerta.Texto);
+        Assert.Equal(VarianteAlerta.Advertencia, alerta.Variante);
+        Assert.Empty(Parte<ComboBox>(m, "ComboFuente").Items);
+    }
+
+    [AvaloniaFact]
+    public void Grilla_MuestraFuenteYCajaDeCadaPago()
+    {
+        var gasto = UnGasto(conPagos: false);
+        var automatico = PagoGasto.Automatico(new DateTime(2026, 10, 12, 0, 0, 0, DateTimeKind.Utc), 100_000m, "Pago contado (automático)", Caja.Poa, Figm.Id);
+        automatico.Id = 61; automatico.GastoId = 6; automatico.FuenteFinanciamiento = Figm;
+        gasto.Pagos.Add(automatico);
+        gasto.Pagos.Add(new PagoGasto
+        {
+            Id = 62, GastoId = 6, Fecha = new DateTime(2026, 10, 14, 0, 0, 0, DateTimeKind.Utc), Monto = 50_000m, Nota = "Recibo 2240",
+            Caja = Caja.Local, FuenteFinanciamientoId = Rentas.Id, FuenteFinanciamiento = Rentas,
+        });
+        var m = Montar(gasto);
+        var grilla = Parte<DataGrid>(m, "Grilla");
+
+        Assert.Equal(new object?[] { "FECHA", "MONTO", "CAJA", "FUENTE", "NOTA", "ESTADO", "" }, grilla.Columns.Select(c => c.Header).ToArray());
+        Assert.Equal("POA", TextoDe(m, 61, "CAJA"));
+        Assert.Equal("FIGM", TextoDe(m, 61, "FUENTE"));
+        Assert.Equal("Local", TextoDe(m, 62, "CAJA"));
+        Assert.Equal("Rentas Generales", TextoDe(m, 62, "FUENTE"));
+    }
+
+    private static string? TextoDe(Montaje m, int pagoId, string encabezado)
+    {
+        var grilla = Parte<DataGrid>(m, "Grilla");
+        var indice = grilla.Columns.ToList().FindIndex(c => (string?)c.Header == encabezado);
+        var celda = Fila(m, pagoId).GetVisualDescendants().OfType<DataGridCell>().ElementAt(indice);
+        return celda.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault()?.Text;
     }
 
     // ── Estados de pantalla ─────────────────────────────────────────────────────
