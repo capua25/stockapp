@@ -12,6 +12,9 @@ public static class CajaYLiteral
 {
     public const string MensajeCajaInexistente = "La caja indicada no existe.";
 
+    public const string MensajePagoManualEnGastoPoa =
+        "Un gasto de la caja POA no admite pagos manuales: anulalo y cargalo de nuevo.";
+
     /// <summary>
     /// La caja se elige explícitamente, nunca se deduce: un body sin caja (null) se rechaza con
     /// <paramref name="mensaje"/> en vez de caer en el valor por defecto del enum (Local).

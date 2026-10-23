@@ -54,7 +54,10 @@ public class GastoRepositoryConcurrenciaTests : PostgresRepositoryTestBase
         {
             await using var ctx = Fixture.CrearContexto();
             var repo = new GastoRepository(ctx);
-            var pago = new PagoGasto { GastoId = gastoId, Fecha = DateTime.UtcNow, Monto = 600m };
+            var pago = new PagoGasto
+            {
+                GastoId = gastoId, Fecha = DateTime.UtcNow, Monto = 600m, FuenteFinanciamientoId = fuente.Id,
+            };
             try
             {
                 await repo.RegistrarPagoAtomicoAsync(pago);

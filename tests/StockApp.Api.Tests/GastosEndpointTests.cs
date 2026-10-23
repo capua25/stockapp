@@ -298,13 +298,61 @@ public class GastosEndpointTests : ApiTestBase
             .Content.ReadFromJsonAsync<GastoGuardadoResponse>();
 
         var pago = await client.PostAsJsonAsync($"/finanzas/gastos/{creado!.Id}/pagos",
-            new RegistrarPagoRequest(DateTime.UtcNow, 1000m, "primer pago"));
+            new RegistrarPagoRequest(DateTime.UtcNow, 1000m, "primer pago", fuenteId));
         Assert.Equal(HttpStatusCode.Created, pago.StatusCode);
 
         // El saldo quedó en 500: pagar 600 debe dar 409 (no pagar más que el saldo)
         var excedido = await client.PostAsJsonAsync($"/finanzas/gastos/{creado.Id}/pagos",
-            new RegistrarPagoRequest(DateTime.UtcNow, 600m, null));
+            new RegistrarPagoRequest(DateTime.UtcNow, 600m, null, fuenteId));
         Assert.Equal(HttpStatusCode.Conflict, excedido.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostPago_LiteralPoa_Devuelve409()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        int literalPoaId;
+        await using (var ctx = Factory.CrearContexto())
+        {
+            var poa = new FuenteFinanciamiento { Nombre = $"Literal POA {Guid.NewGuid():N}", Caja = Caja.Poa };
+            ctx.Add(poa);
+            await ctx.SaveChangesAsync();
+            literalPoaId = poa.Id;
+        }
+        var client = ClienteAutenticado(TokenOperador());
+        var creado = await (await client.PostAsJsonAsync("/finanzas/gastos",
+                RequestValido(proveedorId, fuenteId, rubroId, CondicionPago.Credito)))
+            .Content.ReadFromJsonAsync<GastoGuardadoResponse>();
+
+        var response = await client.PostAsJsonAsync($"/finanzas/gastos/{creado!.Id}/pagos",
+            new RegistrarPagoRequest(DateTime.UtcNow, 100m, null, literalPoaId));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        await using var verif = Factory.CrearContexto();
+        Assert.Empty(await verif.PagosGasto.Where(p => p.GastoId == creado.Id).ToListAsync());
+    }
+
+    [Fact]
+    public async Task PostPago_LiteralLocal_Devuelve201_YElGetMuestraCajaYFuenteDelPago()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var client = ClienteAutenticado(TokenOperador());
+        var creado = await (await client.PostAsJsonAsync("/finanzas/gastos",
+                RequestValido(proveedorId, fuenteId, rubroId, CondicionPago.Credito)))
+            .Content.ReadFromJsonAsync<GastoGuardadoResponse>();
+
+        var response = await client.PostAsJsonAsync($"/finanzas/gastos/{creado!.Id}/pagos",
+            new RegistrarPagoRequest(DateTime.UtcNow, 100m, null, fuenteId));
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var get = await client.GetAsync($"/finanzas/gastos/{creado.Id}");
+        using var doc = JsonDocument.Parse(await get.Content.ReadAsStringAsync());
+        var pago = doc.RootElement.GetProperty("pagos")[0];
+        Assert.Equal(JsonValueKind.Number, pago.GetProperty("caja").ValueKind);
+        Assert.Equal(0, pago.GetProperty("caja").GetInt32());
+        Assert.Equal(fuenteId, pago.GetProperty("fuenteFinanciamientoId").GetInt32());
+        Assert.False(string.IsNullOrEmpty(pago.GetProperty("fuenteNombre").GetString()));
+        Assert.False(pago.GetProperty("esAutomatico").GetBoolean());
     }
 
     [Fact]
@@ -316,7 +364,7 @@ public class GastosEndpointTests : ApiTestBase
                 RequestValido(proveedorId, fuenteId, rubroId, CondicionPago.Credito)))
             .Content.ReadFromJsonAsync<GastoGuardadoResponse>();
         var pago = await (await client.PostAsJsonAsync($"/finanzas/gastos/{creado!.Id}/pagos",
-                new RegistrarPagoRequest(DateTime.UtcNow, 1500m, null)))
+                new RegistrarPagoRequest(DateTime.UtcNow, 1500m, null, fuenteId)))
             .Content.ReadFromJsonAsync<PagoCreadoResponse>();
 
         var response = await client.DeleteAsync($"/finanzas/gastos/{creado.Id}/pagos/{pago!.Id}");

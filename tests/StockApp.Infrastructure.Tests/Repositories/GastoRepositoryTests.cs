@@ -199,7 +199,7 @@ public class GastoRepositoryTests : PostgresRepositoryTestBase
 
         var pagoQueSobrepasa = new PagoGasto
         {
-            GastoId = id, Fecha = DateTime.UtcNow, Monto = 799.5000m,
+            GastoId = id, Fecha = DateTime.UtcNow, Monto = 799.5000m, FuenteFinanciamientoId = fuenteId,
         };
 
         var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
@@ -210,19 +210,42 @@ public class GastoRepositoryTests : PostgresRepositoryTestBase
     }
 
     [Fact]
-    public async Task RegistrarPagoAtomico_SinFuente_HeredaLaDelGasto()
+    public async Task RegistrarPagoAtomico_ConFuente_LaPersiste()
     {
         var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
         var id = await _repo.AgregarAsync(NuevoGasto(proveedorId, fuenteId, rubroId, DateTime.UtcNow));
         Context.ChangeTracker.Clear();
 
-        var pagoId = await _repo.RegistrarPagoAtomicoAsync(
-            new PagoGasto { GastoId = id, Fecha = DateTime.UtcNow, Monto = 100m });
+        var pagoId = await _repo.RegistrarPagoAtomicoAsync(new PagoGasto
+        {
+            GastoId = id, Fecha = DateTime.UtcNow, Monto = 100m, Caja = Caja.Local, FuenteFinanciamientoId = fuenteId,
+        });
         Context.ChangeTracker.Clear();
 
         var leido = await _repo.ObtenerPagoPorIdAsync(pagoId);
         Assert.Equal(fuenteId, leido!.FuenteFinanciamientoId);
         Assert.Equal(Caja.Local, leido.Caja);
+    }
+
+    [Fact]
+    public async Task ObtenerPorIdAsync_IncluyeLaFuenteDeCadaPago()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var otra = new FuenteFinanciamiento { Nombre = $"Otra {Guid.NewGuid():N}" };
+        Context.Add(otra);
+        await Context.SaveChangesAsync();
+        var id = await _repo.AgregarAsync(NuevoGasto(proveedorId, fuenteId, rubroId, DateTime.UtcNow));
+        await _repo.RegistrarPagoAtomicoAsync(new PagoGasto
+        {
+            GastoId = id, Fecha = DateTime.UtcNow, Monto = 100m, FuenteFinanciamientoId = otra.Id,
+        });
+        Context.ChangeTracker.Clear();
+
+        var gasto = await _repo.ObtenerPorIdAsync(id);
+
+        var pago = Assert.Single(gasto!.Pagos);
+        Assert.NotNull(pago.FuenteFinanciamiento);
+        Assert.Equal(otra.Nombre, pago.FuenteFinanciamiento!.Nombre);
     }
 
     [Fact]

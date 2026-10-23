@@ -7,7 +7,9 @@ using StockApp.Domain.Exceptions;
 
 namespace StockApp.ApiClient;
 
-internal sealed record PagoGastoWire(int Id, DateTime Fecha, decimal Monto, string? Nota, bool Activo);
+internal sealed record PagoGastoWire(
+    int Id, DateTime Fecha, decimal Monto, string? Nota, bool Activo,
+    Caja Caja, int FuenteFinanciamientoId, string? FuenteNombre, bool EsAutomatico);
 
 internal sealed record GastoWire(
     int Id,
@@ -31,7 +33,7 @@ internal sealed record GastoBody(
     List<int>? MovimientoIds);
 
 internal sealed record GastoGuardadoWire(int Id, string? AdvertenciaSobregiro);
-internal sealed record RegistrarPagoBody(DateTime Fecha, decimal Monto, string? Nota);
+internal sealed record RegistrarPagoBody(DateTime Fecha, decimal Monto, string? Nota, int FuenteFinanciamientoId);
 internal sealed record AsociarMovimientosBody(List<int> MovimientoIds);
 
 /// <summary>
@@ -126,7 +128,7 @@ public sealed class GastoApiClient : IGastoService
     {
         var response = await ApiErrores.EnviarAsync(() =>
             _http.PostAsJsonAsync($"finanzas/gastos/{pago.GastoId}/pagos",
-                new RegistrarPagoBody(pago.Fecha, pago.Monto, pago.Nota)));
+                new RegistrarPagoBody(pago.Fecha, pago.Monto, pago.Nota, pago.FuenteFinanciamientoId)));
         await ApiErrores.AsegurarExitoAsync(response);
 
         var creado = await response.Content.ReadFromJsonAsync<IdCreado>()
@@ -181,9 +183,24 @@ public sealed class GastoApiClient : IGastoService
         FechaVencimiento = dto.FechaVencimiento,
         Activo = dto.Activo,
         TieneMovimientosDeStock = dto.TieneMovimientosDeStock,
-        Pagos = dto.Pagos.Select(p => new PagoGasto
-        {
-            Id = p.Id, GastoId = dto.Id, Fecha = p.Fecha, Monto = p.Monto, Nota = p.Nota, Activo = p.Activo,
-        }).ToList(),
+        Pagos = dto.Pagos.Select(APago(dto.Id)).ToList(),
+    };
+
+    // EsAutomatico tiene setter privado: el automático solo se construye con PagoGasto.Automatico.
+    private static Func<PagoGastoWire, PagoGasto> APago(int gastoId) => p =>
+    {
+        var pago = p.EsAutomatico
+            ? PagoGasto.Automatico(p.Fecha, p.Monto, p.Nota!, p.Caja, p.FuenteFinanciamientoId)
+            : new PagoGasto
+            {
+                Fecha = p.Fecha, Monto = p.Monto, Nota = p.Nota, Caja = p.Caja,
+                FuenteFinanciamientoId = p.FuenteFinanciamientoId,
+            };
+        pago.Id = p.Id;
+        pago.GastoId = gastoId;
+        pago.Activo = p.Activo;
+        pago.FuenteFinanciamiento = p.FuenteNombre is null
+            ? null : new FuenteFinanciamiento { Id = p.FuenteFinanciamientoId, Nombre = p.FuenteNombre };
+        return pago;
     };
 }

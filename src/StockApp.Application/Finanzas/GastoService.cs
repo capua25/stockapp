@@ -263,6 +263,16 @@ public class GastoService : IGastoService
         if (pago.Fecha == default)
             throw new ArgumentException("La fecha del pago es obligatoria.");
 
+        // El pago manual es siempre de la caja Local: lo que venga en Caja se ignora, y el literal
+        // tiene que ser de esa caja.
+        pago.Caja = Caja.Local;
+        await CajaYLiteral.ValidarFuenteAsync(_fuentes, Caja.Local, pago.FuenteFinanciamientoId, cambio: true);
+
+        // Un gasto contado POA que perdió su pago automático (anulado) queda con saldo pendiente: un pago
+        // manual, que es Local, haría pagar un gasto POA desde la caja Local.
+        if ((await _repo.ObtenerPorIdAsync(pago.GastoId))?.PagoAutomatico is { Caja: Caja.Poa })
+            throw new ReglaDeNegocioException(CajaYLiteral.MensajePagoManualEnGastoPoa);
+
         // La existencia del gasto, el estado (anulado) y el saldo pendiente se re-verifican
         // DENTRO de la transacción atómica del repo (FOR UPDATE) — evita el check-then-insert
         // que permitía sobrepago con dos pagos concurrentes sobre el mismo gasto.
@@ -270,7 +280,8 @@ public class GastoService : IGastoService
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id, AccionAuditada.AltaPagoGasto, "PagoGasto", pagoId,
-            $"Gasto: {pago.GastoId}; Monto: {pago.Monto}; Fecha: {pago.Fecha:yyyy-MM-dd}");
+            $"Gasto: {pago.GastoId}; Monto: {pago.Monto}; Fecha: {pago.Fecha:yyyy-MM-dd}; " +
+            $"Caja: {pago.Caja.Nombre()}; Fuente: {pago.FuenteFinanciamientoId}");
 
         return pagoId;
     }

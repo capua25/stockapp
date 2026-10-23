@@ -38,7 +38,11 @@ public class GastoApiClientTests
         tieneMovimientosDeStock,
         pagos = new[]
         {
-            new { id = 9, fecha = Hoy, monto = 0m, nota = (string?)null, activo = true },
+            new
+            {
+                id = 9, fecha = Hoy, monto = 0m, nota = (string?)null, activo = true,
+                caja = 0, fuenteFinanciamientoId = 2, fuenteNombre = "Literal B", esAutomatico = false,
+            },
         },
     };
 
@@ -217,6 +221,59 @@ public class GastoApiClientTests
         Assert.Equal("/finanzas/gastos/5/pagos", fake.UltimaRequest!.RequestUri!.AbsolutePath);
         Assert.Contains("\"monto\":300", fake.UltimoBody);
         Assert.Equal(21, pagoId);
+    }
+
+    [Fact]
+    public async Task RegistrarPagoAsync_EnviaLaFuente()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(new { id = 21 }, HttpStatusCode.Created));
+        var client = new GastoApiClient(TestHttp.CrearCliente(fake));
+
+        await client.RegistrarPagoAsync(new PagoGasto
+        {
+            GastoId = 5, Fecha = Hoy, Monto = 300m, FuenteFinanciamientoId = 8,
+        });
+
+        Assert.Contains("\"fuenteFinanciamientoId\":8", fake.UltimoBody);
+    }
+
+    [Fact]
+    public async Task ObtenerPorIdAsync_MapeaCajaFuenteYEsAutomatico()
+    {
+        var json = """
+        {"id":1,"proveedorId":3,"proveedorNombre":"Barraca X","numeroFactura":"A-0001","numeroOrden":null,
+         "detalle":"Materiales","destino":null,"fecha":"2026-07-16T00:00:00Z","montoTotal":1000,
+         "fuenteFinanciamientoId":2,"fuenteNombre":"Literal B","rubroGastoId":4,"rubroNombre":"Materiales",
+         "lineaPoaId":null,"lineaPoaNombre":null,"condicionPago":0,"fechaVencimiento":null,"activo":true,
+         "totalPagado":1000,"estado":"Pagado","tieneMovimientosDeStock":false,
+         "pagos":[
+           {"id":9,"fecha":"2026-07-16T00:00:00Z","monto":1000,"nota":"auto","activo":true,
+            "caja":1,"fuenteFinanciamientoId":2,"fuenteNombre":"Literal B","esAutomatico":true},
+           {"id":10,"fecha":"2026-07-17T00:00:00Z","monto":50,"nota":null,"activo":false,
+            "caja":0,"fuenteFinanciamientoId":5,"fuenteNombre":"Literal A","esAutomatico":false}]}
+        """;
+        var fake = new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
+        });
+        var client = new GastoApiClient(TestHttp.CrearCliente(fake));
+
+        var gasto = await client.ObtenerPorIdAsync(1);
+
+        var auto = gasto.PagoAutomatico;
+        Assert.NotNull(auto);
+        Assert.Equal(9, auto!.Id);
+        Assert.Equal(1, auto.GastoId);
+        Assert.Equal(Caja.Poa, auto.Caja);
+        Assert.Equal(2, auto.FuenteFinanciamientoId);
+        Assert.Equal("Literal B", auto.FuenteFinanciamiento!.Nombre);
+        Assert.True(auto.Activo);
+        var manual = gasto.Pagos.Single(p => !p.EsAutomatico);
+        Assert.Equal(10, manual.Id);
+        Assert.Equal(Caja.Local, manual.Caja);
+        Assert.Equal(5, manual.FuenteFinanciamientoId);
+        Assert.Equal("Literal A", manual.FuenteFinanciamiento!.Nombre);
+        Assert.False(manual.Activo);
     }
 
     [Fact]

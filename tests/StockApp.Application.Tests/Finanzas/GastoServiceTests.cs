@@ -406,6 +406,66 @@ public class GastoServiceTests
     }
 
     [Fact]
+    public async Task RegistrarPagoAsync_LiteralPoa_LanzaReglaDeNegocio()
+    {
+        var m = Crear();
+        m.Fuentes.Setup(f => f.ObtenerPorIdAsync(7))
+            .ReturnsAsync(new FuenteFinanciamiento { Id = 7, Nombre = "Literal B", Activo = true, Caja = Caja.Poa });
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.RegistrarPagoAsync(
+            new PagoGasto { GastoId = 1, Fecha = Hoy, Monto = 100m, FuenteFinanciamientoId = 7 }));
+
+        Assert.Equal(CajaYLiteral.MensajeFuenteDeOtraCaja("Literal B", Caja.Local), ex.Message);
+        m.Repo.Verify(r => r.RegistrarPagoAtomicoAsync(It.IsAny<PagoGasto>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RegistrarPagoAsync_CajaPoaEnElPago_SeGuardaLocal()
+    {
+        var m = Crear();
+        m.Repo.Setup(r => r.RegistrarPagoAtomicoAsync(It.IsAny<PagoGasto>())).ReturnsAsync(21);
+
+        await m.Svc.RegistrarPagoAsync(new PagoGasto
+        {
+            GastoId = 1, Fecha = Hoy, Monto = 100m, FuenteFinanciamientoId = 2, Caja = Caja.Poa,
+        });
+
+        m.Repo.Verify(r => r.RegistrarPagoAtomicoAsync(
+            It.Is<PagoGasto>(p => p.Caja == Caja.Local)), Times.Once);
+    }
+
+    [Fact]
+    public async Task RegistrarPagoAsync_GastoContadoPoa_RechazaElPagoManual()
+    {
+        var m = Crear();
+        var gasto = GastoValido(CondicionPago.Contado);
+        gasto.Id = 1;
+        gasto.Pagos.Add(PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)", Caja.Poa, 2));
+        gasto.Pagos[0].Activo = false;   // el automático se anuló: queda saldo pendiente
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.RegistrarPagoAsync(
+            new PagoGasto { GastoId = 1, Fecha = Hoy, Monto = 100m, FuenteFinanciamientoId = 2 }));
+
+        Assert.Equal(CajaYLiteral.MensajePagoManualEnGastoPoa, ex.Message);
+        m.Repo.Verify(r => r.RegistrarPagoAtomicoAsync(It.IsAny<PagoGasto>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RegistrarPagoAsync_AuditaCajaYFuente()
+    {
+        var m = Crear();
+        m.Repo.Setup(r => r.RegistrarPagoAtomicoAsync(It.IsAny<PagoGasto>())).ReturnsAsync(21);
+
+        await m.Svc.RegistrarPagoAsync(
+            new PagoGasto { GastoId = 1, Fecha = Hoy, Monto = 100m, FuenteFinanciamientoId = 2 });
+
+        m.Audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.AltaPagoGasto, "PagoGasto", 21,
+            It.Is<string>(d => d.Contains("Caja: Local") && d.Contains("Fuente: 2"))), Times.Once);
+    }
+
+    [Fact]
     public async Task RegistrarPagoAsync_MontoInvalido_NoLlamaAlRepo()
     {
         var m = Crear();

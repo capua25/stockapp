@@ -6,7 +6,9 @@ using StockApp.Domain.Enums;
 
 namespace StockApp.Api.Endpoints;
 
-public record PagoGastoDto(int Id, DateTime Fecha, decimal Monto, string? Nota, bool Activo);
+public record PagoGastoDto(
+    int Id, DateTime Fecha, decimal Monto, string? Nota, bool Activo,
+    Caja Caja, int FuenteFinanciamientoId, string? FuenteNombre, bool EsAutomatico);
 
 public record GastoDto(
     int Id,
@@ -38,7 +40,7 @@ public record ModificarGastoRequest(
     CondicionPago CondicionPago, DateTime? FechaVencimiento);
 
 public record GastoGuardadoResponse(int Id, string? AdvertenciaSobregiro);
-public record RegistrarPagoRequest(DateTime Fecha, decimal Monto, string? Nota);
+public record RegistrarPagoRequest(DateTime Fecha, decimal Monto, string? Nota, int FuenteFinanciamientoId);
 public record PagoCreadoResponse(int Id);
 public record AsociarMovimientosRequest(List<int> MovimientoIds);
 
@@ -112,6 +114,7 @@ public static class GastosEndpoints
             var pagoId = await gastos.RegistrarPagoAsync(new PagoGasto
             {
                 GastoId = id, Fecha = request.Fecha, Monto = request.Monto, Nota = request.Nota,
+                FuenteFinanciamientoId = request.FuenteFinanciamientoId,
             });
             return Results.Created((string?)null, new PagoCreadoResponse(pagoId));
         })
@@ -165,6 +168,8 @@ public static class GastosEndpoints
         g.CalcularEstado(DateTime.UtcNow).ToString(),
         g.TieneMovimientosDeStock,
         g.Pagos.OrderBy(p => p.Fecha).ThenBy(p => p.Id)
-            .Select(p => new PagoGastoDto(p.Id, p.Fecha, p.Monto, p.Nota, p.Activo))
+            .Select(p => new PagoGastoDto(
+                p.Id, p.Fecha, p.Monto, p.Nota, p.Activo,
+                p.Caja, p.FuenteFinanciamientoId, p.FuenteFinanciamiento?.Nombre, p.EsAutomatico))
             .ToList());
 }

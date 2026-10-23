@@ -21,7 +21,7 @@ public class GastoRepository : IGastoRepository
             .Include(g => g.FuenteFinanciamiento)
             .Include(g => g.RubroGasto)
             .Include(g => g.LineaPoa)
-            .Include(g => g.Pagos);
+            .Include(g => g.Pagos).ThenInclude(p => p.FuenteFinanciamiento);
 
     /// <summary>
     /// Proyecta Gasto + el EXISTS correlacionado contra MovimientosStock en el MISMO SELECT
@@ -159,9 +159,6 @@ public class GastoRepository : IGastoRepository
             await tx.RollbackAsync();
             throw new ReglaDeNegocioException("No se pueden registrar pagos sobre un gasto anulado.");
         }
-
-        // Transitorio: el pago manual todavía no trae literal, hereda el del gasto.
-        if (pago.FuenteFinanciamientoId == 0) pago.FuenteFinanciamientoId = gasto.FuenteFinanciamientoId;
 
         var totalPagado = await _ctx.PagosGasto
             .Where(p => p.GastoId == pago.GastoId && p.Activo)
