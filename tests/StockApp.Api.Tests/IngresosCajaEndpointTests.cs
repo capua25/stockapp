@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using StockApp.Api.Auth;
 using StockApp.Api.Endpoints;
 using StockApp.Api.Tests.Fixtures;
+using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using Xunit;
@@ -79,7 +80,7 @@ public class IngresosCajaEndpointTests : ApiTestBase
         var client = ClienteAutenticado(TokenOperador());
 
         var json = $$"""
-            {"fecha":"2026-01-15","concepto":"Sin zona horaria","fuenteFinanciamientoId":{{fuenteId}},"monto":100}
+            {"fecha":"2026-01-15","concepto":"Sin zona horaria","fuenteFinanciamientoId":{{fuenteId}},"monto":100,"caja":0}
             """;
         var response = await client.PostAsync("/finanzas/ingresos",
             new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
@@ -145,6 +146,53 @@ public class IngresosCajaEndpointTests : ApiTestBase
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         await using var verificacion = Factory.CrearContexto();
         Assert.False(await verificacion.IngresosCaja.AnyAsync(i => i.Concepto == "Caja inexistente"));
+    }
+
+    [Fact]
+    public async Task Post_SinCaja_Devuelve400()
+    {
+        var fuenteId = await SeedFuenteAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var json = $$"""
+            {"fecha":"2026-01-15T00:00:00Z","concepto":"Sin caja en el body","fuenteFinanciamientoId":{{fuenteId}},"monto":100}
+            """;
+        var response = await client.PostAsync("/finanzas/ingresos",
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(IngresoCajaService.MensajeCajaObligatoria, doc.RootElement.GetProperty("detail").GetString());
+        await using var verificacion = Factory.CrearContexto();
+        Assert.False(await verificacion.IngresosCaja.AnyAsync(i => i.Concepto == "Sin caja en el body"));
+    }
+
+    [Fact]
+    public async Task Put_SinCaja_Devuelve400()
+    {
+        var fuenteId = await SeedFuenteAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+        var alta = await client.PostAsJsonAsync("/finanzas/ingresos",
+            new CrearIngresoCajaRequest(DateTime.UtcNow, "Intacto", fuenteId, 100m, Caja.Local));
+        Assert.Equal(HttpStatusCode.Created, alta.StatusCode);
+        await using var ctx = Factory.CrearContexto();
+        var id = await ctx.IngresosCaja.Where(i => i.Concepto == "Intacto")
+            .Select(i => i.Id).SingleAsync();
+
+        var json = $$"""
+            {"fecha":"2026-01-15T00:00:00Z","concepto":"Editado sin caja","fuenteFinanciamientoId":{{fuenteId}},"monto":999}
+            """;
+        var response = await client.PutAsync($"/finanzas/ingresos/{id}",
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(IngresoCajaService.MensajeCajaObligatoria, doc.RootElement.GetProperty("detail").GetString());
+        await using var verificacion = Factory.CrearContexto();
+        var ingreso = await verificacion.IngresosCaja.SingleAsync(i => i.Id == id);
+        Assert.Equal("Intacto", ingreso.Concepto);
+        Assert.Equal(100m, ingreso.Monto);
+        Assert.Equal(Caja.Local, ingreso.Caja);
     }
 
     [Fact]

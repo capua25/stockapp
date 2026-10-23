@@ -13,6 +13,13 @@ public static class CajaYLiteral
     public const string MensajeCajaInexistente = "La caja indicada no existe.";
 
     /// <summary>
+    /// La caja se elige explícitamente, nunca se deduce: un body sin caja (null) se rechaza con
+    /// <paramref name="mensaje"/> en vez de caer en el valor por defecto del enum (Local).
+    /// </summary>
+    public static Caja Obligatoria(Caja? caja, string mensaje)
+        => caja ?? throw new ArgumentException(mensaje);
+
+    /// <summary>
     /// La API no valida el rango del enum (acepta cualquier entero): sin este chequeo se guardaría un
     /// movimiento en una caja que ninguna pantalla muestra.
     /// </summary>

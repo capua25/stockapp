@@ -22,7 +22,7 @@ public static class FuentesFinanciamientoEndpoints
 
         group.MapPost("/", async (CrearFuenteFinanciamientoRequest request, IFuenteFinanciamientoService fuentes) =>
         {
-            var id = await fuentes.AltaAsync(new FuenteFinanciamiento { Nombre = request.Nombre, Caja = CajaObligatoria(request.Caja) });
+            var id = await fuentes.AltaAsync(new FuenteFinanciamiento { Nombre = request.Nombre, Caja = CajaYLiteral.Obligatoria(request.Caja, FuenteFinanciamientoService.MensajeCajaObligatoria) });
             // Sin Location: no existe GET /finanzas/fuentes/{id} (mismo criterio que /categorias).
             return Results.Created((string?)null, new { id });
         })
@@ -30,7 +30,7 @@ public static class FuentesFinanciamientoEndpoints
 
         group.MapPut("/{id:int}", async (int id, ModificarFuenteFinanciamientoRequest request, IFuenteFinanciamientoService fuentes) =>
         {
-            await fuentes.ModificarAsync(new FuenteFinanciamiento { Id = id, Nombre = request.Nombre, Caja = CajaObligatoria(request.Caja) });
+            await fuentes.ModificarAsync(new FuenteFinanciamiento { Id = id, Nombre = request.Nombre, Caja = CajaYLiteral.Obligatoria(request.Caja, FuenteFinanciamientoService.MensajeCajaObligatoria) });
             return Results.Ok();
         })
         .RequireAuthorization(Permisos.GestionarMaestrosFinanzas);
@@ -48,9 +48,6 @@ public static class FuentesFinanciamientoEndpoints
 
         return app;
     }
-
-    private static Caja CajaObligatoria(Caja? caja)
-        => caja ?? throw new ArgumentException(FuenteFinanciamientoService.MensajeCajaObligatoria);
 
     private static FuenteFinanciamientoDto ADto(FuenteFinanciamiento f) => new(f.Id, f.Nombre, f.Activo, f.Caja);
 }

@@ -8,6 +8,8 @@ namespace StockApp.Application.Finanzas;
 
 public class IngresoCajaService : IIngresoCajaService
 {
+    public const string MensajeCajaObligatoria = "La caja del ingreso es obligatoria.";
+
     private readonly IIngresoCajaRepository          _repo;
     private readonly IFuenteFinanciamientoRepository _fuentes;
     private readonly ICurrentSession                 _session;

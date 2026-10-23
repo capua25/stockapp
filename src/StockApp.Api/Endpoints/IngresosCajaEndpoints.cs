@@ -12,10 +12,10 @@ public record IngresoCajaDto(
     decimal Monto, bool Activo, Caja Caja);
 
 public record CrearIngresoCajaRequest(
-    DateTime Fecha, string Concepto, int FuenteFinanciamientoId, decimal Monto, Caja Caja);
+    DateTime Fecha, string Concepto, int FuenteFinanciamientoId, decimal Monto, Caja? Caja);
 
 public record ModificarIngresoCajaRequest(
-    DateTime Fecha, string Concepto, int FuenteFinanciamientoId, decimal Monto, Caja Caja);
+    DateTime Fecha, string Concepto, int FuenteFinanciamientoId, decimal Monto, Caja? Caja);
 
 public static class IngresosCajaEndpoints
 {
@@ -35,7 +35,7 @@ public static class IngresosCajaEndpoints
                 Concepto = request.Concepto,
                 FuenteFinanciamientoId = request.FuenteFinanciamientoId,
                 Monto = request.Monto,
-                Caja = request.Caja,
+                Caja = CajaYLiteral.Obligatoria(request.Caja, IngresoCajaService.MensajeCajaObligatoria),
             });
             return Results.Created((string?)null, new { id });
         })
@@ -50,7 +50,7 @@ public static class IngresosCajaEndpoints
                 Concepto = request.Concepto,
                 FuenteFinanciamientoId = request.FuenteFinanciamientoId,
                 Monto = request.Monto,
-                Caja = request.Caja,
+                Caja = CajaYLiteral.Obligatoria(request.Caja, IngresoCajaService.MensajeCajaObligatoria),
             });
             return Results.Ok();
         })
