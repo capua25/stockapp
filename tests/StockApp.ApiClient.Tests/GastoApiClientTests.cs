@@ -277,6 +277,31 @@ public class GastoApiClientTests
     }
 
     [Fact]
+    public async Task ObtenerPorIdAsync_LaFuenteAnidadaDelPagoConservaSuCaja()
+    {
+        var json = """
+        {"id":1,"proveedorId":3,"proveedorNombre":"Barraca X","numeroFactura":"A-0001","numeroOrden":null,
+         "detalle":"Materiales","destino":null,"fecha":"2026-07-16T00:00:00Z","montoTotal":1000,
+         "fuenteFinanciamientoId":2,"fuenteNombre":"Literal POA","rubroGastoId":4,"rubroNombre":"Materiales",
+         "lineaPoaId":null,"lineaPoaNombre":null,"condicionPago":0,"fechaVencimiento":null,"activo":true,
+         "totalPagado":1000,"estado":"Pagado","tieneMovimientosDeStock":false,
+         "pagos":[
+           {"id":9,"fecha":"2026-07-16T00:00:00Z","monto":1000,"nota":"auto","activo":true,
+            "caja":1,"fuenteFinanciamientoId":2,"fuenteNombre":"Literal POA","esAutomatico":true}]}
+        """;
+        var fake = new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
+        });
+        var client = new GastoApiClient(TestHttp.CrearCliente(fake));
+
+        var gasto = await client.ObtenerPorIdAsync(1);
+
+        var pago = Assert.Single(gasto.Pagos);
+        Assert.Equal(Caja.Poa, pago.FuenteFinanciamiento!.Caja);
+    }
+
+    [Fact]
     public async Task AnularPago_DELETEPagos()
     {
         var fake = new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));

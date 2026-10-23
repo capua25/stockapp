@@ -333,6 +333,42 @@ public class GastosEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task PostPago_SinFuente_Devuelve400()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var client = ClienteAutenticado(TokenOperador());
+        var creado = await (await client.PostAsJsonAsync("/finanzas/gastos",
+                RequestValido(proveedorId, fuenteId, rubroId, CondicionPago.Credito)))
+            .Content.ReadFromJsonAsync<GastoGuardadoResponse>();
+
+        var json = """{"fecha":"2026-01-15T00:00:00Z","monto":100}""";
+        var response = await client.PostAsync($"/finanzas/gastos/{creado!.Id}/pagos",
+            new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("La fuente de financiamiento del pago es obligatoria.",
+            doc.RootElement.GetProperty("detail").GetString());
+        await using var verif = Factory.CrearContexto();
+        Assert.Empty(await verif.PagosGasto.Where(p => p.GastoId == creado.Id).ToListAsync());
+    }
+
+    [Fact]
+    public async Task PostPago_FuenteCero_Devuelve404()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var client = ClienteAutenticado(TokenOperador());
+        var creado = await (await client.PostAsJsonAsync("/finanzas/gastos",
+                RequestValido(proveedorId, fuenteId, rubroId, CondicionPago.Credito)))
+            .Content.ReadFromJsonAsync<GastoGuardadoResponse>();
+
+        var response = await client.PostAsJsonAsync($"/finanzas/gastos/{creado!.Id}/pagos",
+            new RegistrarPagoRequest(DateTime.UtcNow, 100m, null, 0));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task PostPago_LiteralLocal_Devuelve201_YElGetMuestraCajaYFuenteDelPago()
     {
         var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();

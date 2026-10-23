@@ -40,7 +40,7 @@ public record ModificarGastoRequest(
     CondicionPago CondicionPago, DateTime? FechaVencimiento);
 
 public record GastoGuardadoResponse(int Id, string? AdvertenciaSobregiro);
-public record RegistrarPagoRequest(DateTime Fecha, decimal Monto, string? Nota, int FuenteFinanciamientoId);
+public record RegistrarPagoRequest(DateTime Fecha, decimal Monto, string? Nota, int? FuenteFinanciamientoId);
 public record PagoCreadoResponse(int Id);
 public record AsociarMovimientosRequest(List<int> MovimientoIds);
 
@@ -114,7 +114,8 @@ public static class GastosEndpoints
             var pagoId = await gastos.RegistrarPagoAsync(new PagoGasto
             {
                 GastoId = id, Fecha = request.Fecha, Monto = request.Monto, Nota = request.Nota,
-                FuenteFinanciamientoId = request.FuenteFinanciamientoId,
+                FuenteFinanciamientoId = CajaYLiteral.FuenteObligatoria(
+                    request.FuenteFinanciamientoId, CajaYLiteral.MensajeFuenteDelPagoObligatoria),
             });
             return Results.Created((string?)null, new PagoCreadoResponse(pagoId));
         })

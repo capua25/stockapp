@@ -22,6 +22,15 @@ public static class CajaYLiteral
     public static Caja Obligatoria(Caja? caja, string mensaje)
         => caja ?? throw new ArgumentException(mensaje);
 
+    public const string MensajeFuenteDelPagoObligatoria = "La fuente de financiamiento del pago es obligatoria.";
+
+    /// <summary>
+    /// El literal del pago se elige explícitamente: un body sin fuente (null) se rechaza con
+    /// <paramref name="mensaje"/> en vez de caer en 0 y terminar en un 404 "Fuente 0 no encontrada".
+    /// </summary>
+    public static int FuenteObligatoria(int? fuenteFinanciamientoId, string mensaje)
+        => fuenteFinanciamientoId ?? throw new ArgumentException(mensaje);
+
     /// <summary>
     /// La API no valida el rango del enum (acepta cualquier entero): sin este chequeo se guardaría un
     /// movimiento en una caja que ninguna pantalla muestra.

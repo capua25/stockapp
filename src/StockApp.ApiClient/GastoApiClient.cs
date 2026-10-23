@@ -200,7 +200,7 @@ public sealed class GastoApiClient : IGastoService
         pago.GastoId = gastoId;
         pago.Activo = p.Activo;
         pago.FuenteFinanciamiento = p.FuenteNombre is null
-            ? null : new FuenteFinanciamiento { Id = p.FuenteFinanciamientoId, Nombre = p.FuenteNombre };
+            ? null : new FuenteFinanciamiento { Id = p.FuenteFinanciamientoId, Nombre = p.FuenteNombre, Caja = p.Caja };
         return pago;
     };
 }
