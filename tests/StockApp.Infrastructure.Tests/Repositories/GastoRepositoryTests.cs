@@ -45,21 +45,31 @@ public class GastoRepositoryTests : PostgresRepositoryTestBase
         return linea.Id;
     }
 
+    /// <summary>
+    /// Crédito sin pagos (la fuente no se guarda en el gasto). Con <paramref name="conPagoAutomatico"/> es un
+    /// contado con su pago automático por el total, que es donde viven la caja y el literal.
+    /// </summary>
     private static Gasto NuevoGasto(int proveedorId, int fuenteId, int rubroId, DateTime fecha,
-        decimal monto = 1000m, string? factura = null, int? lineaPoaId = null, string? numeroOrden = null) => new()
+        decimal monto = 1000m, string? factura = null, int? lineaPoaId = null, string? numeroOrden = null,
+        bool conPagoAutomatico = false)
     {
-        ProveedorId = proveedorId,
-        NumeroFactura = factura,
-        NumeroOrden = numeroOrden,
-        Detalle = "Gasto de prueba",
-        Fecha = fecha,
-        MontoTotal = monto,
-        FuenteFinanciamientoId = fuenteId,
-        RubroGastoId = rubroId,
-        LineaPoaId = lineaPoaId,
-        CondicionPago = CondicionPago.Credito,
-        FechaVencimiento = fecha.AddDays(30),
-    };
+        var gasto = new Gasto
+        {
+            ProveedorId = proveedorId,
+            NumeroFactura = factura,
+            NumeroOrden = numeroOrden,
+            Detalle = "Gasto de prueba",
+            Fecha = fecha,
+            MontoTotal = monto,
+            RubroGastoId = rubroId,
+            LineaPoaId = lineaPoaId,
+            CondicionPago = conPagoAutomatico ? CondicionPago.Contado : CondicionPago.Credito,
+            FechaVencimiento = conPagoAutomatico ? null : fecha.AddDays(30),
+        };
+        if (conPagoAutomatico)
+            gasto.Pagos.Add(PagoGasto.Automatico(fecha, monto, "Pago contado (automático)", Caja.Local, fuenteId));
+        return gasto;
+    }
 
     [Fact]
     public async Task AgregarAsync_ConPagos_Y_ObtenerPorId_TraeGrafoCompleto()
@@ -77,9 +87,9 @@ public class GastoRepositoryTests : PostgresRepositoryTestBase
         Assert.NotNull(found);
         Assert.Equal("A-0001", found!.NumeroFactura);
         Assert.NotNull(found.Proveedor);
-        Assert.NotNull(found.FuenteFinanciamiento);
         Assert.NotNull(found.RubroGasto);
         var pago = Assert.Single(found.Pagos);
+        Assert.NotNull(pago.FuenteFinanciamiento);
         Assert.Equal(400.5000m, pago.Monto);
         Assert.Equal(400.5000m, found.TotalPagado);
     }
@@ -167,23 +177,49 @@ public class GastoRepositoryTests : PostgresRepositoryTestBase
     }
 
     [Fact]
-    public async Task TotalGastadoLineaFuente_SumaSoloActivosDeEsaFuente_YExcluye()
+    public async Task TotalGastadoLineaFuente_LeeLaFuenteDelPagoAutomatico()
     {
         var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
         var (_, otraFuenteId, _) = await SeedMaestrosAsync();
         var lineaId = await SeedLineaPoaAsync(fuenteId, 10000m);
         var hoy = DateTime.UtcNow;
 
-        var id1 = await _repo.AgregarAsync(NuevoGasto(proveedorId, fuenteId, rubroId, hoy, 1000m, lineaPoaId: lineaId));
-        await _repo.AgregarAsync(NuevoGasto(proveedorId, fuenteId, rubroId, hoy, 2000m, lineaPoaId: lineaId));
-        var anulado = NuevoGasto(proveedorId, fuenteId, rubroId, hoy, 5000m, lineaPoaId: lineaId);
+        var id1 = await _repo.AgregarAsync(NuevoGasto(proveedorId, fuenteId, rubroId, hoy, 1000m, lineaPoaId: lineaId, conPagoAutomatico: true));
+        await _repo.AgregarAsync(NuevoGasto(proveedorId, fuenteId, rubroId, hoy, 2000m, lineaPoaId: lineaId, conPagoAutomatico: true));
+        var anulado = NuevoGasto(proveedorId, fuenteId, rubroId, hoy, 5000m, lineaPoaId: lineaId, conPagoAutomatico: true);
         anulado.Activo = false;
         await _repo.AgregarAsync(anulado);
-        await _repo.AgregarAsync(NuevoGasto(proveedorId, otraFuenteId, rubroId, hoy, 7000m, lineaPoaId: lineaId));
+        await _repo.AgregarAsync(NuevoGasto(proveedorId, otraFuenteId, rubroId, hoy, 7000m, lineaPoaId: lineaId, conPagoAutomatico: true));
+        // Un crédito con un pago manual de la fuente no es contado POA: no cuenta contra la asignación.
+        var credito = NuevoGasto(proveedorId, fuenteId, rubroId, hoy, 9000m, lineaPoaId: lineaId);
+        credito.Pagos.Add(new PagoGasto { Fecha = hoy, Monto = 100m, FuenteFinanciamientoId = fuenteId });
+        await _repo.AgregarAsync(credito);
         Context.ChangeTracker.Clear();
 
         Assert.Equal(3000m, await _repo.TotalGastadoLineaFuenteAsync(lineaId, fuenteId));
         Assert.Equal(2000m, await _repo.TotalGastadoLineaFuenteAsync(lineaId, fuenteId, excluyendoGastoId: id1));
+    }
+
+    [Fact]
+    public async Task ListarAsync_FiltroFuente_DevuelveGastosConAlgunPagoDeEsaFuente()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var (_, otraFuenteId, _) = await SeedMaestrosAsync();
+        var hoy = DateTime.UtcNow;
+
+        var conAutomatico = await _repo.AgregarAsync(
+            NuevoGasto(proveedorId, fuenteId, rubroId, hoy, factura: "F-1", conPagoAutomatico: true));
+        var conManualAnulado = NuevoGasto(proveedorId, otraFuenteId, rubroId, hoy, factura: "F-2");
+        conManualAnulado.Pagos.Add(new PagoGasto { Fecha = hoy, Monto = 10m, Activo = false, FuenteFinanciamientoId = fuenteId });
+        var idAnulado = await _repo.AgregarAsync(conManualAnulado);
+        await _repo.AgregarAsync(NuevoGasto(proveedorId, otraFuenteId, rubroId, hoy, factura: "F-3", conPagoAutomatico: true));
+        await _repo.AgregarAsync(NuevoGasto(proveedorId, fuenteId, rubroId, hoy, factura: "F-4"));   // sin pagos
+        Context.ChangeTracker.Clear();
+
+        var result = await _repo.ListarAsync(new GastoFiltro(FuenteFinanciamientoId: fuenteId));
+
+        // Algún pago (activo o no) de esa fuente: el automático y el manual anulado; no el que solo tiene otra fuente ni el sin pagos.
+        Assert.Equal(new[] { conAutomatico, idAnulado }.OrderBy(x => x), result.Select(g => g.Id).OrderBy(x => x));
     }
 
     // ── Bug real (verificación orgánica): el mensaje de sobrepago mostraba el decimal

@@ -21,8 +21,6 @@ public class Gasto
     public string? Destino { get; set; }
     public DateTime Fecha { get; set; }                   // UTC
     public decimal MontoTotal { get; set; }               // precisión 18,4
-    public int FuenteFinanciamientoId { get; set; }
-    public FuenteFinanciamiento? FuenteFinanciamiento { get; set; }
     public int RubroGastoId { get; set; }
     public RubroGasto? RubroGasto { get; set; }
     public int? LineaPoaId { get; set; }

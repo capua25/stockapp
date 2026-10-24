@@ -14,7 +14,7 @@ internal sealed record RenglonFacturaBody(
 internal sealed record IngresoPorFacturaBody(
     int ProveedorId, string? NumeroFactura, string? NumeroOrden,
     DateTime Fecha, string Detalle, string? Destino, decimal MontoTotal,
-    int FuenteFinanciamientoId, int RubroGastoId, int? LineaPoaId,
+    Caja? Caja, int? FuenteFinanciamientoId, int RubroGastoId, int? LineaPoaId,
     CondicionPago CondicionPago, DateTime? FechaVencimiento,
     List<RenglonFacturaBody> Lineas);
 
@@ -30,7 +30,7 @@ public sealed class IngresoPorFacturaApiClient : IIngresoPorFacturaService
         var body = new IngresoPorFacturaBody(
             dto.ProveedorId, dto.NumeroFactura, dto.NumeroOrden,
             dto.Fecha, dto.Detalle, dto.Destino, dto.MontoTotal,
-            dto.FuenteFinanciamientoId, dto.RubroGastoId, dto.LineaPoaId,
+            dto.PagoContado?.Caja, dto.PagoContado?.FuenteFinanciamientoId, dto.RubroGastoId, dto.LineaPoaId,
             dto.CondicionPago, dto.FechaVencimiento,
             dto.Renglones.Select(r => new RenglonFacturaBody(
                 r.ProductoId,

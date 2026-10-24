@@ -24,8 +24,6 @@ public class GastoApiClientTests
         destino = (string?)null,
         fecha = Hoy,
         montoTotal = 1000m,
-        fuenteFinanciamientoId = 2,
-        fuenteNombre = "Literal B",
         rubroGastoId = 4,
         rubroNombre = "Materiales",
         lineaPoaId = (int?)null,
@@ -41,7 +39,12 @@ public class GastoApiClientTests
             new
             {
                 id = 9, fecha = Hoy, monto = 0m, nota = (string?)null, activo = true,
-                caja = 0, fuenteFinanciamientoId = 2, fuenteNombre = "Literal B", esAutomatico = false,
+                caja = 0, fuenteFinanciamientoId = 2, fuenteNombre = "Literal A", esAutomatico = false,
+            },
+            new
+            {
+                id = 10, fecha = Hoy, monto = 1000m, nota = "Pago contado (automático)", activo = true,
+                caja = 1, fuenteFinanciamientoId = 3, fuenteNombre = "Literal B", esAutomatico = true,
             },
         },
     };
@@ -53,7 +56,6 @@ public class GastoApiClientTests
         Detalle = "Materiales",
         Fecha = Hoy,
         MontoTotal = 1000m,
-        FuenteFinanciamientoId = 2,
         RubroGastoId = 4,
         CondicionPago = CondicionPago.Credito,
         FechaVencimiento = Hoy.AddDays(30),
@@ -75,9 +77,28 @@ public class GastoApiClientTests
 
         var gasto = Assert.Single(gastos);
         Assert.Equal("Barraca X", gasto.Proveedor!.Nombre);
-        Assert.Equal("Literal B", gasto.FuenteFinanciamiento!.Nombre);
         Assert.Equal(CondicionPago.Credito, gasto.CondicionPago);
-        Assert.Single(gasto.Pagos);
+        Assert.Equal(2, gasto.Pagos.Count);
+    }
+
+    [Fact]
+    public async Task Listar_MapeaCajaYFuenteDeCadaPago_DesdeElJsonDelServidor()
+    {
+        // JSON literal del servidor (la caja viaja como número, 1 = POA), mapeo real GastoWire -> Gasto.
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(new[] { GastoJson() }));
+        var client = new GastoApiClient(TestHttp.CrearCliente(fake));
+
+        var gasto = Assert.Single(await client.ListarAsync(new GastoFiltro()));
+
+        var manual = gasto.Pagos.Single(p => !p.EsAutomatico);
+        Assert.Equal(Caja.Local, manual.Caja);
+        Assert.Equal(2, manual.FuenteFinanciamientoId);
+        Assert.Equal("Literal A", manual.FuenteFinanciamiento!.Nombre);
+        var automatico = gasto.PagoAutomatico!;
+        Assert.Equal(Caja.Poa, automatico.Caja);
+        Assert.Equal(3, automatico.FuenteFinanciamientoId);
+        Assert.Equal("Literal B", automatico.FuenteFinanciamiento!.Nombre);
+        Assert.Equal(Caja.Poa, automatico.FuenteFinanciamiento.Caja);
     }
 
     [Fact]
@@ -118,7 +139,7 @@ public class GastoApiClientTests
             new { id = 7, advertenciaSobregiro = "Atención: sobregiro" }, HttpStatusCode.Created));
         var client = new GastoApiClient(TestHttp.CrearCliente(fake));
 
-        var resultado = await client.AltaAsync(GastoEntidad(), new[] { 40, 41 });
+        var resultado = await client.AltaAsync(GastoEntidad(), null, new[] { 40, 41 });
 
         Assert.Equal(HttpMethod.Post, fake.UltimaRequest!.Method);
         Assert.Equal("/finanzas/gastos", fake.UltimaRequest.RequestUri!.AbsolutePath);
@@ -136,7 +157,7 @@ public class GastoApiClientTests
         var gasto = GastoEntidad();
         gasto.Id = 5;
 
-        var resultado = await client.ModificarAsync(gasto);
+        var resultado = await client.ModificarAsync(gasto, null);
 
         Assert.Equal(HttpMethod.Put, fake.UltimaRequest!.Method);
         Assert.Equal("/finanzas/gastos/5", fake.UltimaRequest.RequestUri!.AbsolutePath);
@@ -358,8 +379,51 @@ public class GastoApiClientTests
         var client = new GastoApiClient(TestHttp.CrearCliente(fake));
 
         var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
-            () => client.AltaAsync(GastoEntidad()));
+            () => client.AltaAsync(GastoEntidad(), null));
 
         Assert.Equal("Ya existe la factura 'A-0001' para ese proveedor.", ex.Message);
+    }
+
+    [Fact]
+    public async Task Alta_ContadoEnviaCajaYFuenteComoNumero()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(
+            new { id = 7, advertenciaSobregiro = (string?)null }, HttpStatusCode.Created));
+        var client = new GastoApiClient(TestHttp.CrearCliente(fake));
+        var gasto = GastoEntidad();
+        gasto.CondicionPago = CondicionPago.Contado;
+        gasto.FechaVencimiento = null;
+
+        await client.AltaAsync(gasto, new PagoContadoDto(Caja.Poa, 3));
+
+        Assert.Contains("\"caja\":1,\"fuenteFinanciamientoId\":3,\"rubroGastoId\":4", fake.UltimoBody);
+    }
+
+    [Fact]
+    public async Task Alta_CreditoEnviaCajaYFuenteNull()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(
+            new { id = 7, advertenciaSobregiro = (string?)null }, HttpStatusCode.Created));
+        var client = new GastoApiClient(TestHttp.CrearCliente(fake));
+
+        await client.AltaAsync(GastoEntidad(), null);
+
+        Assert.Contains("\"caja\":null,\"fuenteFinanciamientoId\":null", fake.UltimoBody);
+    }
+
+    [Fact]
+    public async Task Modificar_ContadoEnviaCajaYFuenteComoNumero()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(
+            new { id = 5, advertenciaSobregiro = (string?)null }));
+        var client = new GastoApiClient(TestHttp.CrearCliente(fake));
+        var gasto = GastoEntidad();
+        gasto.Id = 5;
+        gasto.CondicionPago = CondicionPago.Contado;
+        gasto.FechaVencimiento = null;
+
+        await client.ModificarAsync(gasto, new PagoContadoDto(Caja.Local, 2));
+
+        Assert.Contains("\"caja\":0,\"fuenteFinanciamientoId\":2", fake.UltimoBody);
     }
 }

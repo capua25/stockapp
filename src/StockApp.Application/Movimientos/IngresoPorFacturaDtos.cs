@@ -1,8 +1,12 @@
+using StockApp.Application.Finanzas;
 using StockApp.Domain.Enums;
 
 namespace StockApp.Application.Movimientos;
 
-/// <summary>Cabecera + renglones de una factura de compra a ingresar en un solo lote atómico.</summary>
+/// <summary>
+/// Cabecera + renglones de una factura de compra a ingresar en un solo lote atómico. La caja y el literal
+/// del pago de contado viajan en <paramref name="PagoContado"/> (obligatorio en contado, null en crédito).
+/// </summary>
 public record IngresoPorFacturaDto(
     int ProveedorId,
     string? NumeroFactura,
@@ -11,7 +15,7 @@ public record IngresoPorFacturaDto(
     string Detalle,
     string? Destino,
     decimal MontoTotal,
-    int FuenteFinanciamientoId,
+    PagoContadoDto? PagoContado,
     int RubroGastoId,
     int? LineaPoaId,
     CondicionPago CondicionPago,

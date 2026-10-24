@@ -42,7 +42,6 @@ public class GastoRepositoryConcurrenciaTests : PostgresRepositoryTestBase
             Detalle = "Gasto concurrente",
             Fecha = DateTime.UtcNow,
             MontoTotal = 1000m,
-            FuenteFinanciamientoId = fuente.Id,
             RubroGastoId = rubro.Id,
             CondicionPago = CondicionPago.Credito,
             FechaVencimiento = DateTime.UtcNow.AddDays(30),

@@ -140,6 +140,7 @@ public class DatosGastosTests
         Assert.Equal(new DateTime(2030, 12, 31), vm.FechaVencimientoSeleccionada?.Date);
         Assert.Equal("Constructora Oriental S.A.", vm.ProveedorSeleccionado?.Nombre);
         Assert.Equal("420.000,00", vm.MontoTexto);
+        Assert.Null(vm.FuenteSeleccionada);   // un crédito no tiene fuente: se elige en cada pago
         Assert.False(vm.PuedeCambiarCondicionPago);
         Assert.Empty(vm.AdjuntosPanel.Items);
     }

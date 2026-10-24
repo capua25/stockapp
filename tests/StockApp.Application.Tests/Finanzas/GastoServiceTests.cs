@@ -67,11 +67,33 @@ public class GastoServiceTests
         Detalle = "Materiales de obra",
         Fecha = Hoy,
         MontoTotal = 1000m,
-        FuenteFinanciamientoId = 2,
         RubroGastoId = 3,
         CondicionPago = condicion,
         FechaVencimiento = condicion == CondicionPago.Credito ? Hoy.AddDays(30) : null,
     };
+
+    private static PagoContadoDto ContadoLocal(int fuenteId = 2) => new(Caja.Local, fuenteId);
+
+    /// <summary>Gasto de contado ya persistido, con su pago automático (caja y literal del pago).</summary>
+    private static Gasto ContadoPersistido(Caja caja = Caja.Local, int fuenteId = 2, int? lineaPoaId = null)
+    {
+        var g = GastoValido(CondicionPago.Contado);
+        g.Id = 1;
+        g.LineaPoaId = lineaPoaId;
+        g.Pagos.Add(PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)", caja, fuenteId));
+        return g;
+    }
+
+    private static void FuenteEnCaja(Mocks m, int id, string nombre, Caja caja, bool activo = true)
+        => m.Fuentes.Setup(f => f.ObtenerPorIdAsync(id))
+            .ReturnsAsync(new FuenteFinanciamiento { Id = id, Nombre = nombre, Activo = activo, Caja = caja });
+
+    private static void LineaConAsignacion(Mocks m, int fuenteId, decimal monto)
+        => m.LineasPoa.Setup(l => l.ObtenerPorIdAsync(5)).ReturnsAsync(new LineaPoa
+        {
+            Id = 5, Nombre = "PRENSA", Programa = "Com", Ejercicio = 2026, Activo = true,
+            Asignaciones = { new AsignacionPresupuestal { FuenteFinanciamientoId = fuenteId, Monto = monto } },
+        });
 
     // ── Alta ──────────────────────────────────────────────────────────────────
 
@@ -82,7 +104,7 @@ public class GastoServiceTests
         var gasto = GastoValido();
         gasto.Detalle = "  ";
 
-        await Assert.ThrowsAsync<ArgumentException>(() => m.Svc.AltaAsync(gasto));
+        await Assert.ThrowsAsync<ArgumentException>(() => m.Svc.AltaAsync(gasto, null));
     }
 
     [Fact]
@@ -92,7 +114,7 @@ public class GastoServiceTests
         var gasto = GastoValido();
         gasto.MontoTotal = 0m;
 
-        await Assert.ThrowsAsync<ArgumentException>(() => m.Svc.AltaAsync(gasto));
+        await Assert.ThrowsAsync<ArgumentException>(() => m.Svc.AltaAsync(gasto, null));
     }
 
     [Fact]
@@ -102,7 +124,7 @@ public class GastoServiceTests
         var gasto = GastoValido();
         gasto.FechaVencimiento = null;
 
-        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.AltaAsync(gasto));
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.AltaAsync(gasto, null));
     }
 
     [Fact]
@@ -112,7 +134,7 @@ public class GastoServiceTests
         var gasto = GastoValido(CondicionPago.Contado);
         gasto.FechaVencimiento = Hoy.AddDays(10);
 
-        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.AltaAsync(gasto));
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.AltaAsync(gasto, ContadoLocal()));
     }
 
     [Fact]
@@ -124,7 +146,7 @@ public class GastoServiceTests
             .Callback<Gasto>(g => persistido = g)
             .ReturnsAsync(7);
 
-        var resultado = await m.Svc.AltaAsync(GastoValido(CondicionPago.Contado));
+        var resultado = await m.Svc.AltaAsync(GastoValido(CondicionPago.Contado), ContadoLocal());
 
         Assert.Equal(7, resultado.Id);
         Assert.Null(resultado.AdvertenciaSobregiro);
@@ -132,6 +154,8 @@ public class GastoServiceTests
         Assert.Equal(1000m, pago.Monto);
         Assert.Equal(Hoy, pago.Fecha);
         Assert.True(pago.EsAutomatico);
+        Assert.Equal(Caja.Local, pago.Caja);
+        Assert.Equal(2, pago.FuenteFinanciamientoId);
         m.Audit.Verify(a => a.RegistrarAsync(
             It.IsAny<int>(), AccionAuditada.AltaGasto, "Gasto", 7, It.IsAny<string>()), Times.Once);
     }
@@ -145,7 +169,7 @@ public class GastoServiceTests
             .Callback<Gasto>(g => persistido = g)
             .ReturnsAsync(8);
 
-        await m.Svc.AltaAsync(GastoValido());
+        await m.Svc.AltaAsync(GastoValido(), null);
 
         Assert.Empty(persistido!.Pagos);
     }
@@ -157,7 +181,7 @@ public class GastoServiceTests
         m.Repo.Setup(r => r.ObtenerPorProveedorYFacturaAsync(1, "A-0001", null))
             .ReturnsAsync(new Gasto { Id = 99, ProveedorId = 1, NumeroFactura = "A-0001" });
 
-        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.AltaAsync(GastoValido()));
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.AltaAsync(GastoValido(), null));
     }
 
     [Fact]
@@ -175,7 +199,7 @@ public class GastoServiceTests
         var gasto = GastoValido();
         gasto.NumeroOrden = "MI-ORDEN";
 
-        var resultado = await m.Svc.AltaAsync(gasto);
+        var resultado = await m.Svc.AltaAsync(gasto, null);
 
         Assert.Equal(12, resultado.Id);
         m.Repo.Verify(r => r.ObtenerPorProveedorYFacturaAsync(1, "A-0001", "MI-ORDEN"), Times.Once);
@@ -185,31 +209,36 @@ public class GastoServiceTests
     public async Task AltaAsync_FuenteInactiva_LanzaReglaDeNegocio()
     {
         var m = Crear();
-        m.Fuentes.Setup(f => f.ObtenerPorIdAsync(2))
-            .ReturnsAsync(new FuenteFinanciamiento { Id = 2, Nombre = "Vieja", Activo = false });
+        FuenteEnCaja(m, 2, "Vieja", Caja.Local, activo: false);
 
-        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.AltaAsync(GastoValido()));
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => m.Svc.AltaAsync(GastoValido(CondicionPago.Contado), ContadoLocal()));
     }
 
     [Fact]
-    public async Task AltaAsync_LineaPoaSinAsignacionParaLaFuente_LanzaReglaDeNegocio()
+    public async Task AltaAsync_LineaPoaConLiteralSinAsignacion_LanzaReglaDeNegocio()
     {
         var m = Crear();
+        FuenteEnCaja(m, 2, "Literal B", Caja.Poa);
         m.LineasPoa.Setup(l => l.ObtenerPorIdAsync(5)).ReturnsAsync(new LineaPoa
         {
             Id = 5, Nombre = "PRENSA", Programa = "Com", Ejercicio = 2026, Activo = true,
             Asignaciones = { new AsignacionPresupuestal { FuenteFinanciamientoId = 99, Monto = 1000m } },
         });
-        var gasto = GastoValido();
-        gasto.LineaPoaId = 5;  // fuente 2 no tiene asignación en la línea
+        var gasto = GastoValido(CondicionPago.Contado);
+        gasto.LineaPoaId = 5;  // el literal 2 no tiene asignación en la línea
 
-        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.AltaAsync(gasto));
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => m.Svc.AltaAsync(gasto, new PagoContadoDto(Caja.Poa, 2)));
+
+        Assert.Contains("no tiene asignación presupuestal", ex.Message);
     }
 
     [Fact]
-    public async Task AltaAsync_SobregiroDeLinea_AdvierteYNoBloquea()
+    public async Task AltaAsync_LineaPoaContadoPoa_AdviertePorLineaYLiteralDelPago()
     {
         var m = Crear();
+        FuenteEnCaja(m, 2, "Literal B", Caja.Poa);
         m.LineasPoa.Setup(l => l.ObtenerPorIdAsync(5)).ReturnsAsync(new LineaPoa
         {
             Id = 5, Nombre = "PRENSA", Programa = "Com", Ejercicio = 2026, Activo = true,
@@ -217,14 +246,109 @@ public class GastoServiceTests
         });
         m.Repo.Setup(r => r.TotalGastadoLineaFuenteAsync(5, 2, null)).ReturnsAsync(4500m);
         m.Repo.Setup(r => r.AgregarAsync(It.IsAny<Gasto>())).ReturnsAsync(10);
-        var gasto = GastoValido();          // 1000: 4500 + 1000 > 5000 ⇒ sobregiro 500
+        var gasto = GastoValido(CondicionPago.Contado);   // 1000: 4500 + 1000 > 5000 ⇒ sobregiro 500
         gasto.LineaPoaId = 5;
 
-        var resultado = await m.Svc.AltaAsync(gasto);
+        var resultado = await m.Svc.AltaAsync(gasto, new PagoContadoDto(Caja.Poa, 2));
 
         Assert.Equal(10, resultado.Id);     // se registró IGUAL (spec §10: advierte, no bloquea)
         Assert.NotNull(resultado.AdvertenciaSobregiro);
         Assert.Contains("PRENSA", resultado.AdvertenciaSobregiro);
+        m.Repo.Verify(r => r.TotalGastadoLineaFuenteAsync(5, 2, null), Times.Once);
+    }
+
+    [Fact]
+    public async Task AltaAsync_Contado_SinPagoContado_LanzaReglaDeNegocio()
+    {
+        var m = Crear();
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => m.Svc.AltaAsync(GastoValido(CondicionPago.Contado), null));
+
+        Assert.Equal(CajaYLiteral.MensajeContadoSinCajaOFuente, ex.Message);
+        m.Repo.Verify(r => r.AgregarAsync(It.IsAny<Gasto>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AltaAsync_Credito_ConPagoContado_LanzaReglaDeNegocio()
+    {
+        var m = Crear();
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => m.Svc.AltaAsync(GastoValido(), ContadoLocal()));
+
+        Assert.Equal(CajaYLiteral.MensajeCreditoConCajaOFuente, ex.Message);
+        m.Repo.Verify(r => r.AgregarAsync(It.IsAny<Gasto>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AltaAsync_CajaInexistente_LanzaArgumentException()
+    {
+        var m = Crear();
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => m.Svc.AltaAsync(GastoValido(CondicionPago.Contado), new PagoContadoDto((Caja)7, 2)));
+
+        m.Repo.Verify(r => r.AgregarAsync(It.IsAny<Gasto>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AltaAsync_ContadoPoaConLiteralLocal_LanzaReglaDeNegocio()
+    {
+        var m = Crear();   // el literal 2 es de la caja Local
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => m.Svc.AltaAsync(GastoValido(CondicionPago.Contado), new PagoContadoDto(Caja.Poa, 2)));
+
+        Assert.Equal(CajaYLiteral.MensajeFuenteDeOtraCaja("Fuente 2", Caja.Poa), ex.Message);
+        m.Repo.Verify(r => r.AgregarAsync(It.IsAny<Gasto>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AltaAsync_ContadoPoaConLiteralB_ElPagoAutomaticoLlevaCajaYFuente()
+    {
+        var m = Crear();
+        FuenteEnCaja(m, 3, "Literal B", Caja.Poa);
+        Gasto? persistido = null;
+        m.Repo.Setup(r => r.AgregarAsync(It.IsAny<Gasto>()))
+            .Callback<Gasto>(g => persistido = g)
+            .ReturnsAsync(20);
+
+        await m.Svc.AltaAsync(GastoValido(CondicionPago.Contado), new PagoContadoDto(Caja.Poa, 3));
+
+        var pago = Assert.Single(persistido!.Pagos);
+        Assert.True(pago.EsAutomatico);
+        Assert.Equal(Caja.Poa, pago.Caja);
+        Assert.Equal(3, pago.FuenteFinanciamientoId);
+        m.Audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.AltaGasto, "Gasto", 20,
+            It.Is<string>(d => d.Contains("Caja: POA"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task AltaAsync_LineaPoaEnCredito_LanzaReglaDeNegocio()
+    {
+        var m = Crear();
+        LineaConAsignacion(m, 2, 5000m);
+        var gasto = GastoValido();
+        gasto.LineaPoaId = 5;
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.AltaAsync(gasto, null));
+
+        Assert.Equal(CajaYLiteral.MensajeLineaPoaSoloContadoPoa, ex.Message);
+    }
+
+    [Fact]
+    public async Task AltaAsync_LineaPoaEnContadoLocal_LanzaReglaDeNegocio()
+    {
+        var m = Crear();
+        LineaConAsignacion(m, 2, 5000m);
+        var gasto = GastoValido(CondicionPago.Contado);
+        gasto.LineaPoaId = 5;
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.AltaAsync(gasto, ContadoLocal()));
+
+        Assert.Equal(CajaYLiteral.MensajeLineaPoaSoloContadoPoa, ex.Message);
     }
 
     [Fact]
@@ -238,7 +362,7 @@ public class GastoServiceTests
             });
         m.Repo.Setup(r => r.AgregarAsync(It.IsAny<Gasto>())).ReturnsAsync(11);
 
-        await m.Svc.AltaAsync(GastoValido(), new[] { 40 });
+        await m.Svc.AltaAsync(GastoValido(), null, new[] { 40 });
 
         m.Repo.Verify(r => r.AsignarGastoAMovimientosAsync(11,
             It.Is<IReadOnlyList<int>>(ids => ids.Count == 1 && ids[0] == 40)), Times.Once);
@@ -255,7 +379,7 @@ public class GastoServiceTests
             });
 
         await Assert.ThrowsAsync<ReglaDeNegocioException>(
-            () => m.Svc.AltaAsync(GastoValido(), new[] { 41 }));
+            () => m.Svc.AltaAsync(GastoValido(), null, new[] { 41 }));
     }
 
     // ── Modificación ─────────────────────────────────────────────────────────
@@ -271,7 +395,7 @@ public class GastoServiceTests
         var editado = GastoValido();
         editado.Id = 1;
 
-        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.ModificarAsync(editado));
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.ModificarAsync(editado, null));
     }
 
     [Fact]
@@ -284,7 +408,7 @@ public class GastoServiceTests
         var editado = GastoValido(CondicionPago.Contado);
         editado.Id = 1;
 
-        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.ModificarAsync(editado));
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.ModificarAsync(editado, null));
     }
 
     [Fact]
@@ -299,7 +423,7 @@ public class GastoServiceTests
         editado.Id = 1;
         editado.MontoTotal = 500m;   // < 800 pagado
 
-        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.ModificarAsync(editado));
+        await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.ModificarAsync(editado, null));
     }
 
     [Fact]
@@ -314,7 +438,7 @@ public class GastoServiceTests
         editado.Id = 1;
         editado.MontoTotal = 500m;
 
-        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.ModificarAsync(editado));
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.ModificarAsync(editado, null));
 
         Assert.Contains("($ 1.800,50)", ex.Message);
     }
@@ -331,7 +455,7 @@ public class GastoServiceTests
         editado.Detalle = "Materiales de obra (ampliación)";
         editado.MontoTotal = 1500m;
 
-        var resultado = await m.Svc.ModificarAsync(editado);
+        var resultado = await m.Svc.ModificarAsync(editado, null);
 
         Assert.Equal(1, resultado.Id);
         m.Repo.Verify(r => r.ActualizarAsync(It.Is<Gasto>(g =>
@@ -351,12 +475,105 @@ public class GastoServiceTests
         var editado = GastoValido();
         editado.Id = 1;
 
-        await m.Svc.ModificarAsync(editado);
+        await m.Svc.ModificarAsync(editado, null);
 
         m.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Gasto>()), Times.Never);
         m.Audit.Verify(a => a.RegistrarAsync(
             It.IsAny<int>(), It.IsAny<AccionAuditada>(), It.IsAny<string>(),
             It.IsAny<int>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_Contado_CambiaCajaYFuente_ActualizaElPagoAutomaticoYAudita()
+    {
+        var m = Crear();
+        FuenteEnCaja(m, 3, "Literal B", Caja.Poa);
+        var original = ContadoPersistido(Caja.Local, 2);
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        var editado = GastoValido(CondicionPago.Contado);
+        editado.Id = 1;
+
+        await m.Svc.ModificarAsync(editado, new PagoContadoDto(Caja.Poa, 3));
+
+        var auto = Assert.Single(original.Pagos);
+        Assert.Equal(Caja.Poa, auto.Caja);
+        Assert.Equal(3, auto.FuenteFinanciamientoId);
+        m.Repo.Verify(r => r.ActualizarAsync(original), Times.Once);
+        m.Audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.ModificacionGasto, "Gasto", 1,
+            It.Is<string>(d => d.Contains("Caja: Local → POA") && d.Contains("Fuente: 2 → 3"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_Contado_CambiaSoloLaCaja_ValidaElLiteralContraLaCajaNueva()
+    {
+        var m = Crear();   // el literal 2 es de la caja Local
+        var original = ContadoPersistido(Caja.Local, 2);
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        var editado = GastoValido(CondicionPago.Contado);
+        editado.Id = 1;
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => m.Svc.ModificarAsync(editado, new PagoContadoDto(Caja.Poa, 2)));
+
+        Assert.Equal(CajaYLiteral.MensajeFuenteDeOtraCaja("Fuente 2", Caja.Poa), ex.Message);
+        m.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Gasto>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_LegadoLocalConLineaPoa_SoloCambiaElDetalle_Guarda()
+    {
+        var m = Crear();
+        LineaConAsignacion(m, 2, 5000m);
+        var original = ContadoPersistido(Caja.Local, 2, lineaPoaId: 5);
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        var editado = GastoValido(CondicionPago.Contado);
+        editado.Id = 1;
+        editado.LineaPoaId = 5;
+        editado.Detalle = "Materiales de obra (corregido)";
+
+        await m.Svc.ModificarAsync(editado, ContadoLocal(2));
+
+        m.Repo.Verify(r => r.ActualizarAsync(It.Is<Gasto>(g => g.Detalle == "Materiales de obra (corregido)")), Times.Once);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_LegadoLocalConLineaPoa_CambiaLaLinea_LanzaReglaDeNegocio()
+    {
+        var m = Crear();
+        LineaConAsignacion(m, 2, 5000m);
+        m.LineasPoa.Setup(l => l.ObtenerPorIdAsync(6)).ReturnsAsync(new LineaPoa
+        {
+            Id = 6, Nombre = "RADIO", Programa = "Com", Ejercicio = 2026, Activo = true,
+            Asignaciones = { new AsignacionPresupuestal { FuenteFinanciamientoId = 2, Monto = 5000m } },
+        });
+        var original = ContadoPersistido(Caja.Local, 2, lineaPoaId: 5);
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        var editado = GastoValido(CondicionPago.Contado);
+        editado.Id = 1;
+        editado.LineaPoaId = 6;
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => m.Svc.ModificarAsync(editado, ContadoLocal(2)));
+
+        Assert.Equal(CajaYLiteral.MensajeLineaPoaSoloContadoPoa, ex.Message);
+        m.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Gasto>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_ContadoSinPagoAutomatico_LanzaReglaDeNegocio()
+    {
+        var m = Crear();
+        var original = GastoValido(CondicionPago.Contado);   // dato viejo: contado sin pago automático
+        original.Id = 1;
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        var editado = GastoValido(CondicionPago.Contado);
+        editado.Id = 1;
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => m.Svc.ModificarAsync(editado, ContadoLocal()));
+
+        Assert.Equal(CajaYLiteral.MensajeContadoSinPagoAutomatico, ex.Message);
     }
 
     // ── Pagos ────────────────────────────────────────────────────────────────

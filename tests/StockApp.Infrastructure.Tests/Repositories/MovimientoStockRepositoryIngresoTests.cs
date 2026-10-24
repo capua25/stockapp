@@ -59,7 +59,7 @@ public class MovimientoStockRepositoryIngresoTests : PostgresRepositoryTestBase
     {
         ProveedorId = proveedor.Id, NumeroFactura = factura, Detalle = "Compra de insumos",
         Fecha = DateTime.UtcNow, MontoTotal = 500m,
-        FuenteFinanciamientoId = fuente.Id, RubroGastoId = rubro.Id,
+        RubroGastoId = rubro.Id,
         CondicionPago = CondicionPago.Contado,
     };
 

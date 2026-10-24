@@ -10,13 +10,18 @@ namespace StockApp.Application.Finanzas;
 public interface IGastoService
 {
     /// <summary>
-    /// Alta del gasto. Contado crea el pago automático por el total. Si vienen
+    /// Alta del gasto. Contado crea el pago automático por el total, con la caja y el literal de
+    /// <paramref name="pagoContado"/> (obligatorio en contado, prohibido en crédito). Si vienen
     /// <paramref name="movimientoIds"/> (flujo "Asociar factura" de la entrada de stock),
     /// los valida (entradas sin gasto previo) y los vincula al gasto creado.
     /// </summary>
-    Task<ResultadoGastoDto> AltaAsync(Gasto gasto, IReadOnlyList<int>? movimientoIds = null);
+    Task<ResultadoGastoDto> AltaAsync(Gasto gasto, PagoContadoDto? pagoContado, IReadOnlyList<int>? movimientoIds = null);
 
-    Task<ResultadoGastoDto> ModificarAsync(Gasto gasto);
+    /// <summary>
+    /// Modifica el gasto. En contado, <paramref name="pagoContado"/> es la caja y el literal de su pago
+    /// automático (se actualiza si cambiaron); en crédito va null.
+    /// </summary>
+    Task<ResultadoGastoDto> ModificarAsync(Gasto gasto, PagoContadoDto? pagoContado);
 
     /// <summary>Anulación (baja lógica). Exige que no haya pagos activos; desvincula sus movimientos.</summary>
     Task AnularAsync(int id, bool confirmarAnulacionDePagoAutomatico = false);

@@ -420,9 +420,6 @@ namespace StockApp.Infrastructure.Migrations
                     b.Property<DateTime?>("FechaVencimiento")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int>("FuenteFinanciamientoId")
-                        .HasColumnType("integer");
-
                     b.Property<Guid?>("IdImportacion")
                         .HasColumnType("uuid");
 
@@ -448,8 +445,6 @@ namespace StockApp.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("Fecha");
-
-                    b.HasIndex("FuenteFinanciamientoId");
 
                     b.HasIndex("IdImportacion");
 
@@ -1252,12 +1247,6 @@ namespace StockApp.Infrastructure.Migrations
 
             modelBuilder.Entity("StockApp.Domain.Entities.Gasto", b =>
                 {
-                    b.HasOne("StockApp.Domain.Entities.FuenteFinanciamiento", "FuenteFinanciamiento")
-                        .WithMany()
-                        .HasForeignKey("FuenteFinanciamientoId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.HasOne("StockApp.Domain.Entities.LoteImportacion", null)
                         .WithMany()
                         .HasForeignKey("IdImportacion")
@@ -1279,8 +1268,6 @@ namespace StockApp.Infrastructure.Migrations
                         .HasForeignKey("RubroGastoId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.Navigation("FuenteFinanciamiento");
 
                     b.Navigation("LineaPoa");
 

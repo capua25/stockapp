@@ -1,5 +1,6 @@
 using Moq;
 using StockApp.Application.Authorization;
+using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Entities;
@@ -68,7 +69,7 @@ public class IngresoPorFacturaServiceTests
     private static IngresoPorFacturaDto DtoValido(params RenglonFacturaDto[] renglones) => new(
         ProveedorId: 1, NumeroFactura: "A-0001", NumeroOrden: null,
         Fecha: DateTime.UtcNow, Detalle: "Compra de insumos", Destino: null,
-        MontoTotal: 500m, FuenteFinanciamientoId: 1, RubroGastoId: 1, LineaPoaId: null,
+        MontoTotal: 500m, PagoContado: new PagoContadoDto(Caja.Local, 1), RubroGastoId: 1, LineaPoaId: null,
         CondicionPago: CondicionPago.Contado, FechaVencimiento: null,
         Renglones: renglones.Length == 0 ? new[] { RenglonExistente() } : renglones);
 
@@ -305,11 +306,91 @@ public class IngresoPorFacturaServiceTests
         var dto = DtoValido() with
         {
             MontoTotal = 500m, CondicionPago = CondicionPago.Credito, FechaVencimiento = DateTime.UtcNow.AddDays(30),
+            PagoContado = null,
         };
 
         await svc.RegistrarAsync(dto);
 
         Assert.Empty(argsCapturados!.Gasto.Pagos);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_ContadoPoaLiteralB_PagoAutomaticoConCajaYFuente()
+    {
+        var (svc, movRepo, _, _, fuentes, _, _, _, _, _, _, audit) = Crear();
+        fuentes.Setup(f => f.ObtenerPorIdAsync(2))
+            .ReturnsAsync(new FuenteFinanciamiento { Id = 2, Nombre = "Literal B", Activo = true, Caja = Caja.Poa });
+        movRepo.Setup(r => r.ObtenerProductoAsync(1))
+            .ReturnsAsync(new Producto { Id = 1, Codigo = "SKU1", Activo = true, StockActual = 10m, PrecioCosto = 5m });
+        IngresoPorFacturaArgs? argsCapturados = null;
+        movRepo.Setup(r => r.RegistrarIngresoPorFacturaAtomicoAsync(It.IsAny<IngresoPorFacturaArgs>()))
+            .Callback<IngresoPorFacturaArgs>(a => argsCapturados = a)
+            .ReturnsAsync(new ResultadoIngresoPorFactura(7, new List<int> { 100 }));
+
+        await svc.RegistrarAsync(DtoValido() with { PagoContado = new PagoContadoDto(Caja.Poa, 2) });
+
+        var pago = Assert.Single(argsCapturados!.Gasto.Pagos);
+        Assert.True(pago.EsAutomatico);
+        Assert.Equal(Caja.Poa, pago.Caja);
+        Assert.Equal(2, pago.FuenteFinanciamientoId);
+        Assert.Contains("Caja=POA", argsCapturados.DetalleAuditoria);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_ContadoSinPagoContado_LanzaReglaDeNegocio()
+    {
+        var (svc, movRepo, _, _, _, _, _, _, _, _, _, _) = Crear();
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => svc.RegistrarAsync(DtoValido() with { PagoContado = null }));
+
+        Assert.Equal(CajaYLiteral.MensajeContadoSinCajaOFuente, ex.Message);
+        movRepo.Verify(r => r.RegistrarIngresoPorFacturaAtomicoAsync(It.IsAny<IngresoPorFacturaArgs>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_CreditoConPagoContado_LanzaReglaDeNegocio()
+    {
+        var (svc, movRepo, _, _, _, _, _, _, _, _, _, _) = Crear();
+        var dto = DtoValido() with
+        {
+            CondicionPago = CondicionPago.Credito, FechaVencimiento = DateTime.UtcNow.AddDays(30),
+        };   // conserva el PagoContado de DtoValido
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.RegistrarAsync(dto));
+
+        Assert.Equal(CajaYLiteral.MensajeCreditoConCajaOFuente, ex.Message);
+        movRepo.Verify(r => r.RegistrarIngresoPorFacturaAtomicoAsync(It.IsAny<IngresoPorFacturaArgs>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_LineaPoaEnCredito_LanzaReglaDeNegocio()
+    {
+        var (svc, movRepo, _, _, _, _, lineasPoa, _, _, _, _, _) = Crear();
+        lineasPoa.Setup(l => l.ObtenerPorIdAsync(5)).ReturnsAsync(
+            new LineaPoa { Id = 5, Nombre = "PRENSA", Programa = "Com", Ejercicio = 2026, Activo = true });
+        var dto = DtoValido() with
+        {
+            CondicionPago = CondicionPago.Credito, FechaVencimiento = DateTime.UtcNow.AddDays(30),
+            PagoContado = null, LineaPoaId = 5,
+        };
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => svc.RegistrarAsync(dto));
+
+        Assert.Equal(CajaYLiteral.MensajeLineaPoaSoloContadoPoa, ex.Message);
+        movRepo.Verify(r => r.RegistrarIngresoPorFacturaAtomicoAsync(It.IsAny<IngresoPorFacturaArgs>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_ContadoPoaConLiteralLocal_LanzaReglaDeNegocio()
+    {
+        var (svc, movRepo, _, _, _, _, _, _, _, _, _, _) = Crear();   // el literal 1 es de la caja Local
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => svc.RegistrarAsync(DtoValido() with { PagoContado = new PagoContadoDto(Caja.Poa, 1) }));
+
+        Assert.Equal(CajaYLiteral.MensajeFuenteDeOtraCaja("Fuente Test", Caja.Poa), ex.Message);
+        movRepo.Verify(r => r.RegistrarIngresoPorFacturaAtomicoAsync(It.IsAny<IngresoPorFacturaArgs>()), Times.Never);
     }
 
     // ── AnularLoteAsync ────────────────────────────────────────────────────────

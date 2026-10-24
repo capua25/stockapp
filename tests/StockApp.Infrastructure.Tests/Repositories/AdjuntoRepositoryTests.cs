@@ -30,7 +30,7 @@ public class AdjuntoRepositoryTests : PostgresRepositoryTestBase
         var gasto = new Gasto
         {
             ProveedorId = proveedor.Id, Detalle = "Test", Fecha = DateTime.UtcNow,
-            MontoTotal = 100m, FuenteFinanciamientoId = fuente.Id, RubroGastoId = rubro.Id,
+            MontoTotal = 100m, RubroGastoId = rubro.Id,
             CondicionPago = CondicionPago.Contado,
         };
         Context.Gastos.Add(gasto);

@@ -38,12 +38,12 @@ public class GastoRepositoryVistasTests : PostgresRepositoryTestBase
     }
 
     [Fact]
-    public async Task ListarPagosActivosPorRangoAsync_TraeGastoConProveedorRubroYFuente()
+    public async Task ListarPagosActivosPorRangoAsync_TraeGastoConProveedorRubroYLaFuenteDelPago()
     {
         var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
         var gasto = new Gasto
         {
-            ProveedorId = proveedorId, FuenteFinanciamientoId = fuenteId, RubroGastoId = rubroId,
+            ProveedorId = proveedorId, RubroGastoId = rubroId,
             Detalle = "Compra de prueba", Fecha = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
             MontoTotal = 1000m, CondicionPago = CondicionPago.Credito,
             FechaVencimiento = new DateTime(2026, 8, 1, 0, 0, 0, DateTimeKind.Utc),
@@ -61,7 +61,34 @@ public class GastoRepositoryVistasTests : PostgresRepositoryTestBase
         Assert.NotNull(pago.Gasto);
         Assert.NotNull(pago.Gasto!.Proveedor);
         Assert.NotNull(pago.Gasto.RubroGasto);
-        Assert.NotNull(pago.Gasto.FuenteFinanciamiento);
+        Assert.NotNull(pago.FuenteFinanciamiento);
+    }
+
+    [Fact]
+    public async Task ListarPagosActivosPorRango_IncluyeLaFuenteDelPago()
+    {
+        // El gasto ya no tiene fuente: cada pago trae la suya (dos literales de cajas distintas en el mismo gasto).
+        var (proveedorId, fuenteLocalId, rubroId) = await SeedMaestrosAsync();
+        var poa = new FuenteFinanciamiento { Nombre = $"Literal POA {Guid.NewGuid():N}", Caja = Caja.Poa };
+        Context.Add(poa);
+        await Context.SaveChangesAsync();
+        var fecha = new DateTime(2026, 7, 10, 0, 0, 0, DateTimeKind.Utc);
+        var gasto = new Gasto
+        {
+            ProveedorId = proveedorId, RubroGastoId = rubroId, Detalle = "Compra", Fecha = fecha,
+            MontoTotal = 300m, CondicionPago = CondicionPago.Credito, FechaVencimiento = fecha.AddDays(30),
+        };
+        gasto.Pagos.Add(new PagoGasto { Fecha = fecha, Monto = 100m, FuenteFinanciamientoId = fuenteLocalId });
+        gasto.Pagos.Add(new PagoGasto { Fecha = fecha.AddDays(1), Monto = 200m, FuenteFinanciamientoId = poa.Id });
+        await _repo.AgregarAsync(gasto);
+        Context.ChangeTracker.Clear();
+
+        var pagos = await _repo.ListarPagosActivosPorRangoAsync(
+            new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc), new DateTime(2026, 7, 31, 0, 0, 0, DateTimeKind.Utc));
+
+        Assert.Equal(2, pagos.Count);
+        Assert.All(pagos, p => Assert.NotNull(p.FuenteFinanciamiento));
+        Assert.Equal(poa.Nombre, pagos.Single(p => p.Monto == 200m).FuenteFinanciamiento!.Nombre);
     }
 
     [Fact]
@@ -71,7 +98,7 @@ public class GastoRepositoryVistasTests : PostgresRepositoryTestBase
         var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
         var gasto = new Gasto
         {
-            ProveedorId = proveedorId, FuenteFinanciamientoId = fuenteId, RubroGastoId = rubroId,
+            ProveedorId = proveedorId, RubroGastoId = rubroId,
             Detalle = "Factura de junio, pagada en julio",
             Fecha = new DateTime(2026, 6, 5, 0, 0, 0, DateTimeKind.Utc), // gasto de JUNIO
             MontoTotal = 500m, CondicionPago = CondicionPago.Credito,
@@ -101,7 +128,7 @@ public class GastoRepositoryVistasTests : PostgresRepositoryTestBase
 
         var gastoConPagoAnulado = new Gasto
         {
-            ProveedorId = proveedorId, FuenteFinanciamientoId = fuenteId, RubroGastoId = rubroId,
+            ProveedorId = proveedorId, RubroGastoId = rubroId,
             Detalle = "Pago anulado", Fecha = fecha, MontoTotal = 100m, CondicionPago = CondicionPago.Contado,
         };
         gastoConPagoAnulado.Pagos.Add(new PagoGasto { Fecha = fecha, Monto = 100m, Activo = false, FuenteFinanciamientoId = fuenteId });
@@ -109,7 +136,7 @@ public class GastoRepositoryVistasTests : PostgresRepositoryTestBase
 
         var gastoAnulado = new Gasto
         {
-            ProveedorId = proveedorId, FuenteFinanciamientoId = fuenteId, RubroGastoId = rubroId,
+            ProveedorId = proveedorId, RubroGastoId = rubroId,
             Detalle = "Gasto anulado", Fecha = fecha, MontoTotal = 200m, CondicionPago = CondicionPago.Contado,
             Activo = false,
         };
@@ -129,7 +156,7 @@ public class GastoRepositoryVistasTests : PostgresRepositoryTestBase
         var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
         var gasto = new Gasto
         {
-            ProveedorId = proveedorId, FuenteFinanciamientoId = fuenteId, RubroGastoId = rubroId,
+            ProveedorId = proveedorId, RubroGastoId = rubroId,
             Detalle = "Compra", Fecha = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc),
             MontoTotal = 300m, CondicionPago = CondicionPago.Contado,
         };
@@ -148,14 +175,14 @@ public class GastoRepositoryVistasTests : PostgresRepositoryTestBase
         var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
         var activo = new Gasto
         {
-            ProveedorId = proveedorId, FuenteFinanciamientoId = fuenteId, RubroGastoId = rubroId,
+            ProveedorId = proveedorId, RubroGastoId = rubroId,
             Detalle = "Activo", Fecha = DateTime.UtcNow, MontoTotal = 100m,
             CondicionPago = CondicionPago.Credito, FechaVencimiento = DateTime.UtcNow.AddDays(10),
         };
         await _repo.AgregarAsync(activo);
         var anulado = new Gasto
         {
-            ProveedorId = proveedorId, FuenteFinanciamientoId = fuenteId, RubroGastoId = rubroId,
+            ProveedorId = proveedorId, RubroGastoId = rubroId,
             Detalle = "Anulado", Fecha = DateTime.UtcNow, MontoTotal = 50m,
             CondicionPago = CondicionPago.Contado, Activo = false,
         };
@@ -178,19 +205,19 @@ public class GastoRepositoryVistasTests : PostgresRepositoryTestBase
 
         var gasto1 = new Gasto
         {
-            ProveedorId = proveedorId, FuenteFinanciamientoId = fuenteId, RubroGastoId = rubroId,
+            ProveedorId = proveedorId, RubroGastoId = rubroId,
             Detalle = "Gasto 1", Fecha = DateTime.UtcNow, MontoTotal = 1000m,
             CondicionPago = CondicionPago.Contado, LineaPoaId = lineaA,
         };
         var gasto2 = new Gasto
         {
-            ProveedorId = proveedorId, FuenteFinanciamientoId = fuenteId, RubroGastoId = rubroId,
+            ProveedorId = proveedorId, RubroGastoId = rubroId,
             Detalle = "Gasto 2", Fecha = DateTime.UtcNow, MontoTotal = 500m,
             CondicionPago = CondicionPago.Contado, LineaPoaId = lineaA,
         };
         var gastoOtroEjercicio = new Gasto
         {
-            ProveedorId = proveedorId, FuenteFinanciamientoId = fuenteId, RubroGastoId = rubroId,
+            ProveedorId = proveedorId, RubroGastoId = rubroId,
             Detalle = "Gasto ejercicio viejo", Fecha = DateTime.UtcNow, MontoTotal = 999m,
             CondicionPago = CondicionPago.Contado, LineaPoaId = lineaOtroEjercicio,
         };

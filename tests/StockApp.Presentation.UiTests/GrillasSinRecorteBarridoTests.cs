@@ -141,10 +141,10 @@ public class GrillasSinRecorteBarridoTests
                 Id = i, Proveedor = new Proveedor { Id = 1, Nombre = "Distribuidora Municipal del Este SRL", Activo = true },
                 NumeroFactura = "A-0004521", Detalle = "Compra de materiales de construcción para la rambla costanera",
                 Fecha = new DateTime(2026, 3, 15, 0, 0, 0, DateTimeKind.Utc), MontoTotal = 98765432.10m + i,
-                FuenteFinanciamiento = new FuenteFinanciamiento { Id = 1, Nombre = "Rentas Generales Departamentales", Activo = true },
                 RubroGasto = new RubroGasto { Id = 1, Codigo = 10, Nombre = "Materiales de construcción", Activo = true },
                 LineaPoa = new LineaPoa { Id = 1, Nombre = "Obras viales y mantenimiento urbano", Ejercicio = 2026, Activo = true },
                 CondicionPago = CondicionPago.Contado, Activo = true,
+                Pagos = { PagoAutomaticoDePrueba.Con(new FuenteFinanciamiento { Id = 1, Nombre = "Rentas Generales Departamentales", Activo = true }) },
             }, new DateTime(2026, 10, 1)))),
         new("Libro de caja (movimientos)", () => new LibroCajaView(), _ => Muchos<object>(i =>
             new MovimientoCajaDto(new DateOnly(2026, 3, 15), i % 2 == 0 ? "Ingreso" : "Egreso", "Compra de materiales de construcción",

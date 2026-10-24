@@ -45,9 +45,9 @@ public class GastosViewColumnasAnchoTests
         private readonly IReadOnlyList<Gasto> _gastos;
         public GastoServiceFake(IReadOnlyList<Gasto> gastos) => _gastos = gastos;
 
-        public Task<ResultadoGastoDto> AltaAsync(Gasto gasto, IReadOnlyList<int>? movimientoIds = null)
+        public Task<ResultadoGastoDto> AltaAsync(Gasto gasto, PagoContadoDto? pagoContado, IReadOnlyList<int>? movimientoIds = null)
             => throw new NotSupportedException("No usado en este banco de pruebas.");
-        public Task<ResultadoGastoDto> ModificarAsync(Gasto gasto)
+        public Task<ResultadoGastoDto> ModificarAsync(Gasto gasto, PagoContadoDto? pagoContado)
             => throw new NotSupportedException("No usado en este banco de pruebas.");
         public Task AnularAsync(int id, bool confirmarAnulacionDePagoAutomatico = false)
             => throw new NotSupportedException("No usado en este banco de pruebas.");
@@ -103,10 +103,10 @@ public class GastosViewColumnasAnchoTests
         Detalle = "Compra de materiales de construcción para la rambla costanera",
         Fecha = new DateTime(2026, 3, 15, 0, 0, 0, DateTimeKind.Utc),
         MontoTotal = 125_450.75m,
-        FuenteFinanciamiento = new FuenteFinanciamiento { Id = 1, Nombre = "Rentas Generales Departamentales", Activo = true },
         RubroGasto = new RubroGasto { Id = 1, Codigo = 10, Nombre = "Materiales de construcción", Activo = true },
         LineaPoa = new LineaPoa { Id = 1, Nombre = "Obras viales y mantenimiento urbano", Ejercicio = 2026, Activo = true },
         CondicionPago = CondicionPago.Contado,
+        Pagos = { PagoAutomaticoDePrueba.Con(new FuenteFinanciamiento { Id = 1, Nombre = "Rentas Generales Departamentales", Activo = true }) },
         Activo = true,
     };
 

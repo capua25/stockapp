@@ -329,9 +329,9 @@ public class ExportarPdfBotonesGuardianTests
 
     private sealed class GastoServiceFake : IGastoService
     {
-        public Task<ResultadoGastoDto> AltaAsync(Gasto gasto, IReadOnlyList<int>? movimientoIds = null)
+        public Task<ResultadoGastoDto> AltaAsync(Gasto gasto, PagoContadoDto? pagoContado, IReadOnlyList<int>? movimientoIds = null)
             => throw new NotSupportedException("No usado en este banco de pruebas.");
-        public Task<ResultadoGastoDto> ModificarAsync(Gasto gasto)
+        public Task<ResultadoGastoDto> ModificarAsync(Gasto gasto, PagoContadoDto? pagoContado)
             => throw new NotSupportedException("No usado en este banco de pruebas.");
         public Task AnularAsync(int id, bool confirmarAnulacionDePagoAutomatico = false)
             => throw new NotSupportedException("No usado en este banco de pruebas.");

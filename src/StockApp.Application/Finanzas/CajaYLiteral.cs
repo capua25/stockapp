@@ -41,6 +41,29 @@ public static class CajaYLiteral
             throw new ArgumentException(MensajeCajaInexistente);
     }
 
+    public const string MensajeContadoSinCajaOFuente = "Un gasto de contado exige caja y fuente de financiamiento.";
+
+    public const string MensajeCreditoConCajaOFuente =
+        "Un gasto a crédito no lleva caja ni fuente: se eligen en cada pago.";
+
+    public const string MensajeLineaPoaSoloContadoPoa =
+        "La línea POA solo se puede imputar a un gasto de contado de la caja POA.";
+
+    public const string MensajeContadoSinPagoAutomatico =
+        "El gasto de contado no tiene pago automático: no se puede guardar su caja ni su fuente.";
+
+    public const string MensajeCajaYFuenteVanJuntas = "La caja y la fuente de financiamiento van juntas.";
+
+    /// <summary>
+    /// Una línea POA solo se imputa a un gasto de contado de la caja POA. El "solo si cambió" (un gasto viejo de
+    /// caja Local con línea debe poder editar otros campos) lo decide el llamador: esta regla no mira el original.
+    /// </summary>
+    public static void ValidarLineaPoa(int? lineaPoaId, CondicionPago condicion, Caja? caja)
+    {
+        if (lineaPoaId is not null && !(condicion == CondicionPago.Contado && caja == Caja.Poa))
+            throw new ReglaDeNegocioException(MensajeLineaPoaSoloContadoPoa);
+    }
+
     public static string MensajeFuenteDeOtraCaja(string fuente, Caja caja)
         => $"La fuente de financiamiento '{fuente}' no corresponde a la caja {caja.Nombre()}.";
 

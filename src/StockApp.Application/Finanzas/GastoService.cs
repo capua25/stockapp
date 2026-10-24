@@ -47,20 +47,25 @@ public class GastoService : IGastoService
 
     // ── Alta ──────────────────────────────────────────────────────────────────
 
-    public async Task<ResultadoGastoDto> AltaAsync(Gasto gasto, IReadOnlyList<int>? movimientoIds = null)
+    public async Task<ResultadoGastoDto> AltaAsync(
+        Gasto gasto, PagoContadoDto? pagoContado, IReadOnlyList<int>? movimientoIds = null)
     {
         _auth.Verificar(_session, Permisos.RegistrarGastos);
 
         var linea = await ValidarAsync(gasto, esAlta: true, original: null);
+        await ValidarCajaYLiteralAsync(gasto, pagoContado, original: null);
         await ValidarFacturaUnicaAsync(gasto);
-        var advertencia = await AdvertirSobregiroAsync(gasto, linea, excluyendoGastoId: null);
+        var advertencia = await AdvertirSobregiroAsync(
+            gasto, linea, pagoContado?.FuenteFinanciamientoId, excluyendoGastoId: null);
 
-        // Contado ⇒ pago automático por el total en la fecha del gasto (spec §4)
+        // Contado ⇒ pago automático por el total en la fecha del gasto (spec §4), de la caja y el
+        // literal elegidos
         if (gasto.CondicionPago == CondicionPago.Contado)
             gasto.Pagos = new List<PagoGasto>
             {
                 PagoGasto.Automatico(
-                    gasto.Fecha, gasto.MontoTotal, "Pago contado (automático)", Caja.Local, gasto.FuenteFinanciamientoId),
+                    gasto.Fecha, gasto.MontoTotal, "Pago contado (automático)",
+                    pagoContado!.Caja, pagoContado.FuenteFinanciamientoId),
             };
 
         if (movimientoIds is { Count: > 0 })
@@ -75,6 +80,7 @@ public class GastoService : IGastoService
             _session.UsuarioActual!.Id, AccionAuditada.AltaGasto, "Gasto", id,
             $"Proveedor: {gasto.ProveedorId}; Factura: {gasto.NumeroFactura ?? "(sin factura)"}; " +
             $"Monto: {gasto.MontoTotal}; Condición: {gasto.CondicionPago}" +
+            (pagoContado is null ? string.Empty : $"; Caja: {pagoContado.Caja.Nombre()}; Fuente: {pagoContado.FuenteFinanciamientoId}") +
             (movimientoIds is { Count: > 0 } ? $"; Movimientos vinculados: {movimientoIds.Count}" : string.Empty));
 
         return new ResultadoGastoDto(id, advertencia);
@@ -82,7 +88,7 @@ public class GastoService : IGastoService
 
     // ── Modificación ─────────────────────────────────────────────────────────
 
-    public async Task<ResultadoGastoDto> ModificarAsync(Gasto gasto)
+    public async Task<ResultadoGastoDto> ModificarAsync(Gasto gasto, PagoContadoDto? pagoContado)
     {
         _auth.Verificar(_session, Permisos.RegistrarGastos);
 
@@ -96,6 +102,7 @@ public class GastoService : IGastoService
                 "No se puede cambiar la condición de pago de un gasto registrado: anulalo y cargalo de nuevo.");
 
         var linea = await ValidarAsync(gasto, esAlta: false, original);
+        await ValidarCajaYLiteralAsync(gasto, pagoContado, original);
 
         if (gasto.MontoTotal < original.TotalPagado)
             throw new ReglaDeNegocioException(
@@ -111,7 +118,8 @@ public class GastoService : IGastoService
                 || gasto.NumeroOrden != original.NumeroOrden))
             await ValidarFacturaUnicaAsync(gasto);
 
-        var advertencia = await AdvertirSobregiroAsync(gasto, linea, excluyendoGastoId: gasto.Id);
+        var advertencia = await AdvertirSobregiroAsync(
+            gasto, linea, pagoContado?.FuenteFinanciamientoId, excluyendoGastoId: gasto.Id);
 
         var cambios = new List<string>();
         void Comparar<T>(string campo, T viejo, T nuevo)
@@ -127,10 +135,17 @@ public class GastoService : IGastoService
         Comparar("Destino", original.Destino, gasto.Destino);
         Comparar("Fecha", original.Fecha, gasto.Fecha);
         Comparar("Monto", original.MontoTotal, gasto.MontoTotal);
-        Comparar("Fuente", original.FuenteFinanciamientoId, gasto.FuenteFinanciamientoId);
         Comparar("Rubro", original.RubroGastoId, gasto.RubroGastoId);
         Comparar("Línea POA", original.LineaPoaId, gasto.LineaPoaId);
         Comparar("Vencimiento", original.FechaVencimiento, gasto.FechaVencimiento);
+
+        // La caja y el literal de un gasto de contado viven en su pago automático (ya validado arriba).
+        var automatico = pagoContado is null ? null : original.PagoAutomatico;
+        if (automatico is not null)
+        {
+            Comparar("Caja", automatico.Caja.Nombre(), pagoContado!.Caja.Nombre());
+            Comparar("Fuente", automatico.FuenteFinanciamientoId, pagoContado.FuenteFinanciamientoId);
+        }
 
         if (cambios.Count == 0)
             return new ResultadoGastoDto(gasto.Id, null);
@@ -145,10 +160,16 @@ public class GastoService : IGastoService
         original.Destino                = gasto.Destino;
         original.Fecha                  = gasto.Fecha;
         original.MontoTotal             = gasto.MontoTotal;
-        original.FuenteFinanciamientoId = gasto.FuenteFinanciamientoId;
         original.RubroGastoId           = gasto.RubroGastoId;
         original.LineaPoaId             = gasto.LineaPoaId;
         original.FechaVencimiento       = gasto.FechaVencimiento;
+
+        // Solo la FK y la caja, nunca la nav del pago (mismo criterio que arriba).
+        if (automatico is not null)
+        {
+            automatico.Caja                   = pagoContado!.Caja;
+            automatico.FuenteFinanciamientoId = pagoContado.FuenteFinanciamientoId;
+        }
 
         await _repo.ActualizarAsync(original);
 
@@ -373,12 +394,6 @@ public class GastoService : IGastoService
         if (!proveedor.Activo && (esAlta || original!.ProveedorId != gasto.ProveedorId))
             throw new ReglaDeNegocioException($"El proveedor '{proveedor.Nombre}' está dado de baja.");
 
-        var fuente = await _fuentes.ObtenerPorIdAsync(gasto.FuenteFinanciamientoId)
-            ?? throw new EntidadNoEncontradaException(
-                $"Fuente de financiamiento {gasto.FuenteFinanciamientoId} no encontrada.");
-        if (!fuente.Activo && (esAlta || original!.FuenteFinanciamientoId != gasto.FuenteFinanciamientoId))
-            throw new ReglaDeNegocioException($"La fuente de financiamiento '{fuente.Nombre}' está dada de baja.");
-
         var rubro = await _rubros.ObtenerPorIdAsync(gasto.RubroGastoId)
             ?? throw new EntidadNoEncontradaException($"Rubro de gasto {gasto.RubroGastoId} no encontrado.");
         if (!rubro.Activo && (esAlta || original!.RubroGastoId != gasto.RubroGastoId))
@@ -416,22 +431,59 @@ public class GastoService : IGastoService
     }
 
     /// <summary>
-    /// Sobregiro POA (spec §10): la fuente sin asignación en la línea es regla DURA (409);
-    /// superar el presupuesto asignado solo ADVIERTE — la app avisa, el humano decide.
+    /// Caja y literal del gasto de contado (viven en su pago automático) y regla de la línea POA. Crédito no
+    /// lleva caja ni literal; contado los exige. En modificación, el literal solo se re-valida contra la caja
+    /// (y la baja) si cambió la caja o el literal, y la línea solo si cambió ella o el pago: un gasto viejo de
+    /// caja Local con línea POA tiene que poder editar otros campos.
     /// </summary>
-    private async Task<string?> AdvertirSobregiroAsync(Gasto gasto, LineaPoa? linea, int? excluyendoGastoId)
+    private async Task ValidarCajaYLiteralAsync(Gasto gasto, PagoContadoDto? pagoContado, Gasto? original)
     {
-        if (linea is null)
+        var cambioPago = false;
+        if (gasto.CondicionPago == CondicionPago.Credito)
+        {
+            if (pagoContado is not null)
+                throw new ReglaDeNegocioException(CajaYLiteral.MensajeCreditoConCajaOFuente);
+        }
+        else
+        {
+            if (pagoContado is null)
+                throw new ReglaDeNegocioException(CajaYLiteral.MensajeContadoSinCajaOFuente);
+
+            var automatico = original?.PagoAutomatico;
+            if (original is not null && automatico is null)
+                throw new ReglaDeNegocioException(CajaYLiteral.MensajeContadoSinPagoAutomatico);
+
+            cambioPago = automatico is null
+                || automatico.Caja != pagoContado.Caja
+                || automatico.FuenteFinanciamientoId != pagoContado.FuenteFinanciamientoId;
+            await CajaYLiteral.ValidarFuenteAsync(
+                _fuentes, pagoContado.Caja, pagoContado.FuenteFinanciamientoId, cambioPago);
+        }
+
+        if (gasto.LineaPoaId is not null
+            && (original is null || original.LineaPoaId != gasto.LineaPoaId || cambioPago))
+            CajaYLiteral.ValidarLineaPoa(gasto.LineaPoaId, gasto.CondicionPago, pagoContado?.Caja);
+    }
+
+    /// <summary>
+    /// Sobregiro POA (spec §10): el literal sin asignación en la línea es regla DURA (409);
+    /// superar el presupuesto asignado solo ADVIERTE — la app avisa, el humano decide. El literal es el
+    /// del pago de contado: sin línea o sin literal (crédito) no hay nada que medir.
+    /// </summary>
+    private async Task<string?> AdvertirSobregiroAsync(
+        Gasto gasto, LineaPoa? linea, int? fuenteFinanciamientoId, int? excluyendoGastoId)
+    {
+        if (linea is null || fuenteFinanciamientoId is null)
             return null;
 
         var asignacion = linea.Asignaciones
-            .FirstOrDefault(a => a.FuenteFinanciamientoId == gasto.FuenteFinanciamientoId)
+            .FirstOrDefault(a => a.FuenteFinanciamientoId == fuenteFinanciamientoId)
             ?? throw new ReglaDeNegocioException(
                 $"La línea POA '{linea.Nombre}' no tiene asignación presupuestal " +
                 "para la fuente de financiamiento seleccionada.");
 
         var gastado = await _repo.TotalGastadoLineaFuenteAsync(
-            linea.Id, gasto.FuenteFinanciamientoId, excluyendoGastoId);
+            linea.Id, fuenteFinanciamientoId.Value, excluyendoGastoId);
         var restante = asignacion.Monto - gastado - gasto.MontoTotal;
 
         return restante >= 0

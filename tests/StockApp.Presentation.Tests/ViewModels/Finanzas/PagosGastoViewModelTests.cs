@@ -29,7 +29,7 @@ public class PagosGastoViewModelTests
     private static Gasto GastoConPago() => new()
     {
         Id = 5, ProveedorId = 1, Detalle = "Materiales", Fecha = Hoy, MontoTotal = 1000m,
-        FuenteFinanciamientoId = 2, RubroGastoId = 3,
+        RubroGastoId = 3,
         CondicionPago = CondicionPago.Credito, FechaVencimiento = Hoy.AddDays(30),
         Pagos = { new PagoGasto { Id = 21, GastoId = 5, Fecha = Hoy, Monto = 400m } },
     };
@@ -572,14 +572,14 @@ public class PagosGastoViewModelTests
     private static Gasto GastoPoaAlContado() => new()
     {
         Id = 5, ProveedorId = 1, Detalle = "Obra POA", Fecha = Hoy, MontoTotal = 1000m,
-        FuenteFinanciamientoId = 3, RubroGastoId = 3, CondicionPago = CondicionPago.Contado,
+        RubroGastoId = 3, CondicionPago = CondicionPago.Contado,
         Pagos = { PagoGasto.Automatico(Hoy, 1000m, "Pago contado", Caja.Poa, 3) },
     };
 
     private static Gasto GastoLocalAlContado() => new()
     {
         Id = 5, ProveedorId = 1, Detalle = "Compra local", Fecha = Hoy, MontoTotal = 1000m,
-        FuenteFinanciamientoId = 1, RubroGastoId = 3, CondicionPago = CondicionPago.Contado,
+        RubroGastoId = 3, CondicionPago = CondicionPago.Contado,
         Pagos = { PagoGasto.Automatico(Hoy, 1000m, "Pago contado", Caja.Local, 1) },
     };
 

@@ -38,7 +38,6 @@ public class GastosViewModelTests
             Detalle = detalle,
             Fecha = fechaUtc ?? Hoy,
             MontoTotal = 1000m,
-            FuenteFinanciamientoId = 2,
             RubroGastoId = 3,
             CondicionPago = CondicionPago.Credito,
             FechaVencimiento = Hoy.AddDays(30),
@@ -99,6 +98,22 @@ public class GastosViewModelTests
             nav.Object, confirm.Object, guardado.Object, pdfExporter.Object, apertura.Object);
         vm.EsperaDebounce = Timeout.InfiniteTimeSpan;   // un filtro que un test cambia no consulta solo; el que lo mide baja la espera
         return (vm, svc, nav, confirm, guardado, pdfExporter, apertura);
+    }
+
+    [Fact]
+    public void Fila_FuenteNombre_EsLaDelPagoAutomatico()
+    {
+        // El gasto ya no tiene fuente: la fila muestra la del pago automático del contado.
+        var contado = GastoDe(1, "Contado");
+        contado.CondicionPago = CondicionPago.Contado;
+        contado.FechaVencimiento = null;
+        var automatico = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)", Caja.Poa, 3);
+        automatico.FuenteFinanciamiento = new FuenteFinanciamiento { Id = 3, Nombre = "Literal B", Caja = Caja.Poa };
+        contado.Pagos.Add(automatico);
+        var credito = GastoDe(2, "Crédito");   // sin pago automático: no hay fuente que mostrar
+
+        Assert.Equal("Literal B", new GastoFila(contado, Hoy).FuenteNombre);
+        Assert.Equal(string.Empty, new GastoFila(credito, Hoy).FuenteNombre);
     }
 
     [Fact]

@@ -6,6 +6,7 @@ using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Finanzas;
@@ -532,6 +533,40 @@ public class IngresoPorFacturaViewModelTests
         Assert.Single(vm.Renglones);
         Assert.Null(vm.MensajeError);
         Assert.True(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Guardar_Contado_EnviaPagoContadoConLaFuente()
+    {
+        var (vm, svc, _, _, _) = CrearConDialogos();
+        svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()))
+            .ReturnsAsync(new IngresoPorFacturaResultadoDto(1, new List<int> { 1 }, 10m, 0m));
+        await InicializarYCompletarCabeceraAsync(vm);
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 10m);
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.RegistrarAsync(It.Is<IngresoPorFacturaDto>(d =>
+            d.CondicionPago == CondicionPago.Contado && d.PagoContado == new PagoContadoDto(Caja.Local, 1))), Times.Once);
+    }
+
+    [Fact]
+    public async Task Guardar_Credito_EnviaPagoContadoNull_SinElegirFuente()
+    {
+        var (vm, svc, _, _, _) = CrearConDialogos();
+        svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()))
+            .ReturnsAsync(new IngresoPorFacturaResultadoDto(1, new List<int> { 1 }, 10m, 0m));
+        await InicializarYCompletarCabeceraAsync(vm);
+        vm.FuenteSeleccionada = null;
+        vm.EsCredito = true;
+        vm.FechaVencimientoSeleccionada = DateTime.UtcNow.AddDays(30);
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 10m);
+
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.RegistrarAsync(It.Is<IngresoPorFacturaDto>(d =>
+            d.CondicionPago == CondicionPago.Credito && d.PagoContado == null)), Times.Once);
     }
 
     [Fact]

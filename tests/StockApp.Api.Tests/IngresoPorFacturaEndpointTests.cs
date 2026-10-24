@@ -51,7 +51,9 @@ public class IngresoPorFacturaEndpointTests : ApiTestBase
         CondicionPago condicion = CondicionPago.Contado, DateTime? fechaVencimiento = null) => new(
         ProveedorId: proveedorId, NumeroFactura: factura, NumeroOrden: null,
         Fecha: DateTime.UtcNow, Detalle: "Compra vía API", Destino: null, MontoTotal: 100m,
-        FuenteFinanciamientoId: fuenteId, RubroGastoId: rubroId, LineaPoaId: null,
+        Caja: condicion == CondicionPago.Contado ? Caja.Local : null,
+        FuenteFinanciamientoId: condicion == CondicionPago.Contado ? fuenteId : null,
+        RubroGastoId: rubroId, LineaPoaId: null,
         CondicionPago: condicion, FechaVencimiento: fechaVencimiento,
         Lineas: new List<RenglonFacturaRequest>
         {
@@ -108,6 +110,48 @@ public class IngresoPorFacturaEndpointTests : ApiTestBase
         await using var verificacion = Factory.CrearContexto();
         var producto = await verificacion.Productos.SingleAsync(p => p.Id == productoId);
         Assert.Equal(10m, producto.StockActual);   // 5 + 5
+    }
+
+    [Fact]
+    public async Task Post_ContadoPoaConLiteralB_Devuelve201()
+    {
+        var (proveedorId, fuenteId, rubroId, productoId) = await SeedMaestrosAsync();
+        int poaId;
+        await using (var ctx = Factory.CrearContexto())
+        {
+            var poa = new FuenteFinanciamiento { Nombre = $"Literal B {Guid.NewGuid():N}", Caja = Caja.Poa };
+            ctx.Add(poa);
+            await ctx.SaveChangesAsync();
+            poaId = poa.Id;
+        }
+        var client = ClienteAutenticado(TokenOperador());
+
+        var response = await client.PostAsJsonAsync("/movimientos/ingreso-factura",
+            RequestValido(proveedorId, fuenteId, rubroId, productoId, factura: "IPF-POA-01")
+                with { Caja = Caja.Poa, FuenteFinanciamientoId = poaId });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var resultado = await response.Content.ReadFromJsonAsync<IngresoPorFacturaResultadoDto>();
+        await using var verificacion = Factory.CrearContexto();
+        var pago = await verificacion.PagosGasto.SingleAsync(p => p.GastoId == resultado!.GastoId);
+        Assert.True(pago.EsAutomatico);
+        Assert.Equal(Caja.Poa, pago.Caja);
+        Assert.Equal(poaId, pago.FuenteFinanciamientoId);
+    }
+
+    [Fact]
+    public async Task Post_ContadoSinCajaNiFuente_Devuelve400()
+    {
+        var (proveedorId, fuenteId, rubroId, productoId) = await SeedMaestrosAsync();
+        var client = ClienteAutenticado(TokenOperador());
+
+        var response = await client.PostAsJsonAsync("/movimientos/ingreso-factura",
+            RequestValido(proveedorId, fuenteId, rubroId, productoId, factura: "IPF-SINCAJA-01")
+                with { Caja = null, FuenteFinanciamientoId = null });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var verificacion = Factory.CrearContexto();
+        Assert.False(await verificacion.Gastos.AnyAsync(g => g.NumeroFactura == "IPF-SINCAJA-01"));
     }
 
     [Fact]

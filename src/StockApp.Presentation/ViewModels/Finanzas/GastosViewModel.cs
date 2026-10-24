@@ -52,7 +52,7 @@ public sealed class GastoFila
     public string ProveedorNombre => Gasto.Proveedor?.Nombre ?? string.Empty;
     public string NumeroFactura => Gasto.NumeroFactura ?? string.Empty;
     public string Detalle => Gasto.Detalle;
-    public string FuenteNombre => Gasto.FuenteFinanciamiento?.Nombre ?? string.Empty;
+    public string FuenteNombre => Gasto.PagoAutomatico?.FuenteFinanciamiento?.Nombre ?? string.Empty;
     public string RubroNombre => Gasto.RubroGasto?.Nombre ?? string.Empty;
     public string LineaPoaNombre => Gasto.LineaPoa?.Nombre ?? string.Empty;
     public decimal MontoTotal => Gasto.MontoTotal;

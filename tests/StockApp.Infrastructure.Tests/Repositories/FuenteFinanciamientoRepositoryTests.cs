@@ -114,7 +114,6 @@ public class FuenteFinanciamientoRepositoryTests : PostgresRepositoryTestBase
         {
             ProveedorId = proveedorId, Detalle = "Gasto de prueba", Fecha = DateTime.UtcNow, MontoTotal = 1000m,
             RubroGastoId = rubroId, CondicionPago = CondicionPago.Credito, FechaVencimiento = DateTime.UtcNow.AddDays(30),
-            FuenteFinanciamientoId = fuenteId,
         };
         gasto.Pagos.Add(new PagoGasto
         {

@@ -5,7 +5,7 @@ namespace StockApp.Application.Interfaces;
 
 public interface IGastoRepository
 {
-    /// <summary>Incluye Proveedor, Fuente, Rubro, LineaPoa y TODOS los pagos (activos y anulados).</summary>
+    /// <summary>Incluye Proveedor, Rubro, LineaPoa y TODOS los pagos (activos y anulados) con su fuente.</summary>
     Task<Gasto?> ObtenerPorIdAsync(int id);
 
     /// <summary>Un pago por id, activo o anulado, sin includes. Null si no existe.</summary>
@@ -59,15 +59,15 @@ public interface IGastoRepository
 
     /// <summary>
     /// Pagos ACTIVOS de gastos ACTIVOS con Fecha (del PAGO, no de la factura) en
-    /// [desdeUtc, hastaUtc]. Include Gasto→Proveedor/RubroGasto/FuenteFinanciamiento
-    /// (libro caja: cada fila de egreso necesita esos nombres). Ordena por Fecha, luego Id.
+    /// [desdeUtc, hastaUtc]. Include Gasto→Proveedor/RubroGasto y la FuenteFinanciamiento del
+    /// PAGO (libro caja: cada fila de egreso necesita esos nombres). Ordena por Fecha, luego Id.
     /// </summary>
     Task<IReadOnlyList<PagoGasto>> ListarPagosActivosPorRangoAsync(DateTime desdeUtc, DateTime hastaUtc);
 
     /// <summary>Suma de Monto de los pagos ACTIVOS de gastos ACTIVOS con Fecha &lt; fechaUtc (saldo inicial).</summary>
     Task<decimal> TotalPagosActivosAntesDeAsync(DateTime fechaUtc);
 
-    /// <summary>Gastos ACTIVOS con Includes (Proveedor/Fuente/Rubro/LineaPoa/Pagos) para el calendario de pagos.</summary>
+    /// <summary>Gastos ACTIVOS con Includes (Proveedor/Rubro/LineaPoa/Pagos con su fuente) para el calendario de pagos.</summary>
     Task<IReadOnlyList<Gasto>> ListarActivosConSaldoAsync();
 
     /// <summary>

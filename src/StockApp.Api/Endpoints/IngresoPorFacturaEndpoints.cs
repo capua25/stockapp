@@ -17,7 +17,7 @@ public record RenglonFacturaRequest(
 public record IngresoPorFacturaRequest(
     int ProveedorId, string? NumeroFactura, string? NumeroOrden,
     DateTime Fecha, string Detalle, string? Destino, decimal MontoTotal,
-    int FuenteFinanciamientoId, int RubroGastoId, int? LineaPoaId,
+    Caja? Caja, int? FuenteFinanciamientoId, int RubroGastoId, int? LineaPoaId,
     CondicionPago CondicionPago, DateTime? FechaVencimiento,
     List<RenglonFacturaRequest> Lineas);
 
@@ -32,7 +32,8 @@ public static class IngresoPorFacturaEndpoints
             var dto = new IngresoPorFacturaDto(
                 request.ProveedorId, request.NumeroFactura, request.NumeroOrden,
                 request.Fecha, request.Detalle, request.Destino, request.MontoTotal,
-                request.FuenteFinanciamientoId, request.RubroGastoId, request.LineaPoaId,
+                GastosEndpoints.PagoContadoDe(request.CondicionPago, request.Caja, request.FuenteFinanciamientoId),
+                request.RubroGastoId, request.LineaPoaId,
                 request.CondicionPago, request.FechaVencimiento,
                 request.Lineas.Select(l => new RenglonFacturaDto(
                     l.ProductoId,

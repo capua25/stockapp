@@ -18,7 +18,6 @@ public class GastoRepository : IGastoRepository
     private IQueryable<Gasto> ConIncludes() =>
         _ctx.Gastos
             .Include(g => g.Proveedor)
-            .Include(g => g.FuenteFinanciamiento)
             .Include(g => g.RubroGasto)
             .Include(g => g.LineaPoa)
             .Include(g => g.Pagos).ThenInclude(p => p.FuenteFinanciamiento);
@@ -63,7 +62,7 @@ public class GastoRepository : IGastoRepository
         if (filtro.ProveedorId is not null)
             query = query.Where(g => g.ProveedorId == filtro.ProveedorId);
         if (filtro.FuenteFinanciamientoId is not null)
-            query = query.Where(g => g.FuenteFinanciamientoId == filtro.FuenteFinanciamientoId);
+            query = query.Where(g => g.Pagos.Any(p => p.FuenteFinanciamientoId == filtro.FuenteFinanciamientoId));
         if (filtro.RubroGastoId is not null)
             query = query.Where(g => g.RubroGastoId == filtro.RubroGastoId);
         if (filtro.LineaPoaId is not null)
@@ -185,7 +184,7 @@ public class GastoRepository : IGastoRepository
         => await _ctx.Gastos
             .Where(g => g.Activo
                         && g.LineaPoaId == lineaPoaId
-                        && g.FuenteFinanciamientoId == fuenteFinanciamientoId
+                        && g.Pagos.Any(p => p.EsAutomatico && p.FuenteFinanciamientoId == fuenteFinanciamientoId)
                         && (excluyendoGastoId == null || g.Id != excluyendoGastoId))
             .SumAsync(g => (decimal?)g.MontoTotal) ?? 0m;
 
@@ -214,7 +213,7 @@ public class GastoRepository : IGastoRepository
         => await _ctx.PagosGasto
             .Include(p => p.Gasto!).ThenInclude(g => g!.Proveedor)
             .Include(p => p.Gasto!).ThenInclude(g => g!.RubroGasto)
-            .Include(p => p.Gasto!).ThenInclude(g => g!.FuenteFinanciamiento)
+            .Include(p => p.FuenteFinanciamiento)
             .Where(p => p.Activo && p.Gasto!.Activo && p.Fecha >= desdeUtc && p.Fecha <= hastaUtc)
             .OrderBy(p => p.Fecha)
             .ThenBy(p => p.Id)

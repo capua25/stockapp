@@ -111,6 +111,13 @@ public class ColumnasPdfContraDtosRealesTests
             ReporteTareasViewModel.ColumnasPdf,
             new FilaReporteTareas("Centro", 1, 0, 2, 0, 3));
 
+    private static PagoGasto PagoAutomaticoDeRentasGenerales()
+    {
+        var pago = PagoGasto.Automatico(FechaFija, 1234567.89m, "Pago contado (automático)", Caja.Local, 2);
+        pago.FuenteFinanciamiento = new FuenteFinanciamiento { Id = 2, Nombre = "Rentas generales" };
+        return pago;
+    }
+
     [Fact]
     public void Gastos_ColumnasPdf_ResuelvenContraElDtoRealYGeneranPdf() =>
         VerificarPantalla(
@@ -125,14 +132,13 @@ public class ColumnasPdfContraDtosRealesTests
                     Detalle = "Compra de materiales para el alumbrado público",
                     Fecha = FechaFija,
                     MontoTotal = 1234567.89m,
-                    FuenteFinanciamientoId = 2,
-                    FuenteFinanciamiento = new FuenteFinanciamiento { Id = 2, Nombre = "Rentas generales" },
                     RubroGastoId = 3,
                     RubroGasto = new RubroGasto { Id = 3, Nombre = "Materiales de construcción" },
                     LineaPoaId = 4,
                     LineaPoa = new LineaPoa { Id = 4, Nombre = "Alumbrado público" },
-                    CondicionPago = CondicionPago.Credito,
-                    FechaVencimiento = FechaFija.AddDays(30),
+                    // La fuente vive en el pago automático del contado, no en el gasto.
+                    CondicionPago = CondicionPago.Contado,
+                    Pagos = { PagoAutomaticoDeRentasGenerales() },
                 },
                 FechaFija));
 

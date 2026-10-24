@@ -35,7 +35,7 @@ internal sealed class GastosFake : IGastoService
         return Task.CompletedTask;
     }
 
-    public Task<ResultadoGastoDto> AltaAsync(Gasto gasto, IReadOnlyList<int>? movimientoIds = null)
+    public Task<ResultadoGastoDto> AltaAsync(Gasto gasto, PagoContadoDto? pagoContado, IReadOnlyList<int>? movimientoIds = null)
     {
         if (FallaAlGuardar is not null)
             return Task.FromException<ResultadoGastoDto>(FallaAlGuardar);
@@ -43,7 +43,7 @@ internal sealed class GastosFake : IGastoService
         return Task.FromResult(new ResultadoGastoDto(99, null));
     }
 
-    public Task<ResultadoGastoDto> ModificarAsync(Gasto gasto)
+    public Task<ResultadoGastoDto> ModificarAsync(Gasto gasto, PagoContadoDto? pagoContado)
     {
         if (FallaAlGuardar is not null)
             return Task.FromException<ResultadoGastoDto>(FallaAlGuardar);
@@ -108,8 +108,8 @@ internal sealed class PagosFake : IGastoService
 
     public Task<IReadOnlyList<Gasto>> ListarAsync(GastoFiltro filtro) => throw new NotSupportedException();
     public Task AnularAsync(int id, bool confirmarAnulacionDePagoAutomatico = false) => throw new NotSupportedException();
-    public Task<ResultadoGastoDto> AltaAsync(Gasto gasto, IReadOnlyList<int>? movimientoIds = null) => throw new NotSupportedException();
-    public Task<ResultadoGastoDto> ModificarAsync(Gasto gasto) => throw new NotSupportedException();
+    public Task<ResultadoGastoDto> AltaAsync(Gasto gasto, PagoContadoDto? pagoContado, IReadOnlyList<int>? movimientoIds = null) => throw new NotSupportedException();
+    public Task<ResultadoGastoDto> ModificarAsync(Gasto gasto, PagoContadoDto? pagoContado) => throw new NotSupportedException();
     public Task<Gasto?> ObtenerPorProveedorYFacturaAsync(int proveedorId, string numeroFactura, string? numeroOrden) => throw new NotSupportedException();
     public Task AsociarMovimientosAsync(int gastoId, IReadOnlyList<int> movimientoIds) => throw new NotSupportedException();
 }

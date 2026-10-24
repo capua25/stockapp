@@ -1,4 +1,5 @@
 using StockApp.Application.Authorization;
+using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Reportes;
 using StockApp.Domain.Entities;
@@ -92,10 +93,19 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
         if (!proveedor.Activo)
             throw new ReglaDeNegocioException($"El proveedor '{proveedor.Nombre}' está dado de baja.");
 
-        var fuente = await _fuentes.ObtenerPorIdAsync(dto.FuenteFinanciamientoId)
-            ?? throw new EntidadNoEncontradaException($"Fuente de financiamiento {dto.FuenteFinanciamientoId} no encontrada.");
-        if (!fuente.Activo)
-            throw new ReglaDeNegocioException($"La fuente de financiamiento '{fuente.Nombre}' está dada de baja.");
+        // Contado exige caja y literal (el pago automático los lleva); crédito no los lleva.
+        if (dto.CondicionPago == CondicionPago.Credito)
+        {
+            if (dto.PagoContado is not null)
+                throw new ReglaDeNegocioException(CajaYLiteral.MensajeCreditoConCajaOFuente);
+        }
+        else
+        {
+            if (dto.PagoContado is null)
+                throw new ReglaDeNegocioException(CajaYLiteral.MensajeContadoSinCajaOFuente);
+            await CajaYLiteral.ValidarFuenteAsync(
+                _fuentes, dto.PagoContado.Caja, dto.PagoContado.FuenteFinanciamientoId, cambio: true);
+        }
 
         var rubro = await _rubros.ObtenerPorIdAsync(dto.RubroGastoId)
             ?? throw new EntidadNoEncontradaException($"Rubro de gasto {dto.RubroGastoId} no encontrado.");
@@ -108,6 +118,7 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
                 ?? throw new EntidadNoEncontradaException($"Línea POA {dto.LineaPoaId} no encontrada.");
             if (!linea.Activo)
                 throw new ReglaDeNegocioException($"La línea POA '{linea.Nombre}' está dada de baja.");
+            CajaYLiteral.ValidarLineaPoa(dto.LineaPoaId, dto.CondicionPago, dto.PagoContado?.Caja);
         }
 
         var renglonesArgs = new List<RenglonIngresoFacturaArgs>(dto.Renglones.Count);
@@ -171,7 +182,6 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
             Destino                = dto.Destino,
             Fecha                  = dto.Fecha,
             MontoTotal             = dto.MontoTotal,
-            FuenteFinanciamientoId = dto.FuenteFinanciamientoId,
             RubroGastoId           = dto.RubroGastoId,
             LineaPoaId             = dto.LineaPoaId,
             CondicionPago          = dto.CondicionPago,
@@ -185,12 +195,16 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
             gasto.Pagos = new List<PagoGasto>
             {
                 PagoGasto.Automatico(
-                    gasto.Fecha, gasto.MontoTotal, "Pago contado (automático)", Caja.Local, gasto.FuenteFinanciamientoId),
+                    gasto.Fecha, gasto.MontoTotal, "Pago contado (automático)",
+                    dto.PagoContado!.Caja, dto.PagoContado.FuenteFinanciamientoId),
             };
 
         var sumaRenglones = dto.Renglones.Sum(r => r.Cantidad * r.PrecioUnitario);
         var detalle = $"Proveedor={dto.ProveedorId}; Factura={gasto.NumeroFactura ?? "(sin factura)"}; " +
-                      $"Renglones={dto.Renglones.Count}; SumaRenglones={sumaRenglones}; MontoTotal={dto.MontoTotal}";
+                      $"Renglones={dto.Renglones.Count}; SumaRenglones={sumaRenglones}; MontoTotal={dto.MontoTotal}" +
+                      (dto.PagoContado is null
+                          ? string.Empty
+                          : $"; Caja={dto.PagoContado.Caja.Nombre()}; Fuente={dto.PagoContado.FuenteFinanciamientoId}");
 
         var args = new IngresoPorFacturaArgs(
             Gasto:            gasto,

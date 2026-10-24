@@ -45,12 +45,20 @@ public class GastosViewV2Tests
         var gasto = new Gasto
         {
             Id = id, ProveedorId = 1, Proveedor = Barraca, NumeroFactura = $"A-000{id}", Detalle = detalle,
-            Fecha = Dia(2026, 10, 6), MontoTotal = monto, FuenteFinanciamientoId = 1, FuenteFinanciamiento = Figm,
+            Fecha = Dia(2026, 10, 6), MontoTotal = monto,
             RubroGastoId = 1, RubroGasto = Materiales, LineaPoaId = 1, LineaPoa = Bacheo,
             CondicionPago = vence is null ? CondicionPago.Contado : CondicionPago.Credito, FechaVencimiento = vence, Activo = activo,
         };
         if (pagado > 0m)
-            gasto.Pagos.Add(new PagoGasto { Id = id * 10, GastoId = id, Fecha = gasto.Fecha, Monto = pagado, Activo = true });
+        {
+            // Contado: el pago es el automático (con la fuente); crédito: un pago manual.
+            var pago = vence is null
+                ? PagoAutomaticoDePrueba.Con(Figm, fecha: gasto.Fecha, monto: pagado)
+                : new PagoGasto { Fecha = gasto.Fecha, Monto = pagado, FuenteFinanciamientoId = Figm.Id, FuenteFinanciamiento = Figm };
+            pago.Id = id * 10;
+            pago.GastoId = id;
+            gasto.Pagos.Add(pago);
+        }
         return gasto;
     }
 

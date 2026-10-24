@@ -199,9 +199,13 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     partial void OnRubroSeleccionadoChanged(RubroGasto? value) => AlCambiarCampo(nameof(RubroSeleccionado));
     partial void OnFechaVencimientoSeleccionadaChanged(DateTime? value) => AlCambiarCampo(nameof(FechaVencimientoSeleccionada));
 
-    /// <summary>El vencimiento solo es regla a crédito: tildar o destildar cambia su error sin tocar el campo.</summary>
-    partial void OnEsCreditoChanged(bool value) =>
+    /// <summary>El vencimiento solo es regla a crédito y la fuente solo a contado: tildar o destildar cambia sus errores
+    /// sin tocar el campo.</summary>
+    partial void OnEsCreditoChanged(bool value)
+    {
         ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(nameof(FechaVencimientoSeleccionada)));
+        ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(nameof(FuenteSeleccionada)));
+    }
 
     /// <summary>
     /// Reglas del cliente, las de antes: proveedor, fuente y rubro elegidos; detalle y monto no vacíos; monto numérico en
@@ -214,7 +218,7 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
         nameof(FechaSeleccionada) => FechaSeleccionada is null ? MensajeFechaObligatoria : null,
         nameof(Detalle) => string.IsNullOrWhiteSpace(Detalle) ? MensajeDetalleObligatorio : null,
         nameof(MontoTexto) => ReglaDelMonto(),
-        nameof(FuenteSeleccionada) => FuenteSeleccionada is null ? MensajeFuenteObligatoria : null,
+        nameof(FuenteSeleccionada) => !EsCredito && FuenteSeleccionada is null ? MensajeFuenteObligatoria : null,
         nameof(RubroSeleccionado) => RubroSeleccionado is null ? MensajeRubroObligatorio : null,
         nameof(FechaVencimientoSeleccionada) => EsCredito && FechaVencimientoSeleccionada is null ? MensajeVencimientoObligatorio : null,
         _ => null,
@@ -327,9 +331,12 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
                 ProveedorSeleccionado =
                     ProveedoresDisponibles.FirstOrDefault(p => p.Id == _gastoParaEditar.ProveedorId)
                     ?? Agregar(ProveedoresDisponibles, _gastoParaEditar.Proveedor);
-                FuenteSeleccionada =
-                    FuentesDisponibles.FirstOrDefault(f => f.Id == _gastoParaEditar.FuenteFinanciamientoId)
-                    ?? Agregar(FuentesDisponibles, _gastoParaEditar.FuenteFinanciamiento);
+                // La fuente de un gasto de contado es la de su pago automático; un crédito no tiene.
+                var automatico = _gastoParaEditar.PagoAutomatico;
+                if (automatico is not null)
+                    FuenteSeleccionada =
+                        FuentesDisponibles.FirstOrDefault(f => f.Id == automatico.FuenteFinanciamientoId)
+                        ?? Agregar(FuentesDisponibles, automatico.FuenteFinanciamiento);
                 RubroSeleccionado =
                     RubrosDisponibles.FirstOrDefault(r => r.Id == _gastoParaEditar.RubroGastoId)
                     ?? Agregar(RubrosDisponibles, _gastoParaEditar.RubroGasto);
@@ -376,7 +383,6 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
             Destino = string.IsNullOrWhiteSpace(Destino) ? null : Destino,
             Fecha = DateTime.SpecifyKind(FechaSeleccionada!.Value.Date, DateTimeKind.Utc),
             MontoTotal = monto,
-            FuenteFinanciamientoId = FuenteSeleccionada!.Id,
             RubroGastoId = RubroSeleccionado!.Id,
             LineaPoaId = LineaPoaSeleccionada?.Id,
             CondicionPago = EsCredito ? CondicionPago.Credito : CondicionPago.Contado,
@@ -385,11 +391,17 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
                 : null,
         };
 
+        // Caja y literal del pago de contado: solo a contado (un crédito elige la suya en cada pago). Hasta que el
+        // formulario tenga selector de caja, un alta es de la caja Local y una edición conserva la de su pago.
+        var pagoContado = EsCredito
+            ? null
+            : new PagoContadoDto(_gastoParaEditar?.PagoAutomatico?.Caja ?? Caja.Local, FuenteSeleccionada!.Id);
+
         try
         {
             var resultado = EsEdicion
-                ? await _service.ModificarAsync(gasto)
-                : await _service.AltaAsync(gasto,
+                ? await _service.ModificarAsync(gasto, pagoContado)
+                : await _service.AltaAsync(gasto, pagoContado,
                     _movimientoVinculado is null ? null : new[] { _movimientoVinculado.Value });
 
             if (resultado.AdvertenciaSobregiro is not null)

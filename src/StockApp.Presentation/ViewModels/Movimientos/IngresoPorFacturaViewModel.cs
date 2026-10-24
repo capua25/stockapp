@@ -81,7 +81,9 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
     private RubroGasto? _rubroSeleccionado;
 
     [ObservableProperty] private LineaPoa? _lineaPoaSeleccionada;
-    [ObservableProperty] private bool _esCredito;
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
+    private bool _esCredito;
     [ObservableProperty] private DateTime? _fechaVencimientoSeleccionada;
     [ObservableProperty] private string? _mensajeError;
 
@@ -354,7 +356,7 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
         => !GuardadoExitoso
            && Renglones.Count > 0
            && ProveedorSeleccionado is not null
-           && FuenteSeleccionada is not null
+           && (EsCredito || FuenteSeleccionada is not null)
            && RubroSeleccionado is not null
            && !string.IsNullOrWhiteSpace(Detalle)
            && !string.IsNullOrWhiteSpace(MontoTotalTexto);
@@ -406,7 +408,10 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
             ProveedorSeleccionado!.Id, NumeroFactura, NumeroOrden,
             FechaSeleccionada is null ? DateTime.UtcNow : DateTime.SpecifyKind(FechaSeleccionada.Value.Date, DateTimeKind.Utc),
             Detalle, Destino, monto,
-            FuenteSeleccionada!.Id, RubroSeleccionado!.Id, LineaPoaSeleccionada?.Id,
+            // Caja y literal del pago de contado; un crédito no los lleva. Hasta que el formulario tenga
+            // selector de caja, el contado es de la caja Local.
+            EsCredito ? null : new PagoContadoDto(Caja.Local, FuenteSeleccionada!.Id),
+            RubroSeleccionado!.Id, LineaPoaSeleccionada?.Id,
             EsCredito ? CondicionPago.Credito : CondicionPago.Contado,
             EsCredito && FechaVencimientoSeleccionada is not null
                 ? DateTime.SpecifyKind(FechaVencimientoSeleccionada.Value.Date, DateTimeKind.Utc)

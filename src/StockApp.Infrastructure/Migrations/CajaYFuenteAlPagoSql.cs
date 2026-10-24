@@ -23,4 +23,13 @@ public static class CajaYFuenteAlPagoSql
     public const string CopiarFuenteDelGastoALosPagos =
         "UPDATE \"PagosGasto\" p SET \"FuenteFinanciamientoId\" = g.\"FuenteFinanciamientoId\" " +
         "FROM \"Gastos\" g WHERE g.\"Id\" = p.\"GastoId\";";
+
+    /// <summary>
+    /// Down de QuitaFuenteDelGasto: el gasto recupera la fuente de su pago automático o, si no tiene, la de su
+    /// primer pago (el de Id menor). Un gasto sin pagos queda NULL.
+    /// </summary>
+    public const string RepoblarFuenteDelGastoDesdeLosPagos =
+        "UPDATE \"Gastos\" g SET \"FuenteFinanciamientoId\" = (" +
+        "SELECT p.\"FuenteFinanciamientoId\" FROM \"PagosGasto\" p WHERE p.\"GastoId\" = g.\"Id\" " +
+        "ORDER BY p.\"EsAutomatico\" DESC, p.\"Id\" LIMIT 1);";
 }

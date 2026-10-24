@@ -62,14 +62,29 @@ public static class DatosGastos
         {
             Id = id, ProveedorId = proveedor, Proveedor = Proveedores[proveedor - 1], NumeroFactura = factura, Detalle = detalle,
             Fecha = Dia(2026, mes, dia), MontoTotal = monto,
-            FuenteFinanciamientoId = fuente, FuenteFinanciamiento = Fuentes[fuente - 1],
             RubroGastoId = rubro, RubroGasto = Rubros[rubro - 1],
             LineaPoaId = linea, LineaPoa = linea is int l ? Lineas[l - 1] : null,
             CondicionPago = vence is null ? CondicionPago.Contado : CondicionPago.Credito, FechaVencimiento = vence,
             Activo = activo, TieneMovimientosDeStock = conStock,
         };
-        if (pagado > 0m)
-            gasto.Pagos.Add(new PagoGasto { Id = id * 10, GastoId = id, Fecha = gasto.Fecha, Monto = pagado, Activo = true });
+        // La fuente vive en el pago. El contado siempre tiene su pago automático (con la fuente del gasto de los
+        // mockups; el del gasto anulado está dado de baja); un crédito paga con pagos manuales.
+        PagoGasto? pago = null;
+        if (vence is null)
+        {
+            pago = PagoGasto.Automatico(
+                gasto.Fecha, pagado > 0m ? pagado : monto, "Pago contado (automático)", Caja.Local, fuente);
+            pago.Activo = pagado > 0m;
+        }
+        else if (pagado > 0m)
+            pago = new PagoGasto { Fecha = gasto.Fecha, Monto = pagado, FuenteFinanciamientoId = fuente };
+        if (pago is not null)
+        {
+            pago.Id = id * 10;
+            pago.GastoId = id;
+            pago.FuenteFinanciamiento = Fuentes[fuente - 1];
+            gasto.Pagos.Add(pago);
+        }
         return gasto;
     }
 
@@ -257,7 +272,7 @@ public static class DatosGastos
         var confirmacion = new Mock<IConfirmacionService>();
         confirmacion.Setup(c => c.PreguntarAsync(It.IsAny<string>())).Callback<string>(m => mensaje = m).ReturnsAsync(false);
         var servicio = new Mock<IGastoService>();
-        servicio.Setup(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<IReadOnlyList<int>?>()))
+        servicio.Setup(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<PagoContadoDto?>(), It.IsAny<IReadOnlyList<int>?>()))
             .ThrowsAsync(new ReglaDeNegocioException("Ya existe la factura 'A-0004521' para ese proveedor."));
         servicio.Setup(s => s.ObtenerPorProveedorYFacturaAsync(1, "A-0004521", null)).ReturnsAsync(Gastos[3]);
         var vm = Formulario(servicio: servicio.Object, confirmacion: confirmacion.Object);

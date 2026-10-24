@@ -30,9 +30,9 @@ public class GastoFormViewModelTests
                Func<Task<IReadOnlyList<Proveedor>>>? proveedoresActivos = null)
     {
         var svc = new Mock<IGastoService>();
-        svc.Setup(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<IReadOnlyList<int>?>()))
+        svc.Setup(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<PagoContadoDto?>(), It.IsAny<IReadOnlyList<int>?>()))
             .ReturnsAsync(new ResultadoGastoDto(7, null));
-        svc.Setup(s => s.ModificarAsync(It.IsAny<Gasto>()))
+        svc.Setup(s => s.ModificarAsync(It.IsAny<Gasto>(), It.IsAny<PagoContadoDto?>()))
             .ReturnsAsync(new ResultadoGastoDto(7, null));
 
         var proveedores = new Mock<ICategoriaProveedorService>();
@@ -208,7 +208,7 @@ public class GastoFormViewModelTests
 
         svc.Verify(s => s.AltaAsync(
             It.Is<Gasto>(g => g.MontoTotal == 1500.50m && g.CondicionPago == CondicionPago.Contado),
-            null), Times.Once);
+            new PagoContadoDto(Caja.Local, 2), null), Times.Once);
     }
 
     [Fact]
@@ -222,7 +222,7 @@ public class GastoFormViewModelTests
 
         Assert.NotNull(vm.ErrorDe(nameof(GastoFormViewModel.MontoTexto)));
         Assert.Null(vm.MensajeError);
-        svc.Verify(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<IReadOnlyList<int>?>()), Times.Never);
+        svc.Verify(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<PagoContadoDto?>(), It.IsAny<IReadOnlyList<int>?>()), Times.Never);
     }
 
     [Fact]
@@ -236,7 +236,70 @@ public class GastoFormViewModelTests
         await vm.GuardarCommand.ExecuteAsync(null);
 
         svc.Verify(s => s.AltaAsync(It.Is<Gasto>(g =>
-            g.CondicionPago == CondicionPago.Credito && g.FechaVencimiento != null), null), Times.Once);
+            g.CondicionPago == CondicionPago.Credito && g.FechaVencimiento != null), null, null), Times.Once);
+    }
+
+    [Fact]
+    public async Task Guardar_Contado_EnviaPagoContadoConLaFuente()
+    {
+        var (vm, svc, _, _) = Crear();
+        await CompletarFormularioValidoAsync(vm);
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.AltaAsync(It.IsAny<Gasto>(), new PagoContadoDto(Caja.Local, 2), null), Times.Once);
+    }
+
+    [Fact]
+    public async Task Guardar_Credito_EnviaPagoContadoNull_SinElegirFuente()
+    {
+        var (vm, svc, _, _) = Crear();
+        await vm.InicializarAsync();
+        vm.ProveedorSeleccionado = vm.ProveedoresDisponibles[0];
+        vm.RubroSeleccionado = vm.RubrosDisponibles[0];
+        vm.Detalle = "Materiales a crédito";
+        vm.MontoTexto = "1.500,50";
+        vm.EsCredito = true;
+        vm.FechaVencimientoSeleccionada = DateTime.UtcNow.AddDays(30);
+
+        Assert.Null(vm.FuenteSeleccionada);
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.AltaAsync(
+            It.Is<Gasto>(g => g.CondicionPago == CondicionPago.Credito), null, null), Times.Once);
+    }
+
+    [Fact]
+    public async Task Contado_SinFuente_NoSePuedeGuardar_YAlPasarACreditoSi()
+    {
+        var (vm, _, _, _) = Crear();
+        await vm.InicializarAsync();
+        vm.ProveedorSeleccionado = vm.ProveedoresDisponibles[0];
+        vm.RubroSeleccionado = vm.RubrosDisponibles[0];
+        vm.Detalle = "Materiales";
+        vm.MontoTexto = "100";
+
+        Assert.False(vm.GuardarCommand.CanExecute(null));   // contado sin fuente elegida
+
+        vm.EsCredito = true;
+        vm.FechaVencimientoSeleccionada = DateTime.UtcNow.AddDays(30);
+
+        Assert.True(vm.GuardarCommand.CanExecute(null));    // crédito no lleva fuente
+    }
+
+    [Fact]
+    public async Task Editar_Contado_PrecargaLaFuenteDelPagoAutomatico_YConservaSuCaja()
+    {
+        var (vm, svc, _, _) = Crear();
+        vm.CargarParaEditar(GastoExistente(caja: Caja.Poa));
+        await vm.InicializarAsync();
+
+        Assert.Equal(2, vm.FuenteSeleccionada?.Id);
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.ModificarAsync(It.Is<Gasto>(g => g.Id == 9), new PagoContadoDto(Caja.Poa, 2)), Times.Once);
     }
 
     [Fact]
@@ -258,14 +321,14 @@ public class GastoFormViewModelTests
         svc.Verify(s => s.AltaAsync(It.Is<Gasto>(g =>
             g.Fecha == new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc)
             && g.FechaVencimiento == new DateTime(2026, 8, 19, 0, 0, 0, DateTimeKind.Utc)),
-            null), Times.Once);
+            null, null), Times.Once);
     }
 
     [Fact]
     public async Task Guardar_ConAdvertenciaDeSobregiro_LaInformaYNavega()
     {
         var (vm, svc, nav, confirm) = Crear();
-        svc.Setup(s => s.AltaAsync(It.IsAny<Gasto>(), null))
+        svc.Setup(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<PagoContadoDto?>(), null))
             .ReturnsAsync(new ResultadoGastoDto(7, "Atención: sobregiro POA"));
         await CompletarFormularioValidoAsync(vm);
 
@@ -279,7 +342,7 @@ public class GastoFormViewModelTests
     public async Task Guardar_ReglaDeNegocio_MuestraMensajeError()
     {
         var (vm, svc, _, _) = Crear();
-        svc.Setup(s => s.AltaAsync(It.IsAny<Gasto>(), null))
+        svc.Setup(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<PagoContadoDto?>(), null))
             .ThrowsAsync(new ReglaDeNegocioException("Ya existe la factura 'A-1' para ese proveedor."));
         await CompletarFormularioValidoAsync(vm);
         vm.NumeroFactura = "A-1";
@@ -297,7 +360,7 @@ public class GastoFormViewModelTests
         {
             Id = 9, ProveedorId = 1, NumeroFactura = "A-9", Detalle = "Histórico",
             Fecha = DateTime.UtcNow, MontoTotal = 2000m,
-            FuenteFinanciamientoId = 2, RubroGastoId = 3, LineaPoaId = 5,
+            RubroGastoId = 3, LineaPoaId = 5,
             CondicionPago = CondicionPago.Credito, FechaVencimiento = DateTime.UtcNow.AddDays(10),
         };
         vm.CargarParaEditar(gasto);
@@ -310,7 +373,7 @@ public class GastoFormViewModelTests
         Assert.NotNull(vm.LineaPoaSeleccionada);
 
         await vm.GuardarCommand.ExecuteAsync(null);
-        svc.Verify(s => s.ModificarAsync(It.Is<Gasto>(g => g.Id == 9)), Times.Once);
+        svc.Verify(s => s.ModificarAsync(It.Is<Gasto>(g => g.Id == 9), null), Times.Once);
     }
 
     [Fact]
@@ -324,7 +387,7 @@ public class GastoFormViewModelTests
         {
             Id = 11, ProveedorId = 1, Detalle = "Histórico con fecha",
             Fecha = new DateTime(2026, 3, 15, 0, 0, 0, DateTimeKind.Utc), MontoTotal = 500m,
-            FuenteFinanciamientoId = 2, RubroGastoId = 3,
+            RubroGastoId = 3,
             CondicionPago = CondicionPago.Credito,
             FechaVencimiento = new DateTime(2026, 4, 15, 0, 0, 0, DateTimeKind.Utc),
         };
@@ -338,7 +401,7 @@ public class GastoFormViewModelTests
 
         svc.Verify(s => s.ModificarAsync(It.Is<Gasto>(g =>
             g.Fecha == new DateTime(2026, 3, 15, 0, 0, 0, DateTimeKind.Utc)
-            && g.FechaVencimiento == new DateTime(2026, 4, 15, 0, 0, 0, DateTimeKind.Utc))), Times.Once);
+            && g.FechaVencimiento == new DateTime(2026, 4, 15, 0, 0, 0, DateTimeKind.Utc)), null), Times.Once);
     }
 
     [Fact]
@@ -356,7 +419,7 @@ public class GastoFormViewModelTests
 
         await vm.GuardarCommand.ExecuteAsync(null);
 
-        svc.Verify(s => s.AltaAsync(It.IsAny<Gasto>(),
+        svc.Verify(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<PagoContadoDto?>(),
             It.Is<IReadOnlyList<int>>(ids => ids.Count == 1 && ids[0] == 40)), Times.Once);
     }
 
@@ -364,7 +427,7 @@ public class GastoFormViewModelTests
     public async Task CargarDesdeEntrada_FacturaYaExistente_OfreceAsociarLaExistente()
     {
         var (vm, svc, nav, confirm) = Crear();
-        svc.Setup(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<IReadOnlyList<int>>()))
+        svc.Setup(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<PagoContadoDto?>(), It.IsAny<IReadOnlyList<int>>()))
             .ThrowsAsync(new ReglaDeNegocioException("Ya existe la factura 'A-1' para ese proveedor."));
         svc.Setup(s => s.ObtenerPorProveedorYFacturaAsync(1, "A-1", null))
             .ReturnsAsync(new Gasto { Id = 55, ProveedorId = 1, NumeroFactura = "A-1", Detalle = "Existente" });
@@ -420,7 +483,7 @@ public class GastoFormViewModelTests
         var gasto = new Gasto
         {
             Id = 42, ProveedorId = 1, Detalle = "Con adjuntos", Fecha = DateTime.UtcNow,
-            MontoTotal = 100m, FuenteFinanciamientoId = 1, RubroGastoId = 1,
+            MontoTotal = 100m, RubroGastoId = 1,
         };
 
         vm.CargarParaEditar(gasto);
@@ -476,7 +539,7 @@ public class GastoFormViewModelTests
 
         Assert.Equal("El monto total no es un número válido. Usá coma para los decimales: 5,4", vm.ErrorDe(nameof(GastoFormViewModel.MontoTexto)));
         Assert.Null(vm.MensajeError);
-        svc.Verify(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<IReadOnlyList<int>?>()), Times.Never);
+        svc.Verify(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<PagoContadoDto?>(), It.IsAny<IReadOnlyList<int>?>()), Times.Never);
     }
 
     [Fact]
@@ -531,11 +594,7 @@ public class GastoFormViewModelTests
     public async Task Reintentar_EnEdicion_ResuelveLasSeleccionesDelGasto()
     {
         var (vm, _, _, _) = Crear(proveedoresActivos: FallaUnaVez(new ServidorNoDisponibleException()));
-        vm.CargarParaEditar(new Gasto
-        {
-            Id = 9, ProveedorId = 1, Detalle = "Histórico", Fecha = DateTime.UtcNow, MontoTotal = 2000m,
-            FuenteFinanciamientoId = 2, RubroGastoId = 3, CondicionPago = CondicionPago.Contado,
-        });
+        vm.CargarParaEditar(GastoExistente());
         await vm.InicializarAsync();
 
         await vm.ReintentarCargaCommand.ExecuteAsync(null);
@@ -722,7 +781,7 @@ public class GastoFormViewModelTests
         Assert.Equal(GastoFormViewModel.MensajeFuenteObligatoria, vm.ErrorDe(nameof(GastoFormViewModel.FuenteSeleccionada)));
         Assert.Equal(GastoFormViewModel.MensajeRubroObligatorio, vm.ErrorDe(nameof(GastoFormViewModel.RubroSeleccionado)));
         Assert.Null(vm.MensajeError);
-        svc.Verify(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<IReadOnlyList<int>?>()), Times.Never);
+        svc.Verify(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<PagoContadoDto?>(), It.IsAny<IReadOnlyList<int>?>()), Times.Never);
     }
 
     [Fact]
@@ -732,7 +791,7 @@ public class GastoFormViewModelTests
         vm.CargarParaEditar(new Gasto
         {
             Id = 9, ProveedorId = 1, NumeroFactura = "A-9", Detalle = "Histórico", Fecha = DateTime.UtcNow, MontoTotal = 2000m,
-            FuenteFinanciamientoId = 2, RubroGastoId = 3, CondicionPago = CondicionPago.Credito,
+            RubroGastoId = 3, CondicionPago = CondicionPago.Credito,
             FechaVencimiento = DateTime.UtcNow.AddDays(10),
         });
 
@@ -827,12 +886,20 @@ public class GastoFormViewModelTests
 
     // ── Solo lectura, gasto anulado y condición de pago ─────────────────────────
 
-    private static Gasto GastoExistente(bool activo = true, CondicionPago condicion = CondicionPago.Contado) => new()
+    /// <summary>Contado: lleva su pago automático (Local, literal 2), que es donde vive la fuente del gasto.</summary>
+    private static Gasto GastoExistente(
+        bool activo = true, CondicionPago condicion = CondicionPago.Contado, Caja caja = Caja.Local)
     {
-        Id = 9, ProveedorId = 1, Detalle = "Histórico", Fecha = DateTime.UtcNow, MontoTotal = 2000m,
-        FuenteFinanciamientoId = 2, RubroGastoId = 3, CondicionPago = condicion,
-        FechaVencimiento = condicion == CondicionPago.Credito ? DateTime.UtcNow.AddDays(10) : null, Activo = activo,
-    };
+        var gasto = new Gasto
+        {
+            Id = 9, ProveedorId = 1, Detalle = "Histórico", Fecha = DateTime.UtcNow, MontoTotal = 2000m,
+            RubroGastoId = 3, CondicionPago = condicion,
+            FechaVencimiento = condicion == CondicionPago.Credito ? DateTime.UtcNow.AddDays(10) : null, Activo = activo,
+        };
+        if (condicion == CondicionPago.Contado)
+            gasto.Pagos.Add(PagoGasto.Automatico(gasto.Fecha, gasto.MontoTotal, "Pago contado (automático)", caja, 2));
+        return gasto;
+    }
 
     [Fact]
     public void ConPermiso_NoEsSoloLectura()

@@ -28,7 +28,6 @@ public static class DatosPagos
         {
             Id = origen.Id, ProveedorId = origen.ProveedorId, Proveedor = origen.Proveedor, NumeroFactura = origen.NumeroFactura,
             Detalle = origen.Detalle, Fecha = origen.Fecha, MontoTotal = origen.MontoTotal,
-            FuenteFinanciamientoId = origen.FuenteFinanciamientoId, FuenteFinanciamiento = origen.FuenteFinanciamiento,
             RubroGastoId = origen.RubroGastoId, RubroGasto = origen.RubroGasto,
             LineaPoaId = origen.LineaPoaId, LineaPoa = origen.LineaPoa,
             CondicionPago = origen.CondicionPago, FechaVencimiento = origen.FechaVencimiento, Activo = origen.Activo,

@@ -36,15 +36,21 @@ public class GastoFormViewV2Tests
     private static readonly FuenteFinanciamiento Figm = new() { Id = 1, Nombre = "FIGM Literal B", Activo = true };
     private static readonly RubroGasto Materiales = new() { Id = 1, Codigo = 10, Nombre = "Materiales de construcción", Activo = true };
 
-    private static Gasto Existente(bool activo = true, CondicionPago condicion = CondicionPago.Contado) => new()
+    private static Gasto Existente(bool activo = true, CondicionPago condicion = CondicionPago.Contado)
     {
-        Id = 4, ProveedorId = 1, Proveedor = Barraca, NumeroFactura = "A-0004521", Detalle = "Materiales para bacheo",
-        Fecha = new DateTime(2026, 10, 3, 0, 0, 0, DateTimeKind.Utc), MontoTotal = 186_540m,
-        FuenteFinanciamientoId = 1, FuenteFinanciamiento = Figm, RubroGastoId = 1, RubroGasto = Materiales,
-        CondicionPago = condicion,
-        FechaVencimiento = condicion == CondicionPago.Credito ? new DateTime(2030, 12, 31, 0, 0, 0, DateTimeKind.Utc) : null,
-        Activo = activo,
-    };
+        var gasto = new Gasto
+        {
+            Id = 4, ProveedorId = 1, Proveedor = Barraca, NumeroFactura = "A-0004521", Detalle = "Materiales para bacheo",
+            Fecha = new DateTime(2026, 10, 3, 0, 0, 0, DateTimeKind.Utc), MontoTotal = 186_540m,
+            RubroGastoId = 1, RubroGasto = Materiales,
+            CondicionPago = condicion,
+            FechaVencimiento = condicion == CondicionPago.Credito ? new DateTime(2030, 12, 31, 0, 0, 0, DateTimeKind.Utc) : null,
+            Activo = activo,
+        };
+        if (condicion == CondicionPago.Contado)
+            gasto.Pagos.Add(PagoAutomaticoDePrueba.Con(Figm, fecha: gasto.Fecha, monto: gasto.MontoTotal));
+        return gasto;
+    }
 
     private static AdjuntoServiceFake ConAdjuntos(int cantidad)
     {

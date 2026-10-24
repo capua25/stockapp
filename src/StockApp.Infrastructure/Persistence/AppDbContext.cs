@@ -267,8 +267,6 @@ public class AppDbContext : DbContext
                 .HasFilter("\"Activo\" = TRUE AND \"NumeroFactura\" IS NOT NULL");
             e.HasOne(g => g.Proveedor).WithMany()
                 .HasForeignKey(g => g.ProveedorId).OnDelete(DeleteBehavior.Restrict);
-            e.HasOne(g => g.FuenteFinanciamiento).WithMany()
-                .HasForeignKey(g => g.FuenteFinanciamientoId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(g => g.RubroGasto).WithMany()
                 .HasForeignKey(g => g.RubroGastoId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(g => g.LineaPoa).WithMany()

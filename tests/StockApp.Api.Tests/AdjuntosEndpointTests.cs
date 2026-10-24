@@ -54,7 +54,7 @@ public class AdjuntosEndpointTests : ApiTestBase
         var gasto = new Gasto
         {
             ProveedorId = proveedor.Id, Detalle = "Test", Fecha = DateTime.UtcNow,
-            MontoTotal = 100m, FuenteFinanciamientoId = fuente.Id, RubroGastoId = rubro.Id,
+            MontoTotal = 100m, RubroGastoId = rubro.Id,
             CondicionPago = CondicionPago.Contado,
             Activo = activo,
         };
@@ -69,7 +69,7 @@ public class AdjuntosEndpointTests : ApiTestBase
     {
         var gastoId = await SembrarGastoAsync();
         using var ctx = Factory.CrearContexto();
-        var fuenteId = await ctx.Gastos.Where(g => g.Id == gastoId).Select(g => g.FuenteFinanciamientoId).SingleAsync();
+        var fuenteId = await ctx.FuentesFinanciamiento.Select(f => f.Id).FirstAsync();
         var pago = new PagoGasto
         {
             GastoId = gastoId, Fecha = DateTime.UtcNow, Monto = 100m, Activo = activo, FuenteFinanciamientoId = fuenteId,

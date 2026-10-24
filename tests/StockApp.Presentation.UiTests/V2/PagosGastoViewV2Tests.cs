@@ -45,7 +45,7 @@ public class PagosGastoViewV2Tests
         var gasto = new Gasto
         {
             Id = 6, ProveedorId = 3, Proveedor = ElectroSur, NumeroFactura = "A-0001190", Detalle = "Luminarias LED plaza Artigas",
-            Fecha = new DateTime(2026, 10, 12, 0, 0, 0, DateTimeKind.Utc), MontoTotal = 310_000m, FuenteFinanciamientoId = 1,
+            Fecha = new DateTime(2026, 10, 12, 0, 0, 0, DateTimeKind.Utc), MontoTotal = 310_000m,
             RubroGastoId = 3, CondicionPago = CondicionPago.Credito,
             FechaVencimiento = new DateTime(2030, 11, 30, 0, 0, 0, DateTimeKind.Utc), Activo = activo,
         };

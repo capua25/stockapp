@@ -16,7 +16,6 @@ public class GastoTests
         Detalle = "Compra de insumos",
         Fecha = Hoy,
         MontoTotal = 1000m,
-        FuenteFinanciamientoId = 1,
         RubroGastoId = 1,
         CondicionPago = CondicionPago.Contado,
     };

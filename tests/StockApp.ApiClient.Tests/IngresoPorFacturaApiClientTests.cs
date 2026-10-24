@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using StockApp.ApiClient;
 using StockApp.ApiClient.Tests.TestInfra;
+using StockApp.Application.Finanzas;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -13,7 +14,7 @@ public class IngresoPorFacturaApiClientTests
     private static IngresoPorFacturaDto DtoValido() => new(
         ProveedorId: 3, NumeroFactura: "A-0099", NumeroOrden: null,
         Fecha: new DateTime(2026, 7, 20), Detalle: "Compra de insumos", Destino: null,
-        MontoTotal: 500m, FuenteFinanciamientoId: 4, RubroGastoId: 5, LineaPoaId: null,
+        MontoTotal: 500m, PagoContado: new PagoContadoDto(Caja.Poa, 4), RubroGastoId: 5, LineaPoaId: null,
         CondicionPago: CondicionPago.Contado, FechaVencimiento: null,
         Renglones: new[]
         {
@@ -39,6 +40,37 @@ public class IngresoPorFacturaApiClientTests
         Assert.Contains("\"codigo\":\"SKU-N\"", fake.UltimoBody);
         Assert.Equal(42, resultado.GastoId);
         Assert.Equal(2, resultado.MovimientoIds.Count);
+    }
+
+    [Fact]
+    public async Task Registrar_ContadoEnviaCajaYFuenteComoNumero()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(new
+        {
+            gastoId = 42, movimientoIds = new[] { 1 }, sumaRenglones = 500.0, diferenciaConTotal = 0.0,
+        }, HttpStatusCode.Created));
+        var client = new IngresoPorFacturaApiClient(TestHttp.CrearCliente(fake));
+
+        await client.RegistrarAsync(DtoValido());
+
+        Assert.Contains("\"caja\":1,\"fuenteFinanciamientoId\":4,\"rubroGastoId\":5", fake.UltimoBody);
+    }
+
+    [Fact]
+    public async Task Registrar_CreditoEnviaCajaYFuenteNull()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(new
+        {
+            gastoId = 42, movimientoIds = new[] { 1 }, sumaRenglones = 500.0, diferenciaConTotal = 0.0,
+        }, HttpStatusCode.Created));
+        var client = new IngresoPorFacturaApiClient(TestHttp.CrearCliente(fake));
+
+        await client.RegistrarAsync(DtoValido() with
+        {
+            PagoContado = null, CondicionPago = CondicionPago.Credito, FechaVencimiento = new DateTime(2026, 8, 20),
+        });
+
+        Assert.Contains("\"caja\":null,\"fuenteFinanciamientoId\":null", fake.UltimoBody);
     }
 
     [Fact]

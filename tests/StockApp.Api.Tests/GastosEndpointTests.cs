@@ -52,6 +52,17 @@ public class GastosEndpointTests : ApiTestBase
         return (proveedor.Id, fuente.Id, rubro.Id);
     }
 
+    /// <summary>Un literal de la caja POA (los literales B y C del FIGM), para los gastos de contado POA.</summary>
+    private async Task<int> SeedFuentePoaAsync()
+    {
+        await using var ctx = Factory.CrearContexto();
+        var fuente = new FuenteFinanciamiento { Nombre = $"Literal B {Guid.NewGuid():N}", Caja = Caja.Poa };
+        ctx.Add(fuente);
+        await ctx.SaveChangesAsync();
+        return fuente.Id;
+    }
+
+    /// <summary>Contado: caja Local y el literal (caja y literal viajan juntos). Crédito: ninguno de los dos.</summary>
     private static CrearGastoRequest RequestValido(
         int proveedorId, int fuenteId, int rubroId,
         CondicionPago condicion = CondicionPago.Contado, string? factura = null) => new(
@@ -62,7 +73,8 @@ public class GastosEndpointTests : ApiTestBase
         Destino: null,
         Fecha: DateTime.UtcNow,
         MontoTotal: 1500m,
-        FuenteFinanciamientoId: fuenteId,
+        Caja: condicion == CondicionPago.Contado ? Caja.Local : null,
+        FuenteFinanciamientoId: condicion == CondicionPago.Contado ? fuenteId : null,
         RubroGastoId: rubroId,
         LineaPoaId: null,
         CondicionPago: condicion,
@@ -121,7 +133,7 @@ public class GastosEndpointTests : ApiTestBase
         var json = $$"""
             {"proveedorId":{{proveedorId}},"numeroFactura":"SINZONA-01","numeroOrden":null,
             "detalle":"Gasto sin zona horaria","destino":null,"fecha":"2026-01-15","montoTotal":1500,
-            "fuenteFinanciamientoId":{{fuenteId}},"rubroGastoId":{{rubroId}},"lineaPoaId":null,
+            "caja":0,"fuenteFinanciamientoId":{{fuenteId}},"rubroGastoId":{{rubroId}},"lineaPoaId":null,
             "condicionPago":0,"fechaVencimiento":null,"movimientoIds":null}
             """;
         var response = await client.PostAsync("/finanzas/gastos",
@@ -141,7 +153,7 @@ public class GastosEndpointTests : ApiTestBase
         var json = $$"""
             {"proveedorId":{{proveedorId}},"numeroFactura":"SINZONA-02","numeroOrden":null,
             "detalle":"Gasto a crédito sin zona horaria","destino":null,"fecha":"2026-01-15","montoTotal":1500,
-            "fuenteFinanciamientoId":{{fuenteId}},"rubroGastoId":{{rubroId}},"lineaPoaId":null,
+            "caja":null,"fuenteFinanciamientoId":null,"rubroGastoId":{{rubroId}},"lineaPoaId":null,
             "condicionPago":1,"fechaVencimiento":"2026-02-15","movimientoIds":null}
             """;
         var response = await client.PostAsync("/finanzas/gastos",
@@ -193,12 +205,13 @@ public class GastosEndpointTests : ApiTestBase
     public async Task PostGastos_SobregiroLineaPoa_Crea201ConAdvertencia()
     {
         var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var poaId = await SeedFuentePoaAsync();
         await using (var ctx = Factory.CrearContexto())
         {
             ctx.Add(new LineaPoa
             {
                 Nombre = $"PRENSA {Guid.NewGuid():N}", Programa = "Com", Ejercicio = 2026,
-                Asignaciones = { new AsignacionPresupuestal { FuenteFinanciamientoId = fuenteId, Monto = 1000m } },
+                Asignaciones = { new AsignacionPresupuestal { FuenteFinanciamientoId = poaId, Monto = 1000m } },
             });
             await ctx.SaveChangesAsync();
         }
@@ -207,7 +220,8 @@ public class GastosEndpointTests : ApiTestBase
             lineaId = await ctx.LineasPoa.OrderByDescending(l => l.Id).Select(l => l.Id).FirstAsync();
 
         var client = ClienteAutenticado(TokenAdmin());
-        var request = RequestValido(proveedorId, fuenteId, rubroId) with { LineaPoaId = lineaId };  // 1500 > 1000
+        var request = RequestValido(proveedorId, fuenteId, rubroId)
+            with { Caja = Caja.Poa, FuenteFinanciamientoId = poaId, LineaPoaId = lineaId };  // 1500 > 1000
 
         var response = await client.PostAsJsonAsync("/finanzas/gastos", request);
 
@@ -544,7 +558,7 @@ public class GastosEndpointTests : ApiTestBase
                 ProveedorId: proveedorId, NumeroFactura: null, NumeroOrden: "OC-77",
                 Detalle: "Gasto vía API (editado)", Destino: "Corralón",
                 Fecha: DateTime.UtcNow, MontoTotal: 1800m,
-                FuenteFinanciamientoId: fuenteId, RubroGastoId: rubroId, LineaPoaId: null,
+                Caja: null, FuenteFinanciamientoId: null, RubroGastoId: rubroId, LineaPoaId: null,
                 CondicionPago: CondicionPago.Credito, FechaVencimiento: DateTime.UtcNow.AddDays(60)));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -555,6 +569,149 @@ public class GastosEndpointTests : ApiTestBase
         Assert.Equal(1800m, gasto.MontoTotal);
         Assert.Equal("OC-77", gasto.NumeroOrden);
     }
+
+    [Fact]
+    public async Task Post_ContadoPoaConLiteralB_Devuelve201_YElPagoAutomaticoEsPoa()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var poaId = await SeedFuentePoaAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsJsonAsync("/finanzas/gastos",
+            RequestValido(proveedorId, fuenteId, rubroId) with { Caja = Caja.Poa, FuenteFinanciamientoId = poaId });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var creado = await response.Content.ReadFromJsonAsync<GastoGuardadoResponse>();
+        await using var verificacion = Factory.CrearContexto();
+        var pago = await verificacion.PagosGasto.SingleAsync(p => p.GastoId == creado!.Id);
+        Assert.True(pago.EsAutomatico);
+        Assert.Equal(Caja.Poa, pago.Caja);
+        Assert.Equal(poaId, pago.FuenteFinanciamientoId);
+    }
+
+    [Fact]
+    public async Task Post_CreditoConCaja_Devuelve409()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsJsonAsync("/finanzas/gastos",
+            RequestValido(proveedorId, fuenteId, rubroId, CondicionPago.Credito)
+                with { Caja = Caja.Local, FuenteFinanciamientoId = fuenteId });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Post_CajaSinFuente_Devuelve400()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsJsonAsync("/finanzas/gastos",
+            RequestValido(proveedorId, fuenteId, rubroId) with { FuenteFinanciamientoId = null });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Post_ContadoSinCajaNiFuente_Devuelve400_YNoPersisteNada()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsJsonAsync("/finanzas/gastos",
+            RequestValido(proveedorId, fuenteId, rubroId, factura: "SINCAJA-01")
+                with { Caja = null, FuenteFinanciamientoId = null });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var verificacion = Factory.CrearContexto();
+        Assert.False(await verificacion.Gastos.AnyAsync(g => g.NumeroFactura == "SINCAJA-01"));
+    }
+
+    [Fact]
+    public async Task Post_CajaInexistente_Devuelve400_YNoPersisteNada()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsJsonAsync("/finanzas/gastos",
+            RequestValido(proveedorId, fuenteId, rubroId, factura: "CAJA7-01") with { Caja = (Caja)7 });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await using var verificacion = Factory.CrearContexto();
+        Assert.False(await verificacion.Gastos.AnyAsync(g => g.NumeroFactura == "CAJA7-01"));
+    }
+
+    [Fact]
+    public async Task Post_LineaPoaEnCredito_Devuelve409()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        await using (var ctx = Factory.CrearContexto())
+        {
+            ctx.Add(new LineaPoa
+            {
+                Nombre = $"RADIO {Guid.NewGuid():N}", Programa = "Com", Ejercicio = 2026,
+                Asignaciones = { new AsignacionPresupuestal { FuenteFinanciamientoId = fuenteId, Monto = 1000m } },
+            });
+            await ctx.SaveChangesAsync();
+        }
+        int lineaId;
+        await using (var ctx = Factory.CrearContexto())
+            lineaId = await ctx.LineasPoa.OrderByDescending(l => l.Id).Select(l => l.Id).FirstAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsJsonAsync("/finanzas/gastos",
+            RequestValido(proveedorId, fuenteId, rubroId, CondicionPago.Credito) with { LineaPoaId = lineaId });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Put_ContadoConLiteralDeOtraCaja_Devuelve409()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+        var creado = await (await client.PostAsJsonAsync("/finanzas/gastos",
+                RequestValido(proveedorId, fuenteId, rubroId, factura: "PUTCAJA-01")))
+            .Content.ReadFromJsonAsync<GastoGuardadoResponse>();
+
+        // Pasa a la caja POA conservando el literal de la caja Local.
+        var response = await client.PutAsJsonAsync($"/finanzas/gastos/{creado!.Id}",
+            PutContado(proveedorId, rubroId, Caja.Poa, fuenteId));
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        await using var verificacion = Factory.CrearContexto();
+        var pago = await verificacion.PagosGasto.SingleAsync(p => p.GastoId == creado.Id);
+        Assert.Equal(Caja.Local, pago.Caja);
+    }
+
+    [Fact]
+    public async Task Put_ContadoCambiaDeCajaYLiteral_ActualizaElPagoAutomatico()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var poaId = await SeedFuentePoaAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+        var creado = await (await client.PostAsJsonAsync("/finanzas/gastos",
+                RequestValido(proveedorId, fuenteId, rubroId, factura: "PUTCAJA-02")))
+            .Content.ReadFromJsonAsync<GastoGuardadoResponse>();
+
+        var response = await client.PutAsJsonAsync($"/finanzas/gastos/{creado!.Id}",
+            PutContado(proveedorId, rubroId, Caja.Poa, poaId));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        await using var verificacion = Factory.CrearContexto();
+        var pago = await verificacion.PagosGasto.SingleAsync(p => p.GastoId == creado.Id);
+        Assert.Equal(Caja.Poa, pago.Caja);
+        Assert.Equal(poaId, pago.FuenteFinanciamientoId);
+        Assert.True(pago.EsAutomatico);
+    }
+
+    private static ModificarGastoRequest PutContado(int proveedorId, int rubroId, Caja caja, int fuenteId) => new(
+        ProveedorId: proveedorId, NumeroFactura: "PUTCAJA", NumeroOrden: null,
+        Detalle: "Gasto vía API", Destino: null, Fecha: DateTime.UtcNow, MontoTotal: 1500m,
+        Caja: caja, FuenteFinanciamientoId: fuenteId, RubroGastoId: rubroId, LineaPoaId: null,
+        CondicionPago: CondicionPago.Contado, FechaVencimiento: null);
 
     [Fact]
     public async Task DeleteGasto_ContadoConPagoAutomaticoSinConfirmar_Devuelve409ConDatosEstructurados()

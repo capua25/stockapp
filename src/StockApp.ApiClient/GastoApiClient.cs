@@ -17,7 +17,6 @@ internal sealed record GastoWire(
     string? NumeroFactura, string? NumeroOrden,
     string Detalle, string? Destino,
     DateTime Fecha, decimal MontoTotal,
-    int FuenteFinanciamientoId, string? FuenteNombre,
     int RubroGastoId, string? RubroNombre,
     int? LineaPoaId, string? LineaPoaNombre,
     CondicionPago CondicionPago, DateTime? FechaVencimiento,
@@ -28,7 +27,7 @@ internal sealed record GastoWire(
 internal sealed record GastoBody(
     int ProveedorId, string? NumeroFactura, string? NumeroOrden,
     string Detalle, string? Destino, DateTime Fecha, decimal MontoTotal,
-    int FuenteFinanciamientoId, int RubroGastoId, int? LineaPoaId,
+    Caja? Caja, int? FuenteFinanciamientoId, int RubroGastoId, int? LineaPoaId,
     CondicionPago CondicionPago, DateTime? FechaVencimiento,
     List<int>? MovimientoIds);
 
@@ -47,10 +46,11 @@ public sealed class GastoApiClient : IGastoService
 
     public GastoApiClient(HttpClient http) => _http = http;
 
-    public async Task<ResultadoGastoDto> AltaAsync(Gasto gasto, IReadOnlyList<int>? movimientoIds = null)
+    public async Task<ResultadoGastoDto> AltaAsync(
+        Gasto gasto, PagoContadoDto? pagoContado, IReadOnlyList<int>? movimientoIds = null)
     {
         var response = await ApiErrores.EnviarAsync(() =>
-            _http.PostAsJsonAsync("finanzas/gastos", ABody(gasto, movimientoIds)));
+            _http.PostAsJsonAsync("finanzas/gastos", ABody(gasto, pagoContado, movimientoIds)));
         await ApiErrores.AsegurarExitoAsync(response);
 
         var creado = await response.Content.ReadFromJsonAsync<GastoGuardadoWire>()
@@ -58,10 +58,10 @@ public sealed class GastoApiClient : IGastoService
         return new ResultadoGastoDto(creado.Id, creado.AdvertenciaSobregiro);
     }
 
-    public async Task<ResultadoGastoDto> ModificarAsync(Gasto gasto)
+    public async Task<ResultadoGastoDto> ModificarAsync(Gasto gasto, PagoContadoDto? pagoContado)
     {
         var response = await ApiErrores.EnviarAsync(() =>
-            _http.PutAsJsonAsync($"finanzas/gastos/{gasto.Id}", ABody(gasto, movimientoIds: null)));
+            _http.PutAsJsonAsync($"finanzas/gastos/{gasto.Id}", ABody(gasto, pagoContado, movimientoIds: null)));
         await ApiErrores.AsegurarExitoAsync(response);
 
         var guardado = await response.Content.ReadFromJsonAsync<GastoGuardadoWire>()
@@ -151,10 +151,10 @@ public sealed class GastoApiClient : IGastoService
         await ApiErrores.AsegurarExitoAsync(response);
     }
 
-    private static GastoBody ABody(Gasto gasto, IReadOnlyList<int>? movimientoIds) => new(
+    private static GastoBody ABody(Gasto gasto, PagoContadoDto? pagoContado, IReadOnlyList<int>? movimientoIds) => new(
         gasto.ProveedorId, gasto.NumeroFactura, gasto.NumeroOrden,
         gasto.Detalle, gasto.Destino, gasto.Fecha, gasto.MontoTotal,
-        gasto.FuenteFinanciamientoId, gasto.RubroGastoId, gasto.LineaPoaId,
+        pagoContado?.Caja, pagoContado?.FuenteFinanciamientoId, gasto.RubroGastoId, gasto.LineaPoaId,
         gasto.CondicionPago, gasto.FechaVencimiento,
         movimientoIds?.ToList());
 
@@ -170,9 +170,6 @@ public sealed class GastoApiClient : IGastoService
         Destino = dto.Destino,
         Fecha = dto.Fecha,
         MontoTotal = dto.MontoTotal,
-        FuenteFinanciamientoId = dto.FuenteFinanciamientoId,
-        FuenteFinanciamiento = dto.FuenteNombre is null
-            ? null : new FuenteFinanciamiento { Id = dto.FuenteFinanciamientoId, Nombre = dto.FuenteNombre },
         RubroGastoId = dto.RubroGastoId,
         RubroGasto = dto.RubroNombre is null
             ? null : new RubroGasto { Id = dto.RubroGastoId, Nombre = dto.RubroNombre },

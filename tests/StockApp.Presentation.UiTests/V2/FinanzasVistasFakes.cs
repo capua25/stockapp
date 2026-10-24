@@ -64,8 +64,8 @@ internal sealed class FinanzasVistasFake : IFinanzasVistasService
 
 internal sealed class GastoServiceSinUsoFake : IGastoService
 {
-    public Task<ResultadoGastoDto> AltaAsync(Gasto gasto, IReadOnlyList<int>? movimientoIds = null) => throw new NotSupportedException();
-    public Task<ResultadoGastoDto> ModificarAsync(Gasto gasto) => throw new NotSupportedException();
+    public Task<ResultadoGastoDto> AltaAsync(Gasto gasto, PagoContadoDto? pagoContado, IReadOnlyList<int>? movimientoIds = null) => throw new NotSupportedException();
+    public Task<ResultadoGastoDto> ModificarAsync(Gasto gasto, PagoContadoDto? pagoContado) => throw new NotSupportedException();
     public Task AnularAsync(int id, bool confirmarAnulacionDePagoAutomatico = false) => throw new NotSupportedException();
     public Task<Gasto> ObtenerPorIdAsync(int id) => throw new NotSupportedException();
     public Task<Gasto?> ObtenerPorProveedorYFacturaAsync(int proveedorId, string numeroFactura, string? numeroOrden) => throw new NotSupportedException();

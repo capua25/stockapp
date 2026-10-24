@@ -16,7 +16,6 @@ public record GastoDto(
     string? NumeroFactura, string? NumeroOrden,
     string Detalle, string? Destino,
     DateTime Fecha, decimal MontoTotal,
-    int FuenteFinanciamientoId, string? FuenteNombre,
     int RubroGastoId, string? RubroNombre,
     int? LineaPoaId, string? LineaPoaNombre,
     CondicionPago CondicionPago, DateTime? FechaVencimiento,
@@ -26,17 +25,19 @@ public record GastoDto(
     bool TieneMovimientosDeStock,
     List<PagoGastoDto> Pagos);
 
+// Caja y FuenteFinanciamientoId son la caja y el literal del pago de un gasto de CONTADO: se mandan juntos
+// (contado) o ninguno (crédito). Nullable a propósito: un body sin ellos NO cae en Local/0, se rechaza.
 public record CrearGastoRequest(
     int ProveedorId, string? NumeroFactura, string? NumeroOrden,
     string Detalle, string? Destino, DateTime Fecha, decimal MontoTotal,
-    int FuenteFinanciamientoId, int RubroGastoId, int? LineaPoaId,
+    Caja? Caja, int? FuenteFinanciamientoId, int RubroGastoId, int? LineaPoaId,
     CondicionPago CondicionPago, DateTime? FechaVencimiento,
     List<int>? MovimientoIds);
 
 public record ModificarGastoRequest(
     int ProveedorId, string? NumeroFactura, string? NumeroOrden,
     string Detalle, string? Destino, DateTime Fecha, decimal MontoTotal,
-    int FuenteFinanciamientoId, int RubroGastoId, int? LineaPoaId,
+    Caja? Caja, int? FuenteFinanciamientoId, int RubroGastoId, int? LineaPoaId,
     CondicionPago CondicionPago, DateTime? FechaVencimiento);
 
 public record GastoGuardadoResponse(int Id, string? AdvertenciaSobregiro);
@@ -78,7 +79,8 @@ public static class GastosEndpoints
 
         group.MapPost("/", async (CrearGastoRequest request, IGastoService gastos) =>
         {
-            var resultado = await gastos.AltaAsync(AEntidad(request), request.MovimientoIds);
+            var resultado = await gastos.AltaAsync(
+                AEntidad(request), PagoContadoDe(request.CondicionPago, request.Caja, request.FuenteFinanciamientoId), request.MovimientoIds);
             // Sin Location: no hay convención de Location en los POST del proyecto.
             return Results.Created((string?)null,
                 new GastoGuardadoResponse(resultado.Id, resultado.AdvertenciaSobregiro));
@@ -90,10 +92,11 @@ public static class GastosEndpoints
             var gasto = AEntidad(new CrearGastoRequest(
                 request.ProveedorId, request.NumeroFactura, request.NumeroOrden,
                 request.Detalle, request.Destino, request.Fecha, request.MontoTotal,
-                request.FuenteFinanciamientoId, request.RubroGastoId, request.LineaPoaId,
+                request.Caja, request.FuenteFinanciamientoId, request.RubroGastoId, request.LineaPoaId,
                 request.CondicionPago, request.FechaVencimiento, null));
             gasto.Id = id;
-            var resultado = await gastos.ModificarAsync(gasto);
+            var resultado = await gastos.ModificarAsync(
+                gasto, PagoContadoDe(request.CondicionPago, request.Caja, request.FuenteFinanciamientoId));
             return Results.Ok(new GastoGuardadoResponse(resultado.Id, resultado.AdvertenciaSobregiro));
         })
         .RequireAuthorization(Permisos.RegistrarGastos);
@@ -138,6 +141,21 @@ public static class GastosEndpoints
         return app;
     }
 
+    /// <summary>
+    /// Caja y literal del pago de contado: ambos o ninguno (un crédito no los lleva). Una mitad sola, o un
+    /// contado sin ninguno, es un body incompleto (400): nunca se completa con Local ni con 0.
+    /// </summary>
+    internal static PagoContadoDto? PagoContadoDe(CondicionPago condicion, Caja? caja, int? fuenteFinanciamientoId)
+    {
+        if (caja is null && fuenteFinanciamientoId is null)
+            return condicion == CondicionPago.Contado
+                ? throw new ArgumentException(CajaYLiteral.MensajeContadoSinCajaOFuente)
+                : null;
+        if (caja is null || fuenteFinanciamientoId is null)
+            throw new ArgumentException(CajaYLiteral.MensajeCajaYFuenteVanJuntas);
+        return new PagoContadoDto(caja.Value, fuenteFinanciamientoId.Value);
+    }
+
     private static Gasto AEntidad(CrearGastoRequest r) => new()
     {
         ProveedorId = r.ProveedorId,
@@ -147,7 +165,6 @@ public static class GastosEndpoints
         Destino = r.Destino,
         Fecha = r.Fecha,
         MontoTotal = r.MontoTotal,
-        FuenteFinanciamientoId = r.FuenteFinanciamientoId,
         RubroGastoId = r.RubroGastoId,
         LineaPoaId = r.LineaPoaId,
         CondicionPago = r.CondicionPago,
@@ -160,7 +177,6 @@ public static class GastosEndpoints
         g.NumeroFactura, g.NumeroOrden,
         g.Detalle, g.Destino,
         g.Fecha, g.MontoTotal,
-        g.FuenteFinanciamientoId, g.FuenteFinanciamiento?.Nombre,
         g.RubroGastoId, g.RubroGasto?.Nombre,
         g.LineaPoaId, g.LineaPoa?.Nombre,
         g.CondicionPago, g.FechaVencimiento,

@@ -73,6 +73,18 @@ public sealed class BackfillLotesImportacionMigrationTests
         return (int)(await cmd.ExecuteScalarAsync())!;
     }
 
+    /// <summary>
+    /// Gasto por SQL crudo: en el punto intermedio de la migración el esquema todavía tiene
+    /// Gastos.FuenteFinanciamientoId (NOT NULL) y el modelo actual ya no la mapea.
+    /// </summary>
+    private static Task<int> InsertarGastoAsync(
+        string connectionString, Proveedor proveedor, RubroGasto rubro, int fuenteId, string detalle,
+        DateTime fecha, decimal monto, CondicionPago condicion, Guid? idImportacion)
+        => InsertarAsync(connectionString,
+            "INSERT INTO \"Gastos\" (\"Detalle\", \"Fecha\", \"MontoTotal\", \"FuenteFinanciamientoId\", \"ProveedorId\", " +
+            "\"RubroGastoId\", \"CondicionPago\", \"IdImportacion\") VALUES (@p0, @p1, @p2, @p3, @p4, @p5, @p6, @p7) RETURNING \"Id\"",
+            detalle, fecha, monto, fuenteId, proveedor.Id, rubro.Id, (int)condicion, (object?)idImportacion ?? DBNull.Value);
+
     private static AppDbContext CrearContexto(string connectionString)
     {
         var options = new DbContextOptionsBuilder<AppDbContext>().UseNpgsql(connectionString).Options;
@@ -131,12 +143,8 @@ public sealed class BackfillLotesImportacionMigrationTests
             // ImportacionRepository.ConfirmarAsync escribe hoy).
             idLoteNormal = Guid.NewGuid();
             var fechaLoteNormal = new DateTime(2026, 1, 10, 12, 0, 0, DateTimeKind.Utc);
-            ctx.Gastos.Add(new Gasto
-            {
-                Proveedor = proveedor, Detalle = "Gasto del lote normal", Fecha = fechaLoteNormal,
-                MontoTotal = 1000m, FuenteFinanciamientoId = fuenteId, RubroGasto = rubro,
-                CondicionPago = CondicionPago.Contado, IdImportacion = idLoteNormal,
-            });
+            await InsertarGastoAsync(connectionString, proveedor, rubro, fuenteId, "Gasto del lote normal",
+                fechaLoteNormal, 1000m, CondicionPago.Contado, idLoteNormal);
             ctx.LogsAuditoria.Add(new LogAuditoria
             {
                 UsuarioId = usuarioId, Fecha = fechaLoteNormal, Accion = (AccionAuditada)AccionImportacionPlanillas,
@@ -147,12 +155,8 @@ public sealed class BackfillLotesImportacionMigrationTests
             idLoteRevertido = Guid.NewGuid();
             fechaConfirmacionRevertido = new DateTime(2026, 2, 5, 9, 0, 0, DateTimeKind.Utc);
             fechaReversionEsperada = new DateTime(2026, 2, 6, 9, 0, 0, DateTimeKind.Utc);
-            ctx.Gastos.Add(new Gasto
-            {
-                Proveedor = proveedor, Detalle = "Gasto del lote revertido", Fecha = fechaConfirmacionRevertido,
-                MontoTotal = 2000m, FuenteFinanciamientoId = fuenteId, RubroGasto = rubro,
-                CondicionPago = CondicionPago.Contado, IdImportacion = idLoteRevertido,
-            });
+            await InsertarGastoAsync(connectionString, proveedor, rubro, fuenteId, "Gasto del lote revertido",
+                fechaConfirmacionRevertido, 2000m, CondicionPago.Contado, idLoteRevertido);
             ctx.LogsAuditoria.Add(new LogAuditoria
             {
                 UsuarioId = usuarioId, Fecha = fechaConfirmacionRevertido, Accion = (AccionAuditada)AccionImportacionPlanillas,
@@ -171,12 +175,8 @@ public sealed class BackfillLotesImportacionMigrationTests
             // en este punto de la migración) y no hay forma de derivar autor/ejercicio.
             idLoteHuerfano = Guid.NewGuid();
             var fechaGastoHuerfano = new DateTime(2026, 3, 1, 8, 0, 0, DateTimeKind.Utc);
-            ctx.Gastos.Add(new Gasto
-            {
-                Proveedor = proveedor, Detalle = "Gasto huérfano sin log", Fecha = fechaGastoHuerfano,
-                MontoTotal = 300m, FuenteFinanciamientoId = fuenteId, RubroGasto = rubro,
-                CondicionPago = CondicionPago.Contado, IdImportacion = idLoteHuerfano,
-            });
+            await InsertarGastoAsync(connectionString, proveedor, rubro, fuenteId, "Gasto huérfano sin log",
+                fechaGastoHuerfano, 300m, CondicionPago.Contado, idLoteHuerfano);
 
             // Lote SOLO con LineaPoa (Menor 5 del review): ningún Gasto/Ingreso/Pago, sin
             // LogAuditoria -- ejercita la rama LineasPoa del UNION de "guids", la única fuente
@@ -194,14 +194,9 @@ public sealed class BackfillLotesImportacionMigrationTests
             // aparece en ninguna otra tabla. Ejercita la rama PagosGasto del UNION de "guids" y la
             // rama PagosGasto del UNION ALL de fecha_derivada.
             idLoteSoloPago = Guid.NewGuid();
-            var gastoParaPagoHuerfano = new Gasto
-            {
-                Proveedor = proveedor, Detalle = "Gasto manual con pago de lote huérfano",
-                Fecha = new DateTime(2026, 3, 10, 0, 0, 0, DateTimeKind.Utc),
-                MontoTotal = 400m, FuenteFinanciamientoId = fuenteId, RubroGasto = rubro,
-                CondicionPago = CondicionPago.Credito, IdImportacion = null,
-            };
-            ctx.Gastos.Add(gastoParaPagoHuerfano);
+            var gastoParaPagoHuerfanoId = await InsertarGastoAsync(
+                connectionString, proveedor, rubro, fuenteId, "Gasto manual con pago de lote huérfano",
+                new DateTime(2026, 3, 10, 0, 0, 0, DateTimeKind.Utc), 400m, CondicionPago.Credito, null);
             fechaPagoHuerfanoEsperada = new DateTime(2026, 3, 12, 15, 0, 0, DateTimeKind.Utc);
 
             // Lote presente en las 4 tablas a la vez, SIN LogAuditoria (Menor 5): prueba que
@@ -214,13 +209,9 @@ public sealed class BackfillLotesImportacionMigrationTests
             var fechaGastoTodas = new DateTime(2026, 6, 5, 8, 0, 0, DateTimeKind.Utc);
             fechaIngresoTodasEsperada = new DateTime(2026, 6, 1, 8, 0, 0, DateTimeKind.Utc); // la más temprana
             var fechaPagoTodas = new DateTime(2026, 6, 10, 8, 0, 0, DateTimeKind.Utc);
-            var gastoTodas = new Gasto
-            {
-                Proveedor = proveedor, Detalle = "Gasto del lote en las 4 tablas", Fecha = fechaGastoTodas,
-                MontoTotal = 900m, FuenteFinanciamientoId = fuenteId, RubroGasto = rubro,
-                CondicionPago = CondicionPago.Contado, IdImportacion = idLoteEnTodasLasTablas,
-            };
-            ctx.Gastos.Add(gastoTodas);
+            var gastoTodasId = await InsertarGastoAsync(
+                connectionString, proveedor, rubro, fuenteId, "Gasto del lote en las 4 tablas",
+                fechaGastoTodas, 900m, CondicionPago.Contado, idLoteEnTodasLasTablas);
             ctx.LineasPoa.Add(new LineaPoa
             {
                 // Primera de las dos -- Id más chico (insertada primero) -- tiene que ser la que
@@ -238,13 +229,8 @@ public sealed class BackfillLotesImportacionMigrationTests
             // el comportamiento actual -- DISTINCT ON ("IdLote") ... ORDER BY "IdLote", "Fecha"
             // (ascendente) se queda con la confirmación MÁS TEMPRANA de las dos.
             idLoteDobleLogConfirmacion = Guid.NewGuid();
-            ctx.Gastos.Add(new Gasto
-            {
-                Proveedor = proveedor, Detalle = "Gasto con doble log de confirmación",
-                Fecha = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc), MontoTotal = 150m,
-                FuenteFinanciamientoId = fuenteId, RubroGasto = rubro, CondicionPago = CondicionPago.Contado,
-                IdImportacion = idLoteDobleLogConfirmacion,
-            });
+            await InsertarGastoAsync(connectionString, proveedor, rubro, fuenteId, "Gasto con doble log de confirmación",
+                new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc), 150m, CondicionPago.Contado, idLoteDobleLogConfirmacion);
             ctx.LogsAuditoria.Add(new LogAuditoria
             {
                 UsuarioId = usuarioId, Fecha = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc),
@@ -274,9 +260,9 @@ public sealed class BackfillLotesImportacionMigrationTests
                 "INSERT INTO \"PagosGasto\" (\"GastoId\", \"Fecha\", \"Monto\", \"IdImportacion\") " +
                 "VALUES (@p0, @p1, @p2, @p3) RETURNING \"Id\"";
             await InsertarAsync(connectionString, insertPago,
-                gastoParaPagoHuerfano.Id, fechaPagoHuerfanoEsperada, 400m, idLoteSoloPago);
+                gastoParaPagoHuerfanoId, fechaPagoHuerfanoEsperada, 400m, idLoteSoloPago);
             await InsertarAsync(connectionString, insertPago,
-                gastoTodas.Id, fechaPagoTodas, 900m, idLoteEnTodasLasTablas);
+                gastoTodasId, fechaPagoTodas, 900m, idLoteEnTodasLasTablas);
         }
 
         // ── 3. Migrar hasta HEAD: acá es donde, SIN el fix, tira 23503 ──────────────────────
@@ -406,12 +392,8 @@ public sealed class BackfillLotesImportacionMigrationTests
 
             idLote = Guid.NewGuid();
             var fecha = new DateTime(2026, 5, 1, 9, 0, 0, DateTimeKind.Utc);
-            ctx.Gastos.Add(new Gasto
-            {
-                Proveedor = proveedor, Detalle = "Gasto idempotencia", Fecha = fecha, MontoTotal = 250m,
-                FuenteFinanciamientoId = fuenteId, RubroGasto = rubro, CondicionPago = CondicionPago.Contado,
-                IdImportacion = idLote,
-            });
+            await InsertarGastoAsync(connectionString, proveedor, rubro, fuenteId, "Gasto idempotencia",
+                fecha, 250m, CondicionPago.Contado, idLote);
             ctx.LogsAuditoria.Add(new LogAuditoria
             {
                 UsuarioId = usuarioId, Fecha = fecha, Accion = (AccionAuditada)AccionImportacionPlanillas,
@@ -513,12 +495,8 @@ public sealed class BackfillLotesImportacionMigrationTests
 
             idLote = Guid.NewGuid();
             var fecha = new DateTime(2026, 4, 1, 10, 0, 0, DateTimeKind.Utc);
-            ctx.Gastos.Add(new Gasto
-            {
-                Proveedor = proveedor, Detalle = "Gasto Down/Up", Fecha = fecha, MontoTotal = 700m,
-                FuenteFinanciamientoId = fuenteId, RubroGasto = rubro, CondicionPago = CondicionPago.Contado,
-                IdImportacion = idLote,
-            });
+            await InsertarGastoAsync(connectionString, proveedor, rubro, fuenteId, "Gasto Down/Up",
+                fecha, 700m, CondicionPago.Contado, idLote);
             ctx.LogsAuditoria.Add(new LogAuditoria
             {
                 UsuarioId = usuarioId, Fecha = fecha, Accion = (AccionAuditada)AccionImportacionPlanillas,

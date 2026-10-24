@@ -52,7 +52,7 @@ public class FinanzasVistasService : IFinanzasVistasService
             .Concat(pagos.Select(p => (
                 Fecha: p.Fecha, Tipo: "Egreso", Concepto: p.Gasto?.Detalle ?? string.Empty,
                 ProveedorNombre: p.Gasto?.Proveedor?.Nombre, NumeroFactura: p.Gasto?.NumeroFactura,
-                FuenteNombre: p.Gasto?.FuenteFinanciamiento?.Nombre, RubroNombre: p.Gasto?.RubroGasto?.Nombre,
+                FuenteNombre: p.FuenteFinanciamiento?.Nombre, RubroNombre: p.Gasto?.RubroGasto?.Nombre,
                 Ingreso: 0m, Egreso: p.Monto)))
             .OrderBy(x => x.Fecha)
             .ThenBy(x => x.Tipo)
@@ -75,13 +75,13 @@ public class FinanzasVistasService : IFinanzasVistasService
             .ToList();
 
         var clavesFuente = ingresos.Select(i => i.FuenteFinanciamiento?.Nombre ?? "(sin fuente)")
-            .Concat(pagos.Select(p => p.Gasto?.FuenteFinanciamiento?.Nombre ?? "(sin fuente)"))
+            .Concat(pagos.Select(p => p.FuenteFinanciamiento?.Nombre ?? "(sin fuente)"))
             .Distinct();
         var totalesPorFuente = clavesFuente
             .Select(clave => new TotalPorClaveDto(
                 clave,
                 ingresos.Where(i => (i.FuenteFinanciamiento?.Nombre ?? "(sin fuente)") == clave).Sum(i => i.Monto)
-                - pagos.Where(p => (p.Gasto?.FuenteFinanciamiento?.Nombre ?? "(sin fuente)") == clave).Sum(p => p.Monto)))
+                - pagos.Where(p => (p.FuenteFinanciamiento?.Nombre ?? "(sin fuente)") == clave).Sum(p => p.Monto)))
             .OrderByDescending(t => t.Total)
             .ToList();
 

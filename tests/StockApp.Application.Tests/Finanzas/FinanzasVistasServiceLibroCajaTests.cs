@@ -88,7 +88,7 @@ public class FinanzasVistasServiceLibroCajaTests
         var gastoDelPago = new Gasto
         {
             Id = 1, Detalle = "Compra", Proveedor = proveedor, RubroGasto = rubro,
-            FuenteFinanciamiento = fuente, NumeroFactura = "A-1", Activo = true,
+            NumeroFactura = "A-1", Activo = true,
         };
 
         m.Ingresos.Setup(i => i.ListarPorRangoAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>()))
@@ -101,7 +101,7 @@ public class FinanzasVistasServiceLibroCajaTests
             .ReturnsAsync(new List<PagoGasto>
             {
                 new() { Fecha = new DateTime(2026, 7, 10, 0, 0, 0, DateTimeKind.Utc),
-                        Monto = 300m, Gasto = gastoDelPago },
+                        Monto = 300m, Gasto = gastoDelPago, FuenteFinanciamiento = fuente },
             });
 
         var resultado = await m.Svc.ObtenerLibroCajaMesAsync(2026, 7);
@@ -115,6 +115,39 @@ public class FinanzasVistasServiceLibroCajaTests
         Assert.Equal(700m, resultado.Movimientos[1].SaldoCorrido);
         Assert.Equal(700m, resultado.SaldoFinal);
         Assert.Contains(resultado.TotalesPorRubro, t => t.Clave == "Obras" && t.Total == 300m);
+    }
+
+    [Fact]
+    public async Task Mes_FuenteNombreYTotalesPorFuente_SonLosDelPago()
+    {
+        var m = Crear();
+        m.Ingresos.Setup(i => i.TotalActivosAntesDeAsync(It.IsAny<DateTime>())).ReturnsAsync(0m);
+        m.Gastos.Setup(g => g.TotalPagosActivosAntesDeAsync(It.IsAny<DateTime>())).ReturnsAsync(0m);
+        m.Ingresos.Setup(i => i.ListarPorRangoAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>()))
+            .ReturnsAsync(new List<IngresoCaja>());
+
+        // El gasto ya no tiene fuente: la del libro es la del PAGO (dos pagos de literales distintos).
+        var gasto = new Gasto
+        {
+            Id = 1, Detalle = "Compra", Proveedor = new Proveedor { Id = 1, Nombre = "Barraca X" },
+            RubroGasto = new RubroGasto { Id = 1, Nombre = "Obras" }, Activo = true,
+        };
+        m.Gastos.Setup(g => g.ListarPagosActivosPorRangoAsync(It.IsAny<DateTime>(), It.IsAny<DateTime>()))
+            .ReturnsAsync(new List<PagoGasto>
+            {
+                new() { Fecha = new DateTime(2026, 7, 10, 0, 0, 0, DateTimeKind.Utc), Monto = 300m, Gasto = gasto,
+                        FuenteFinanciamientoId = 1, FuenteFinanciamiento = new FuenteFinanciamiento { Id = 1, Nombre = "Literal A" } },
+                new() { Fecha = new DateTime(2026, 7, 11, 0, 0, 0, DateTimeKind.Utc), Monto = 200m, Gasto = gasto,
+                        FuenteFinanciamientoId = 2, FuenteFinanciamiento = new FuenteFinanciamiento { Id = 2, Nombre = "Literal B" } },
+            });
+
+        var resultado = await m.Svc.ObtenerLibroCajaMesAsync(2026, 7);
+
+        Assert.Equal("Literal A", resultado.Movimientos[0].FuenteNombre);
+        Assert.Equal("Literal B", resultado.Movimientos[1].FuenteNombre);
+        Assert.Contains(resultado.TotalesPorFuente, t => t.Clave == "Literal A" && t.Total == -300m);
+        Assert.Contains(resultado.TotalesPorFuente, t => t.Clave == "Literal B" && t.Total == -200m);
+        Assert.DoesNotContain(resultado.TotalesPorFuente, t => t.Clave == "(sin fuente)");
     }
 
     [Fact]
