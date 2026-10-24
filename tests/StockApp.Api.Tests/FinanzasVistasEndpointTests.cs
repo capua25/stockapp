@@ -204,9 +204,9 @@ public class FinanzasVistasEndpointTests : ApiTestBase
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var dto = await response.Content.ReadFromJsonAsync<LibroCajaMesDto>();
-        Assert.Equal(new[] { "Gasto activo", "Ingreso POA" }, dto!.Movimientos.Select(m => m.Concepto));
-        Assert.Equal(new[] { 0m, 20m }, dto.Movimientos.Select(m => m.Ingreso));
-        Assert.Equal(new[] { 3m, 0m }, dto.Movimientos.Select(m => m.Egreso));
+        Assert.Equal(new[] { "Ingreso POA", "Gasto activo" }, dto!.Movimientos.Select(m => m.Concepto));
+        Assert.Equal(new[] { 20m, 0m }, dto.Movimientos.Select(m => m.Ingreso));
+        Assert.Equal(new[] { 0m, 3m }, dto.Movimientos.Select(m => m.Egreso));
         Assert.Equal(-500m, dto.SaldoInicial);
         Assert.Equal(-483m, dto.SaldoFinal);
     }
@@ -220,8 +220,8 @@ public class FinanzasVistasEndpointTests : ApiTestBase
         var response = await client.GetAsync("/finanzas/libro-caja?anio=2026&mes=7");
 
         var dto = await response.Content.ReadFromJsonAsync<LibroCajaMesDto>();
-        Assert.Equal(new[] { 0m, 1000m }, dto!.Movimientos.Select(m => m.Ingreso));
-        Assert.Equal(new[] { 5000m, 0m }, dto.Movimientos.Select(m => m.Egreso));
+        Assert.Equal(new[] { 1000m, 0m }, dto!.Movimientos.Select(m => m.Ingreso));
+        Assert.Equal(new[] { 0m, 5000m }, dto.Movimientos.Select(m => m.Egreso));
         Assert.Equal(-60000m, dto.SaldoInicial);
         Assert.Equal(-64000m, dto.SaldoFinal);
     }

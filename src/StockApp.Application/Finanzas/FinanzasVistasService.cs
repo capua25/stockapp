@@ -57,7 +57,7 @@ public class FinanzasVistasService : IFinanzasVistasService
                 FuenteNombre: p.FuenteFinanciamiento?.Nombre, RubroNombre: p.Gasto?.RubroGasto?.Nombre,
                 Ingreso: 0m, Egreso: p.Monto)))
             .OrderBy(x => x.Fecha)
-            .ThenBy(x => x.Tipo)
+            .ThenBy(x => x.Tipo == "Ingreso" ? 0 : 1) // dentro del día, los ingresos van antes que los egresos
             .ToList();
 
         var movimientos = new List<MovimientoCajaDto>(crudos.Count);

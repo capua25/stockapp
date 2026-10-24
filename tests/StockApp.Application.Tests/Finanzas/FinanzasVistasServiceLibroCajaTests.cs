@@ -118,6 +118,24 @@ public class FinanzasVistasServiceLibroCajaTests
     }
 
     [Fact]
+    public async Task Mes_MismoDia_IngresoVaAntesQueEgresoYElSaldoCorridoNoPasaPorNegativo()
+    {
+        var m = Crear();
+        var dia = new DateTime(2026, 7, 5, 0, 0, 0, DateTimeKind.Utc);
+        var gasto = new Gasto { Id = 1, Detalle = "Compra", Activo = true };
+        m.Ingresos.Setup(i => i.ListarPorRangoAsync(It.IsAny<Caja>(), It.IsAny<DateTime>(), It.IsAny<DateTime>()))
+            .ReturnsAsync(new List<IngresoCaja> { new() { Fecha = dia, Concepto = "Partida", Monto = 1000m } });
+        m.Gastos.Setup(g => g.ListarPagosActivosPorRangoAsync(It.IsAny<Caja>(), It.IsAny<DateTime>(), It.IsAny<DateTime>()))
+            .ReturnsAsync(new List<PagoGasto> { new() { Fecha = dia, Monto = 500m, Gasto = gasto } });
+
+        var r = await m.Svc.ObtenerLibroCajaMesAsync(Caja.Poa, 2026, 7);
+
+        Assert.Equal(new[] { "Ingreso", "Egreso" }, r.Movimientos.Select(x => x.Tipo));
+        Assert.Equal(new[] { 1000m, 500m }, r.Movimientos.Select(x => x.SaldoCorrido));
+        Assert.Equal(500m, r.SaldoFinal);
+    }
+
+    [Fact]
     public async Task Mes_FuenteNombreYTotalesPorFuente_SonLosDelPago()
     {
         var m = Crear();
