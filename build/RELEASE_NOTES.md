@@ -1,9 +1,15 @@
 severity: critical
 
-# Gestión Municipal 0.5.3
+# Gestión Municipal 0.6.0
 
 Mejoras:
-- Ahora la aplicación busca actualizaciones cada 15 minutos mientras está abierta (antes lo hacía una vez por hora), para que las correcciones importantes lleguen más rápido.
+- La caja POA ahora está separada de la caja Local y tiene su propio saldo.
+- Al cargar ingresos, gastos al contado, ingresos por factura y pagos, se elige de forma explícita la caja y el literal.
+- El libro de caja tiene un selector de caja, y el PDF indica de qué caja se trata.
+- El listado de gastos muestra la caja de cada gasto.
+- Se eliminó el importador de planillas.
+
+Esta actualización es obligatoria: las versiones anteriores ya no pueden guardar ingresos ni pagos.
 
 ---
 <!-- INSTRUCCIONES PARA EL PUBLICADOR — leer antes de empaquetar:
