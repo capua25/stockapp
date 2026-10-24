@@ -86,6 +86,7 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     private int? _movimientoVinculado;   // modo "desde entrada de stock"
     private List<FuenteFinanciamiento> _fuentesActivas = new();
     private FuenteFinanciamiento? _fuenteHistorica;
+    private Caja? _cajaOriginal;   // la fuente histórica solo se ofrece en la caja original (puede ser de otra caja: legado)
     private bool _fuentesCargadas;
 
     [ObservableProperty]
@@ -234,7 +235,8 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     }
 
     /// <summary>El vencimiento solo es regla a crédito y caja y literal solo a contado: tildar o destildar cambia sus
-    /// errores sin tocar los campos. Una línea POA no sobrevive a un crédito.</summary>
+    /// errores sin tocar los campos. A crédito no hay caja ni literal: se limpian, así al volver a contado se eligen de nuevo
+    /// (nada queda elegido implícitamente). Una línea POA no sobrevive a un crédito.</summary>
     partial void OnEsCreditoChanged(bool value)
     {
         ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(nameof(FechaVencimientoSeleccionada)));
@@ -242,7 +244,11 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
         ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(nameof(FuenteSeleccionada)));
         ActualizarAvisoSinLiterales();
         if (value)
+        {
+            CajaSeleccionada = null;
+            FuenteSeleccionada = null;
             LineaPoaSeleccionada = null;
+        }
     }
 
     /// <summary>Rellena el combo de fuentes con los literales de la caja elegida (sin caja, vacío).</summary>
@@ -251,7 +257,7 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
         if (CajaSeleccionada is not { } caja)
             FuentesDisponibles.Clear();
         else
-            LiteralesPorCaja.Refrescar(FuentesDisponibles, _fuentesActivas, caja, _fuenteHistorica);
+            LiteralesPorCaja.Refrescar(FuentesDisponibles, _fuentesActivas, caja, caja == _cajaOriginal ? _fuenteHistorica : null);
         ActualizarAvisoSinLiterales();
     }
 
@@ -324,6 +330,7 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
         MontoTexto       = FormatoEsUy.Decimal(gasto.MontoTotal);
         EsCredito        = gasto.CondicionPago == CondicionPago.Credito;
         FechaVencimientoSeleccionada = gasto.FechaVencimiento;
+        _cajaOriginal    = gasto.PagoAutomatico?.Caja;
         CajaSeleccionada = gasto.PagoAutomatico?.Caja;
         EsAnulado        = !gasto.Activo;
         EsEdicion        = true;

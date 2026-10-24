@@ -11,14 +11,16 @@ namespace StockApp.Presentation.Helpers;
 public static class LiteralesPorCaja
 {
     /// <summary>Deja en <paramref name="destino"/> las fuentes activas de la caja, más la <paramref name="historica"/>
-    /// (la de un movimiento ya guardado, que puede estar dada de baja) si es de esa caja y no está.</summary>
+    /// (la de un movimiento ya guardado, que puede estar dada de baja o ser de otra caja: la migración dejó pagos en caja
+    /// Local con literales hoy POA) si no está. Quién la pasa decide cuándo corresponde: los formularios solo cuando la caja
+    /// elegida es la caja original del movimiento.</summary>
     public static void Refrescar(ObservableCollection<FuenteFinanciamiento> destino, IEnumerable<FuenteFinanciamiento> activas,
         Caja caja, FuenteFinanciamiento? historica = null)
     {
         destino.Clear();
         foreach (var fuente in activas.Where(f => f.Caja == caja))
             destino.Add(fuente);
-        if (historica is not null && historica.Caja == caja && destino.All(f => f.Id != historica.Id))
+        if (historica is not null && destino.All(f => f.Id != historica.Id))
             destino.Add(historica);
     }
 

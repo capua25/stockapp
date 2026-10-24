@@ -472,6 +472,26 @@ public class IngresoFormViewV2Tests
     }
 
     [AvaloniaFact]
+    public void Edicion_IngresoLocalConLiteralPoa_ElComboLoTieneElegido_YGuardarClickLoManda()
+    {
+        var m = Montar(new IngresoCaja
+        {
+            Id = 9, Fecha = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc), Concepto = "Legado",
+            FuenteFinanciamientoId = 4, FuenteFinanciamiento = Poa1, Monto = 10_000m, Caja = Caja.Local, Activo = true,
+        }, fuentes: new FuentesActivasFake { Activas = [Figm, Poa1] });
+
+        Assert.Equal(Caja.Local, Parte<ComboBox>(m, "ComboCaja").SelectedItem);
+        Assert.Same(Poa1, Parte<ComboBox>(m, "ComboFuente").SelectedItem);
+        Assert.True(Parte<Button>(m, "BotonGuardar").IsEffectivelyEnabled);
+
+        Clickear(m.Ventana, Parte<Button>(m, "BotonGuardar"));
+
+        var modificado = Assert.Single(m.Servicio.Modificaciones);
+        Assert.Equal(Caja.Local, modificado.Caja);
+        Assert.Equal(4, modificado.FuenteFinanciamientoId);
+    }
+
+    [AvaloniaFact]
     public void SalirDeLaFecha_LaMarcaComoTocada()
     {
         var m = Montar();

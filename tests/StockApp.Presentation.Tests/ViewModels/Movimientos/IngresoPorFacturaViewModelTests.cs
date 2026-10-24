@@ -688,6 +688,23 @@ public class IngresoPorFacturaViewModelTests
     }
 
     [Fact]
+    public async Task ContadoACreditoYDeVuelta_NoQuedanCajaNiLiteralElegidos_YGuardarSeDeshabilita()
+    {
+        var (vm, _, _, _, _) = CrearConDialogos();
+        await InicializarYCompletarCabeceraAsync(vm);
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 10m);
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+
+        vm.EsCredito = true;
+        vm.EsCredito = false;
+
+        Assert.Null(vm.CajaSeleccionada);
+        Assert.Null(vm.FuenteSeleccionada);
+        Assert.Empty(vm.FuentesDisponibles);
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
     public async Task CambiarCaja_FiltraYLimpiaLaFuenteIncompatible()
     {
         var (vm, _, _, _, _) = CrearConDialogos();

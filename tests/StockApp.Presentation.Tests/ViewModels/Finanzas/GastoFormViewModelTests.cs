@@ -858,6 +858,73 @@ public class GastoFormViewModelTests
         Assert.True(vm.GuardarCommand.CanExecute(null));
     }
 
+    // ── Fuente legada de otra caja: la migración dejó pagos en caja Local con literales hoy POA ──
+
+    [Fact]
+    public async Task Editar_PagoLocalConLiteralPoa_SigueElegido_YSeGuarda()
+    {
+        var (vm, svc, _, _) = Crear();
+        vm.CargarParaEditar(GastoExistente(caja: Caja.Local, fuenteId: 4));   // literal 4 es de la caja POA
+
+        await vm.InicializarAsync();
+
+        Assert.Equal(Caja.Local, vm.CajaSeleccionada);
+        Assert.Equal(4, vm.FuenteSeleccionada?.Id);
+        Assert.Contains(vm.FuentesDisponibles, f => f.Id == 4);
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.ModificarAsync(It.Is<Gasto>(g => g.Id == 9), new PagoContadoDto(Caja.Local, 4)), Times.Once);
+    }
+
+    [Fact]
+    public async Task Editar_PagoLocalConLiteralPoa_VolverALaCajaOriginal_OfreceElLiteralPeroNoLoReelige()
+    {
+        var (vm, _, _, _) = Crear();
+        vm.CargarParaEditar(GastoExistente(caja: Caja.Local, fuenteId: 4));
+        await vm.InicializarAsync();
+
+        vm.CajaSeleccionada = Caja.Poa;
+        vm.CajaSeleccionada = Caja.Local;   // el literal es de POA: al salir de Local se limpia y al volver no se reelige
+
+        Assert.Contains(vm.FuentesDisponibles, f => f.Id == 4);
+        Assert.Null(vm.FuenteSeleccionada);
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Editar_LiteralHistoricoDeBaja_SoloSeOfreceEnLaCajaOriginal()
+    {
+        var (vm, _, _, _) = Crear();
+        var gasto = GastoExistente(caja: Caja.Local, fuenteId: 9);
+        gasto.PagoAutomatico!.FuenteFinanciamiento = Fuente(9, "Literal viejo POA", Caja.Poa, activo: false);
+        vm.CargarParaEditar(gasto);
+        await vm.InicializarAsync();
+
+        Assert.Equal(9, vm.FuenteSeleccionada?.Id);
+        vm.CajaSeleccionada = Caja.Poa;
+        Assert.DoesNotContain(vm.FuentesDisponibles, f => f.Id == 9);   // POA no es su caja original
+    }
+
+    // ── Crédito limpia caja y literal: al volver a contado se eligen de nuevo ──
+
+    [Fact]
+    public async Task ContadoACreditoYDeVuelta_NoQuedanCajaNiLiteralElegidos_YGuardarSeDeshabilita()
+    {
+        var (vm, _, _, _) = Crear();
+        await CompletarFormularioValidoAsync(vm);
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+
+        vm.EsCredito = true;
+        vm.EsCredito = false;
+
+        Assert.Null(vm.CajaSeleccionada);
+        Assert.Null(vm.FuenteSeleccionada);
+        Assert.Empty(vm.FuentesDisponibles);
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+    }
+
     // ── Errores por campo ───────────────────────────────────────────────────────
 
     private static readonly string[] Campos =
@@ -979,6 +1046,8 @@ public class GastoFormViewModelTests
         vm.ErrorsChanged += (_, e) => avisos.Add(e.PropertyName);
 
         vm.EsCredito = false;
+        vm.CajaSeleccionada = Caja.Local;   // el crédito limpió caja y literal: a contado se eligen de nuevo
+        vm.FuenteSeleccionada = vm.FuentesDisponibles[0];
 
         Assert.True(vm.GuardarCommand.CanExecute(null));
         Assert.Null(vm.ErrorDe(nameof(GastoFormViewModel.FechaVencimientoSeleccionada)));
@@ -1097,6 +1166,8 @@ public class GastoFormViewModelTests
         vm.EsCredito = false;
 
         Assert.True(avisos > 0);
+        vm.CajaSeleccionada = Caja.Local;   // el crédito limpió caja y literal: a contado se eligen de nuevo
+        vm.FuenteSeleccionada = vm.FuentesDisponibles[0];
         Assert.True(vm.GuardarCommand.CanExecute(null));
     }
 

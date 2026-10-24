@@ -116,12 +116,17 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
             LineaPoaSeleccionada = null;
     }
 
-    /// <summary>Una línea POA no sobrevive a un crédito; el aviso de caja sin literales tampoco aplica.</summary>
+    /// <summary>A crédito no hay caja ni literal (al volver a contado se eligen de nuevo: nada queda elegido
+    /// implícitamente), no hay línea POA y el aviso de caja sin literales tampoco aplica.</summary>
     partial void OnEsCreditoChanged(bool value)
     {
         ActualizarAvisoSinLiterales();
         if (value)
+        {
+            CajaSeleccionada = null;
+            FuenteSeleccionada = null;
             LineaPoaSeleccionada = null;
+        }
     }
 
     /// <summary>Rellena el combo de fuentes con los literales de la caja elegida (sin caja, vacío).</summary>

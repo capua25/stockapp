@@ -360,6 +360,40 @@ public class GastoFormViewV2Tests
     }
 
     [AvaloniaFact]
+    public void Edicion_PagoLocalConLiteralPoa_ElComboLoTieneElegido_YGuardarClickLoManda()
+    {
+        var gasto = Existente();
+        gasto.Pagos.Clear();
+        gasto.Pagos.Add(PagoAutomaticoDePrueba.Con(PoaObras, caja: Caja.Local, fecha: gasto.Fecha, monto: gasto.MontoTotal));
+        var m = Montar(vm => vm.CargarParaEditar(gasto));
+
+        Assert.Equal(Caja.Local, Parte<ComboBox>(m, "ComboCaja").SelectedItem);
+        Assert.Same(PoaObras, Parte<ComboBox>(m, "ComboFuente").SelectedItem);
+        Assert.True(Parte<Button>(m, "BotonGuardar").IsEffectivelyEnabled);
+
+        Clickear(m.Ventana, Parte<Button>(m, "BotonGuardar"));
+
+        Assert.Equal(new PagoContadoDto(Caja.Local, 4), Assert.Single(m.Servicio.PagosContado));
+    }
+
+    [AvaloniaFact]
+    public void ContadoACreditoYDeVuelta_ClickReal_CajaYLiteralVuelvenSinElegir_YGuardarDeshabilitado()
+    {
+        var m = Montar(alto: 1600);   // alto para que el tilde quede dentro de la ventana, sin scroll
+        Completar(m.Vm);
+        Assert.True(Parte<Button>(m, "BotonGuardar").IsEffectivelyEnabled);
+
+        Clickear(m.Ventana, Parte<CheckBox>(m, "CheckCredito"));
+        Clickear(m.Ventana, Parte<CheckBox>(m, "CheckCredito"));
+
+        Assert.False(m.Vm.EsCredito);
+        Assert.Null(m.Vm.CajaSeleccionada);
+        Assert.Null(Parte<ComboBox>(m, "ComboCaja").SelectedItem);
+        Assert.Null(Parte<ComboBox>(m, "ComboFuente").SelectedItem);
+        Assert.False(Parte<Button>(m, "BotonGuardar").IsEffectivelyEnabled);
+    }
+
+    [AvaloniaFact]
     public void Vencimiento_SoloACredito()
     {
         var m = Montar();

@@ -312,6 +312,8 @@ public class IngresoPorFacturaViewTests
         vm.EsCredito = true;
         vm.FechaVencimientoSeleccionada = new DateTime(2026, 12, 31);
         vm.EsCredito = false; // el usuario se arrepiente y vuelve a Contado -- sin limpiar el picker a mano.
+        vm.CajaSeleccionada = Caja.Local;   // el crédito limpió caja y literal: a contado se eligen de nuevo
+        vm.FuenteSeleccionada = fuente;
 
         CargarArticuloPorClicksReales(window, producto, "1", "100");
 

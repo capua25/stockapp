@@ -31,6 +31,7 @@ public partial class IngresoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     private IngresoCaja? _ingresoParaEditar;
     private List<FuenteFinanciamiento> _fuentesActivas = new();
     private FuenteFinanciamiento? _fuenteHistorica;
+    private Caja? _cajaOriginal;   // la fuente histórica solo se ofrece en la caja original (puede ser de otra caja: legado)
     private bool _fuentesCargadas;
 
     [ObservableProperty]
@@ -130,7 +131,7 @@ public partial class IngresoFormViewModel : ViewModelBase, INotifyDataErrorInfo
             AvisoSinLiterales = null;
             return;
         }
-        LiteralesPorCaja.Refrescar(FuentesDisponibles, _fuentesActivas, caja, _fuenteHistorica);
+        LiteralesPorCaja.Refrescar(FuentesDisponibles, _fuentesActivas, caja, caja == _cajaOriginal ? _fuenteHistorica : null);
         AvisoSinLiterales = _fuentesCargadas
             ? LiteralesPorCaja.Aviso(caja, _fuentesActivas.Count(f => f.Caja == caja))
             : null;
@@ -193,6 +194,7 @@ public partial class IngresoFormViewModel : ViewModelBase, INotifyDataErrorInfo
         FechaSeleccionada  = ingreso.Fecha;
         Concepto           = ingreso.Concepto;
         MontoTexto         = FormatoEsUy.Decimal(ingreso.Monto);
+        _cajaOriginal      = ingreso.Caja;
         CajaSeleccionada   = ingreso.Caja;
         EsEdicion          = true;
     }

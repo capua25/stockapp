@@ -381,6 +381,47 @@ public class IngresoFormViewModelTests
         Assert.True(vm.GuardarCommand.CanExecute(null));
     }
 
+    [Fact]
+    public async Task Editar_IngresoLocalConLiteralPoa_SigueElegido_YSeGuarda()
+    {
+        var (vm, svc, _) = Crear();
+        vm.CargarParaEditar(new IngresoCaja
+        {
+            Id = 14, Concepto = "Legado", Fecha = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            FuenteFinanciamientoId = 5, Monto = 10m, Caja = Caja.Local,   // literal 5 es de la caja POA
+        });
+
+        await vm.InicializarAsync();
+
+        Assert.Equal(Caja.Local, vm.CajaSeleccionada);
+        Assert.Equal(5, vm.FuenteSeleccionada?.Id);
+        Assert.Contains(vm.FuentesDisponibles, f => f.Id == 5);
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.ModificarAsync(It.Is<IngresoCaja>(i => i.Id == 14 && i.Caja == Caja.Local && i.FuenteFinanciamientoId == 5)), Times.Once);
+    }
+
+    [Fact]
+    public async Task Editar_IngresoLocalConLiteralPoa_VolverALaCajaOriginal_NoReeligeElLiteral()
+    {
+        var (vm, _, _) = Crear();
+        vm.CargarParaEditar(new IngresoCaja
+        {
+            Id = 14, Concepto = "Legado", Fecha = new DateTime(2026, 3, 1, 0, 0, 0, DateTimeKind.Utc),
+            FuenteFinanciamientoId = 5, Monto = 10m, Caja = Caja.Local,
+        });
+        await vm.InicializarAsync();
+
+        vm.CajaSeleccionada = Caja.Poa;
+        vm.CajaSeleccionada = Caja.Local;
+
+        Assert.Contains(vm.FuentesDisponibles, f => f.Id == 5);
+        Assert.Null(vm.FuenteSeleccionada);
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+    }
+
     // La fuente histórica llega con la forma REAL que produce el cliente HTTP (pasa por IngresoCajaApiClient.AEntidad),
     // no armada a mano con la Caja ya seteada: ese stub ocultaba que el mapeo la perdía.
     private sealed class HandlerFijo : HttpMessageHandler
