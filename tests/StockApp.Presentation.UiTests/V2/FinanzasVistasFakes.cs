@@ -44,10 +44,14 @@ internal sealed class FinanzasVistasFake : IFinanzasVistasService
     /// <summary>Consultas de libro caja en orden: "2026-10" para un mes, "2026" para un año.</summary>
     public List<string> ConsultasLibroCaja { get; } = new();
 
+    /// <summary>Lo mismo con la caja pedida: (caja, año, mes); el mes es null en la consulta anual.</summary>
+    public List<(Caja Caja, int Anio, int? Mes)> ConsultasLibroCajaPorCaja { get; } = new();
+
     /// <summary>Sin datos cargados para ese mes responde un mes vacío, como el servidor.</summary>
     public Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(Caja caja, int anio, int mes)
     {
         ConsultasLibroCaja.Add($"{anio}-{mes:00}");
+        ConsultasLibroCajaPorCaja.Add((caja, anio, mes));
         return FallaLibroCaja is not null ? Task.FromException<LibroCajaMesDto>(FallaLibroCaja)
             : PendienteMes is not null ? PendienteMes.Task
             : Task.FromResult(Meses.TryGetValue((anio, mes), out var libro) ? libro : new LibroCajaMesDto(anio, mes, 0m, 0m, [], [], []));
@@ -57,6 +61,7 @@ internal sealed class FinanzasVistasFake : IFinanzasVistasService
     public Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(Caja caja, int anio)
     {
         ConsultasLibroCaja.Add($"{anio}");
+        ConsultasLibroCajaPorCaja.Add((caja, anio, null));
         return FallaLibroCaja is not null ? Task.FromException<LibroCajaAnualDto>(FallaLibroCaja)
             : Task.FromResult(Anios.TryGetValue(anio, out var libro) ? libro
                 : new LibroCajaAnualDto(anio, Enumerable.Range(1, 12).Select(m => new TotalMensualDto(m, 0m, 0m, 0m)).ToList(), []));

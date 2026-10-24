@@ -97,6 +97,7 @@ public class LibroCajaViewV2Tests
 
         Assert.Contains("ui2", m.Vista.Classes);
         Assert.Equal("Libro caja", Control<EncabezadoPagina>(m, "Encabezado").Titulo);
+        Assert.Equal("Ingresos y egresos de la caja Local, con el saldo día por día.", Control<EncabezadoPagina>(m, "Encabezado").Subtitulo);
         Assert.Contains("secundario", Control<Button>(m, "BotonActualizar").Classes);
         Assert.Same(m.Vm.RecargarCommand, Control<Button>(m, "BotonActualizar").Command);
         Assert.Contains("secundario", Control<Button>(m, "BotonExportarPdf").Classes);
@@ -116,6 +117,53 @@ public class LibroCajaViewV2Tests
         Assert.True(Visible(Control<CampoFormulario>(m, "CampoMes")));
         Assert.Equal(2026m, Control<NumericUpDown>(m, "SelectorAnio").Value);
         Assert.Equal(10m, Control<NumericUpDown>(m, "SelectorMes").Value);
+    }
+
+    [AvaloniaFact]
+    public void ComboCaja_LocalYPoa_ConLocalElegida()
+    {
+        var m = Montar(ConOctubre());
+        var combo = Control<ComboBox>(m, "ComboCaja");
+
+        Assert.Equal("Caja", Control<CampoFormulario>(m, "CampoCaja").Etiqueta);
+        Assert.True(Visible(combo));
+        Assert.Equal(new[] { Caja.Local, Caja.Poa }, combo.Items.Cast<Caja>().ToArray());
+        Assert.Equal(Caja.Local, combo.SelectedItem);
+        Assert.Contains(combo.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Local" && Visible(t));
+        Assert.Equal((Caja.Local, 2026, (int?)10), Assert.Single(m.Servicio.ConsultasLibroCajaPorCaja));
+    }
+
+    [AvaloniaFact]
+    public async Task ElegirPoa_ConsultaConCajaPoa()
+    {
+        var m = Montar(ConOctubre());
+
+        Control<ComboBox>(m, "ComboCaja").SelectedItem = Caja.Poa;
+        Dispatcher.UIThread.RunJobs();
+        await m.Vm._tareaDebounce;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal((Caja.Poa, 2026, (int?)10), m.Servicio.ConsultasLibroCajaPorCaja[^1]);
+        Assert.Equal(2, m.Servicio.ConsultasLibroCajaPorCaja.Count);
+    }
+
+    [AvaloniaFact]
+    public async Task ElegirPoa_ElEncabezadoDiceLaCaja_TambienEnAnioCompleto()
+    {
+        var m = Montar(ConOctubreYAnio());
+        Assert.Equal("Ingresos y egresos de la caja Local, con el saldo día por día.", Control<EncabezadoPagina>(m, "Encabezado").Subtitulo);
+
+        Control<ComboBox>(m, "ComboCaja").SelectedItem = Caja.Poa;
+        Dispatcher.UIThread.RunJobs();
+        await m.Vm._tareaDebounce;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("Ingresos y egresos de la caja POA, con el saldo día por día.", Control<EncabezadoPagina>(m, "Encabezado").Subtitulo);
+
+        await PasarAAsync(m, "Año completo");
+
+        Assert.Equal("Ingresos y egresos de la caja POA, con el saldo día por día.", Control<EncabezadoPagina>(m, "Encabezado").Subtitulo);
+        Assert.True(Visible(Control<ComboBox>(m, "ComboCaja")));
+        Assert.Equal((Caja.Poa, 2026, (int?)1), m.Servicio.ConsultasLibroCajaPorCaja[^1]);
     }
 
     /// <summary>Validación del año en la vista (como Control POA): un texto que no parsea o fuera de 2020 a 2100 marca

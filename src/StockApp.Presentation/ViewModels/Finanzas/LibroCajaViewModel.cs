@@ -32,6 +32,34 @@ public partial class LibroCajaViewModel : ViewModelBase
     private readonly IServicioAperturaArchivo _apertura;
     private readonly ICurrentSession _session;
 
+    /// <summary>Caja del filtro. Arranca en Local (es un filtro de lectura); al cambiarla se recarga.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TituloLibro))]
+    [NotifyPropertyChangedFor(nameof(SubtituloPantalla))]
+    private Caja _cajaSeleccionada = Caja.Local;
+
+    /// <summary>Las dos cajas del selector.</summary>
+    public IReadOnlyList<Caja> Cajas => CajaExtensions.Todas;
+
+    /// <summary>La caja del período CARGADO (null si no hay nada cargado). El filtro puede ir por delante mientras una
+    /// recarga espera: el título de la pantalla y el PDF dicen de qué caja son los datos que se ven.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TituloLibro))]
+    [NotifyPropertyChangedFor(nameof(SubtituloPantalla))]
+    private Caja? _cajaCargada;
+
+    /// <summary>Título del libro: "Libro caja — caja Local" (el del PDF). Sin nada cargado, la caja del filtro.</summary>
+    public string TituloLibro => TituloDe(CajaCargada ?? CajaSeleccionada);
+
+    /// <summary>Subtítulo de la pantalla: dice de qué caja es lo que se ve (la cargada; sin nada cargado, la del filtro).</summary>
+    public string SubtituloPantalla =>
+        $"Ingresos y egresos de la caja {(CajaCargada ?? CajaSeleccionada).Nombre()}, con el saldo día por día.";
+
+    private static string TituloDe(Caja caja) => $"Libro caja — caja {caja.Nombre()}";
+
+    /// <summary>Parte del nombre de archivo: la caja en minúsculas ("poa").</summary>
+    private static string SlugDe(Caja caja) => caja.Nombre().ToLowerInvariant();
+
     [ObservableProperty] private int _anio;
     [ObservableProperty] private int _mes;
 
@@ -128,6 +156,9 @@ public partial class LibroCajaViewModel : ViewModelBase
 
     partial void OnVerAnioCompletoChanged(bool value) => ProgramarRecarga();
 
+    /// <summary>Otra caja es otra consulta (los saldos son independientes): recarga.</summary>
+    partial void OnCajaSeleccionadaChanged(Caja value) => ProgramarRecarga();
+
     /// <summary>Debounce de año, mes y modo: de una ráfaga de cambios solo el último va al servidor.</summary>
     private RecargaConDebounce Recarga => field ??= new RecargaConDebounce(() => EsperaDebounce);
 
@@ -158,6 +189,7 @@ public partial class LibroCajaViewModel : ViewModelBase
     public async Task CargarAsync()
     {
         var turno = _consultas.Empezar();
+        var caja = CajaSeleccionada;
         var anio = Anio;
         var mes = Mes;
         var anual = VerAnioCompleto;
@@ -165,25 +197,26 @@ public partial class LibroCajaViewModel : ViewModelBase
         {
             if (anual)
             {
-                var libroAnual = await _service.ObtenerLibroCajaAnualAsync(Caja.Local, anio);
+                var libroAnual = await _service.ObtenerLibroCajaAnualAsync(caja, anio);
                 // El año no trae saldos: el inicial del año es el inicial de enero (sin cambiar la API).
-                var enero = await _service.ObtenerLibroCajaMesAsync(Caja.Local, anio, 1);
+                var enero = await _service.ObtenerLibroCajaMesAsync(caja, anio, 1);
                 if (!turno.EsLaUltima)
                     return;
-                AplicarAnual(libroAnual, enero.SaldoInicial);
+                AplicarAnual(caja, libroAnual, enero.SaldoInicial);
                 return;
             }
 
-            var libroMes = await _service.ObtenerLibroCajaMesAsync(Caja.Local, anio, mes);
+            var libroMes = await _service.ObtenerLibroCajaMesAsync(caja, anio, mes);
             if (!turno.EsLaUltima)
                 return;
-            AplicarMes(libroMes);
+            AplicarMes(caja, libroMes);
         }, MensajeSinPermisoLibroCaja, turno);
     }
 
-    private void AplicarMes(LibroCajaMesDto libro)
+    private void AplicarMes(Caja caja, LibroCajaMesDto libro)
     {
         LimpiarPeriodo();
+        CajaCargada = caja;
         SaldoInicial = libro.SaldoInicial;
         SaldoFinal = libro.SaldoFinal;
         foreach (var mov in libro.Movimientos)
@@ -198,9 +231,10 @@ public partial class LibroCajaViewModel : ViewModelBase
 
     /// <summary>El saldo final del año es el inicial más los netos de los doce meses: la misma cuenta del saldo corrido
     /// que hace el servidor mes a mes.</summary>
-    private void AplicarAnual(LibroCajaAnualDto libro, decimal saldoInicialDelAnio)
+    private void AplicarAnual(Caja caja, LibroCajaAnualDto libro, decimal saldoInicialDelAnio)
     {
         LimpiarPeriodo();
+        CajaCargada = caja;
         SaldoInicial = saldoInicialDelAnio;
         SaldoFinal = saldoInicialDelAnio + libro.TotalesPorMes.Sum(t => t.Neto);
         LibroAnual = libro;
@@ -216,6 +250,7 @@ public partial class LibroCajaViewModel : ViewModelBase
         TotalesPorFuente.Clear();
         LibroMes = null;
         LibroAnual = null;
+        CajaCargada = null;
         SaldoInicial = 0m;
         SaldoFinal = 0m;
         MesesConMovimientos = 0;
@@ -288,16 +323,18 @@ public partial class LibroCajaViewModel : ViewModelBase
         // ExecuteAsync directo no consulta CanExecute: la regla completa se repite acá.
         if (!PuedeExportar)
             return;
+        if (CajaCargada is not { } caja)
+            return;
         if (LibroAnual is { } anual)
         {
-            await ExportarAnioAsync(anual);
+            await ExportarAnioAsync(caja, anual);
             return;
         }
         if (LibroMes is { } mes)
-            await ExportarMesAsync(mes);
+            await ExportarMesAsync(caja, mes);
     }
 
-    private async Task ExportarMesAsync(LibroCajaMesDto mes)
+    private async Task ExportarMesAsync(Caja caja, LibroCajaMesDto mes)
     {
         if (!await AvisoVolumenExportacion.ConfirmarAsync(Movimientos.Count, _confirmacion))
             return;
@@ -305,7 +342,7 @@ public partial class LibroCajaViewModel : ViewModelBase
         await ExportacionPdf.EjecutarAsync(async () =>
         {
             var metadatos = new MetadatosDocumento(
-                Titulo: "Libro caja",
+                Titulo: TituloDe(caja),
                 DescripcionFiltros: $"Mes: {mes.Mes:00}/{mes.Anio:0000}.",
                 UsuarioEmisor: Emisor());
 
@@ -326,24 +363,24 @@ public partial class LibroCajaViewModel : ViewModelBase
                 });
 
             var pdf = _pdfExporter.Exportar(Movimientos, ColumnasPdf, metadatos, resumen);
-            await GuardarYOfrecerAbrirAsync(pdf, $"libro-caja-{mes.Anio:0000}-{mes.Mes:00}.pdf");
+            await GuardarYOfrecerAbrirAsync(pdf, $"libro-caja-{SlugDe(caja)}-{mes.Anio:0000}-{mes.Mes:00}.pdf");
         }, _confirmacion);
     }
 
     /// <summary>PDF anual: la tabla de totales por mes y, después (la plantilla imprime el resumen después de la tabla),
     /// los saldos del año, los meses en déficit y los totales por rubro. Sin totales por fuente.</summary>
-    private async Task ExportarAnioAsync(LibroCajaAnualDto anual)
+    private async Task ExportarAnioAsync(Caja caja, LibroCajaAnualDto anual)
     {
         await ExportacionPdf.EjecutarAsync(async () =>
         {
             var metadatos = new MetadatosDocumento(
-                Titulo: "Libro caja",
+                Titulo: TituloDe(caja),
                 DescripcionFiltros: $"Año completo: {anual.Anio:0000}.",
                 UsuarioEmisor: Emisor());
 
             var pdf = _pdfExporter.Exportar(ArmarFilasPdfAnual(anual.TotalesPorMes), ColumnasPdfAnual, metadatos,
                 ArmarResumenAnual(anual, SaldoInicial, SaldoFinal));
-            await GuardarYOfrecerAbrirAsync(pdf, $"libro-caja-{anual.Anio:0000}.pdf");
+            await GuardarYOfrecerAbrirAsync(pdf, $"libro-caja-{SlugDe(caja)}-{anual.Anio:0000}.pdf");
         }, _confirmacion);
     }
 

@@ -4,6 +4,7 @@
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
              xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:dto="using:StockApp.Application.Finanzas"
+             xmlns:en="using:StockApp.Domain.Enums"
              xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -22,7 +23,7 @@
         <StackPanel Margin="28,24">
 
             <v2:EncabezadoPagina x:Name="Encabezado" Titulo="Libro caja"
-                                 Subtitulo="Ingresos y egresos de la caja municipal, con el saldo día por día.">
+                                 Subtitulo="{Binding SubtituloPantalla}">
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button x:Name="BotonActualizar" Classes="secundario" Content="Actualizar" Command="{Binding RecargarCommand}" />
                     <Button x:Name="BotonExportarPdf" Classes="secundario" Content="Exportar PDF" Command="{Binding ExportarPdfCommand}" />
@@ -83,6 +84,17 @@
                                     <ComboBox x:Name="ComboModo" Width="160"
                                               ItemsSource="{x:Static vm:LibroCajaViewModel.OpcionesModo}"
                                               SelectedItem="{Binding ModoSeleccionado}" />
+                                </v2:CampoFormulario>
+                                <v2:CampoFormulario x:Name="CampoCaja" Etiqueta="Caja">
+                                    <ComboBox x:Name="ComboCaja" Width="120"
+                                              ItemsSource="{Binding Cajas}"
+                                              SelectedItem="{Binding CajaSeleccionada}">
+                                        <ComboBox.ItemTemplate>
+                                            <DataTemplate x:DataType="en:Caja">
+                                                <TextBlock Text="{Binding ., Converter={x:Static conv:CajaNombreConverter.Instance}}" />
+                                            </DataTemplate>
+                                        </ComboBox.ItemTemplate>
+                                    </ComboBox>
                                 </v2:CampoFormulario>
                                 <!-- En Año completo el mes no aplica: se oculta (no se deshabilita). -->
                                 <v2:CampoFormulario x:Name="CampoMes" Etiqueta="Mes" IsVisible="{Binding !VerAnioCompleto}">

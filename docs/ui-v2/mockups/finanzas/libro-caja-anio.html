@@ -19,11 +19,12 @@
   .pie { margin-top: 12px; }
   /* Card de filtros: la barra (sin el margen inferior de BarraFiltros, que en una card sola deja 32 abajo) a la
      izquierda y los saldos a la derecha, alineados con el borde inferior de los controles. Campos con 12 de
-     separación: Año (NumericUpDown) 120, Período (ComboBox) 160, Mes (NumericUpDown) 100. */
+     separación: Año (NumericUpDown) 120, Período (ComboBox) 160, Caja (ComboBox) 120, Mes (NumericUpDown) 100. */
   .tarjeta-filtros { display: flex; align-items: flex-end; justify-content: space-between; }
   .tarjeta-filtros > .v2-barra-campos { gap: 12px; margin-bottom: 0; }
   .campo-anio { width: 120px; }
   .campo-periodo { width: 160px; }
+  .campo-caja { width: 120px; }
   .campo-mes { width: 100px; }
   /* Saldos: dos bloques con 24 de separación; etiqueta (etiqueta-campo) 4 arriba del valor (titulo-seccion); la
      insignia, si el saldo es negativo, 8 a la izquierda del valor. */
@@ -93,7 +94,7 @@
     <div class="pagina">
       <div class="v2-encabezado">
         <div class="v2-encabezado-fila">
-          <div><div class="v2-titulo-pagina">Libro caja</div><div class="v2-encabezado-subtitulo">Ingresos y egresos de la caja municipal, con el saldo día por día.</div></div>
+          <div><div class="v2-titulo-pagina">Libro caja</div><div class="v2-encabezado-subtitulo">Ingresos y egresos de la caja Local, con el saldo día por día.</div></div>
           <div class="v2-acciones">
             <span class="v2-boton v2-boton--secundario">Actualizar</span>
             <span class="v2-boton v2-boton--secundario">Exportar PDF</span>
@@ -110,6 +111,10 @@
             <div class="v2-campo campo-periodo">
               <div class="v2-campo-etiqueta"><span>Período</span></div>
               <div><div class="v2-input"><span>Año completo</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div>
+            </div>
+            <div class="v2-campo campo-caja">
+              <div class="v2-campo-etiqueta"><span>Caja</span></div>
+              <div><div class="v2-input"><span>Local</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div>
             </div>
           </div>
           <div class="saldos">

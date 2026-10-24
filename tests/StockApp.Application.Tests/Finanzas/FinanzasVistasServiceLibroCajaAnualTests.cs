@@ -86,10 +86,17 @@ public class FinanzasVistasServiceLibroCajaAnualTests
     [Fact]
     public async Task Anual_CajaInexistente_LanzaArgumentException()
     {
-        var svc = Crear(out var ingresos, out _);
+        var svc = Crear(out var ingresos, out var gastos);
+        // Los dos repositorios responden listas vacías: sin la validación, el anual terminaría bien y el test caería
+        // por "no se lanzó nada", no por un NullReference del mock sin configurar.
+        ingresos.Setup(i => i.ListarPorRangoAsync(It.IsAny<Caja>(), It.IsAny<DateTime>(), It.IsAny<DateTime>()))
+            .ReturnsAsync(new List<IngresoCaja>());
+        gastos.Setup(g => g.ListarPagosActivosPorRangoAsync(It.IsAny<Caja>(), It.IsAny<DateTime>(), It.IsAny<DateTime>()))
+            .ReturnsAsync(new List<PagoGasto>());
 
         await Assert.ThrowsAsync<ArgumentException>(() => svc.ObtenerLibroCajaAnualAsync((Caja)7, 2026));
 
         ingresos.Verify(i => i.ListarPorRangoAsync(It.IsAny<Caja>(), It.IsAny<DateTime>(), It.IsAny<DateTime>()), Times.Never);
+        gastos.Verify(g => g.ListarPagosActivosPorRangoAsync(It.IsAny<Caja>(), It.IsAny<DateTime>(), It.IsAny<DateTime>()), Times.Never);
     }
 }

@@ -1,4 +1,5 @@
 using StockApp.Application.Finanzas;
+using StockApp.Domain.Enums;
 using StockApp.Domain.Formato;
 using StockApp.Presentation.Converters;
 using StockApp.Presentation.ViewModels.Finanzas;
@@ -112,5 +113,19 @@ public class DatosLibroCajaTests
 
         Assert.Equal("$ 949.350,00", FormatoEsUy.Moneda(vm.SaldoInicial));
         Assert.Equal(10, vm.MesesConMovimientos);
+    }
+
+    /// <summary>Los mockups dicen "Libro caja — caja Local" en el título y "Local" en el selector de caja: el VM de los
+    /// datos fijos arranca en Local y lo cargado también.</summary>
+    [Fact]
+    public async Task Vm_ArrancaEnCajaLocal_TituloYSelectorDelMockup()
+    {
+        var vm = DatosLibroCaja.Vm(() => Task.FromResult(DatosLibroCaja.Octubre));
+
+        Assert.Equal(Caja.Local, vm.CajaSeleccionada);
+        Assert.Equal("Libro caja — caja Local", vm.TituloLibro);
+        await vm.CargarAsync();
+        Assert.Equal(Caja.Local, vm.CajaCargada);
+        Assert.Equal("Libro caja — caja Local", vm.TituloLibro);
     }
 }

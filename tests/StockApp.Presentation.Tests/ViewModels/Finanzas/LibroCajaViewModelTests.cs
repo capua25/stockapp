@@ -76,7 +76,7 @@ public class LibroCajaViewModelTests
 
         Assert.Equal(2026, vm.Anio);
         Assert.Equal(10, vm.Mes);
-        svc.Verify(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(It.IsAny<Caja>(), It.IsAny<int>(), It.IsAny<int>()), Times.Never);
     }
 
     [Fact]
@@ -161,8 +161,8 @@ public class LibroCajaViewModelTests
         vm.Mes = 3;
         await vm._tareaDebounce;
 
-        svc.Verify(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, It.IsAny<int>()), Times.Never);
-        svc.Verify(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+        svc.Verify(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<Caja>(), It.IsAny<int>()), Times.Never);
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(It.IsAny<Caja>(), It.IsAny<int>(), It.IsAny<int>()), Times.Never);
     }
 
     [Fact]
@@ -696,9 +696,9 @@ public class LibroCajaViewModelTests
                 && f.ElementAt(2).Equals(new FilaPdfMensual("Marzo", 1_250_000m, 1_322_750m, -72_750m))
                 && f.ElementAt(8).Mes == "Setiembre"),
             It.Is<IReadOnlyList<ColumnaPdf>>(c => c.SequenceEqual(esperado)),
-            It.Is<MetadatosDocumento>(m => m.Titulo == "Libro caja" && m.DescripcionFiltros == "Año completo: 2026."),
+            It.Is<MetadatosDocumento>(m => m.Titulo == "Libro caja — caja Local" && m.DescripcionFiltros == "Año completo: 2026."),
             It.IsAny<ResumenPdf>()), Times.Once);
-        guardado.Verify(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-2026.pdf", It.IsAny<CancellationToken>(),
+        guardado.Verify(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-local-2026.pdf", It.IsAny<CancellationToken>(),
             "pdf", "application/pdf"), Times.Once);
         pdf.Verify(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
             It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()), Times.Never);
@@ -828,7 +828,7 @@ public class LibroCajaViewModelTests
 
         pdf.Verify(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
             It.Is<MetadatosDocumento>(m => m.DescripcionFiltros == "Mes: 09/2026."), It.IsAny<ResumenPdf>()), Times.Once);
-        guardado.Verify(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-2026-09.pdf", It.IsAny<CancellationToken>(),
+        guardado.Verify(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-local-2026-09.pdf", It.IsAny<CancellationToken>(),
             "pdf", "application/pdf"), Times.Once);
     }
 
@@ -846,7 +846,7 @@ public class LibroCajaViewModelTests
 
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
-        guardado.Verify(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-2026-10.pdf", It.IsAny<CancellationToken>(),
+        guardado.Verify(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-local-2026-10.pdf", It.IsAny<CancellationToken>(),
             "pdf", "application/pdf"), Times.Once);
         pdf.Verify(e => e.Exportar(It.IsAny<IEnumerable<FilaPdfMensual>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
             It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()), Times.Never);
@@ -946,7 +946,7 @@ public class LibroCajaViewModelTests
             It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()),
             Times.Once);
         guardadoMock.Verify(g => g.GuardarBytesAsync(
-            It.IsAny<Stream>(), "libro-caja-2026-07.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"), Times.Once);
+            It.IsAny<Stream>(), "libro-caja-local-2026-07.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"), Times.Once);
     }
 
     [Fact]
@@ -1003,14 +1003,14 @@ public class LibroCajaViewModelTests
             .Setup(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(pdfBytes);
         guardadoMock
-            .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-2026-07.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-local-2026-07.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
             .ReturnsAsync(true);
         confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
 
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
         confirmMock.Verify(c => c.PreguntarAsync("PDF guardado. ¿Desea abrirlo ahora?"), Times.Once);
-        aperturaMock.Verify(a => a.AbrirAsync("libro-caja-2026-07.pdf", pdfBytes), Times.Once);
+        aperturaMock.Verify(a => a.AbrirAsync("libro-caja-local-2026-07.pdf", pdfBytes), Times.Once);
     }
 
     [Fact]
@@ -1028,7 +1028,7 @@ public class LibroCajaViewModelTests
             .Setup(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
-            .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-2026-07.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-local-2026-07.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
             .ReturnsAsync(false);
 
         await vm.ExportarPdfCommand.ExecuteAsync(null);
@@ -1053,7 +1053,7 @@ public class LibroCajaViewModelTests
             .Setup(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
-            .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-2026-07.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-local-2026-07.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
             .ReturnsAsync(true);
 
         await vm.ExportarPdfCommand.ExecuteAsync(null);
@@ -1062,7 +1062,7 @@ public class LibroCajaViewModelTests
             It.IsAny<IEnumerable<MovimientoCajaDto>>(),
             It.IsAny<IReadOnlyList<ColumnaPdf>>(),
             It.Is<MetadatosDocumento>(m =>
-                m.Titulo == "Libro caja" &&
+                m.Titulo == "Libro caja — caja Local" &&
                 m.DescripcionFiltros == "Mes: 07/2026." &&
                 m.UsuarioEmisor == "Juan Pérez"),
             It.IsAny<ResumenPdf>()),
@@ -1117,5 +1117,184 @@ public class LibroCajaViewModelTests
                 r.Secciones[1].Filas[0].Etiqueta == "Rentas Generales" &&
                 Equals(r.Secciones[1].Filas[0].Valor, 900m))),
             Times.Once);
+    }
+
+    // ── Task 11: selector de caja ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public void CajaSeleccionada_ArrancaEnLocal_YOfreceLasDosCajas()
+    {
+        var (vm, _, _, _, _, _, _) = Crear(Octubre2026);
+
+        Assert.Equal(Caja.Local, vm.CajaSeleccionada);
+        Assert.Equal(new[] { Caja.Local, Caja.Poa }, vm.Cajas);
+    }
+
+    [Fact]
+    public async Task CambiarCaja_RecargaConLaCajaNueva()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
+        vm.EsperaDebounce = TimeSpan.Zero;
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Poa, 2026, 10)).ReturnsAsync(MesDe(2026, 10, 7m, 17m, Mov(2, 10m, 0m, 17m)));
+
+        vm.CajaSeleccionada = Caja.Poa;
+        await vm._tareaDebounce;
+
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(Caja.Poa, 2026, 10), Times.Once);
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+        Assert.Equal(7m, vm.SaldoInicial);
+        Assert.Equal(Caja.Poa, vm.CajaCargada);
+    }
+
+    [Fact]
+    public async Task Anual_ConCajaPoa_ElSaldoInicialSaleDeEneroDeLaCajaPoa()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 1)).ReturnsAsync(MesDe(2026, 1, 111m, 111m));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Poa, 2026, 1)).ReturnsAsync(MesDe(2026, 1, 900m, 900m));
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(Caja.Poa, 2026))
+            .ReturnsAsync(AnioDe(2026, DoceMeses(new TotalMensualDto(3, 100m, 0m, 100m))));
+        vm.CajaSeleccionada = Caja.Poa;
+        vm.VerAnioCompleto = true;
+
+        await vm.CargarAsync();
+
+        svc.Verify(s => s.ObtenerLibroCajaAnualAsync(Caja.Poa, 2026), Times.Once);
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(Caja.Poa, 2026, 1), Times.Once);
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+        svc.Verify(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, It.IsAny<int>()), Times.Never);
+        Assert.Equal(900m, vm.SaldoInicial);
+        Assert.Equal(1_000m, vm.SaldoFinal);
+    }
+
+    [Fact]
+    public async Task CambiarCajaRapido_SoloLaUltimaConsultaPinta()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
+        var vieja = new TaskCompletionSource<LibroCajaMesDto>();
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Poa, 2026, 10)).Returns(vieja.Task);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 10))
+            .ReturnsAsync(MesDe(2026, 10, 0m, 10m, Mov(2, 10m, 0m, 10m)));
+
+        vm.CajaSeleccionada = Caja.Poa;
+        var primera = vm.CargarAsync();
+        vm.CajaSeleccionada = Caja.Local;
+        await vm.CargarAsync();
+        vieja.SetResult(MesDe(2026, 10, 0m, 99m, Mov(9, 99m, 0m, 99m)));
+        await primera;
+
+        Assert.Equal(10m, vm.SaldoFinal);
+        Assert.Equal(new DateOnly(2026, 10, 2), Assert.Single(vm.Movimientos).Fecha);
+        Assert.Equal(Caja.Local, vm.CajaCargada);
+        Assert.Equal("Libro caja — caja Local", vm.TituloLibro);
+    }
+
+    [Fact]
+    public async Task CambiarCajaRapido_ConDebounce_SoloConsultaLaUltima()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
+        vm.EsperaDebounce = TimeSpan.FromMilliseconds(50);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<Caja>(), 2026, 10)).ReturnsAsync(MesDe(2026, 10, 0m, 0m));
+
+        vm.CajaSeleccionada = Caja.Poa;
+        vm.CajaSeleccionada = Caja.Local;
+        await vm._tareaDebounce;
+
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(Caja.Poa, It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 10), Times.Once);
+    }
+
+    [Fact]
+    public async Task Titulo_DiceLaCajaCargada_NoLaDelFiltroQueVaPorDelante()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Poa, 2026, 10)).ReturnsAsync(MesDe(2026, 10, 0m, 5m, Mov(1, 5m, 0m, 5m)));
+        Assert.Equal("Libro caja — caja Local", vm.TituloLibro);
+        vm.CajaSeleccionada = Caja.Poa;
+        await vm.CargarAsync();
+        Assert.Equal("Libro caja — caja POA", vm.TituloLibro);
+
+        vm.CajaSeleccionada = Caja.Local;   // el debounce infinito deja el filtro por delante de lo cargado
+
+        Assert.Equal("Libro caja — caja POA", vm.TituloLibro);
+    }
+
+    [Fact]
+    public async Task Titulo_SinNadaCargado_DiceLaCajaDelFiltro()
+    {
+        var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Poa, 2026, 10)).ThrowsAsync(new ServidorNoDisponibleException());
+        vm.CajaSeleccionada = Caja.Poa;
+
+        await vm.CargarAsync();
+
+        Assert.Null(vm.CajaCargada);
+        Assert.Equal("Libro caja — caja POA", vm.TituloLibro);
+    }
+
+    [Fact]
+    public async Task ExportarPdfMes_TituloYArchivoLlevanLaCaja()
+    {
+        var (vm, svc, guardado, _, pdf, _, _) = Crear(Octubre2026);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Poa, 2026, 10)).ReturnsAsync(MesDe(2026, 10, 0m, 5m, Mov(1, 5m, 0m, 5m)));
+        vm.CajaSeleccionada = Caja.Poa;
+        await vm.CargarAsync();
+        pdf.Setup(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>())).Returns(new byte[] { 1 });
+        guardado.Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(true);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        pdf.Verify(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.Is<MetadatosDocumento>(m => m.Titulo == "Libro caja — caja POA"), It.IsAny<ResumenPdf>()), Times.Once);
+        guardado.Verify(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-poa-2026-10.pdf", It.IsAny<CancellationToken>(),
+            "pdf", "application/pdf"), Times.Once);
+    }
+
+    [Fact]
+    public async Task ExportarPdfAnual_TituloYArchivoLlevanLaCaja()
+    {
+        var (vm, svc, guardado, _, pdf, _, _) = Crear(Octubre2026);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Poa, 2026, 1)).ReturnsAsync(MesDe(2026, 1, 900m, 900m));
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(Caja.Poa, 2026))
+            .ReturnsAsync(AnioDe(2026, DoceMeses(new TotalMensualDto(3, 100m, 0m, 100m))));
+        vm.CajaSeleccionada = Caja.Poa;
+        vm.VerAnioCompleto = true;
+        await vm.CargarAsync();
+        pdf.Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaPdfMensual>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>())).Returns(new byte[] { 1 });
+        guardado.Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(true);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        pdf.Verify(e => e.Exportar(It.IsAny<IEnumerable<FilaPdfMensual>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.Is<MetadatosDocumento>(m => m.Titulo == "Libro caja — caja POA"), It.IsAny<ResumenPdf>()), Times.Once);
+        guardado.Verify(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-poa-2026.pdf", It.IsAny<CancellationToken>(),
+            "pdf", "application/pdf"), Times.Once);
+    }
+
+    /// <summary>Lo que se exporta es el período CARGADO: con el filtro ya en Local pero la pantalla todavía en POA, el
+    /// PDF dice POA (los datos son de POA).</summary>
+    [Fact]
+    public async Task ExportarPdf_ConCajaCambiadaSinRecargar_ExportaLaCajaCargada()
+    {
+        var (vm, svc, guardado, _, pdf, _, _) = Crear(Octubre2026);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Poa, 2026, 10)).ReturnsAsync(MesDe(2026, 10, 0m, 5m, Mov(1, 5m, 0m, 5m)));
+        vm.CajaSeleccionada = Caja.Poa;
+        await vm.CargarAsync();
+        vm.CajaSeleccionada = Caja.Local;
+        pdf.Setup(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>())).Returns(new byte[] { 1 });
+        guardado.Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(true);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        pdf.Verify(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.Is<MetadatosDocumento>(m => m.Titulo == "Libro caja — caja POA"), It.IsAny<ResumenPdf>()), Times.Once);
+        guardado.Verify(g => g.GuardarBytesAsync(It.IsAny<Stream>(), "libro-caja-poa-2026-10.pdf", It.IsAny<CancellationToken>(),
+            "pdf", "application/pdf"), Times.Once);
     }
 }
