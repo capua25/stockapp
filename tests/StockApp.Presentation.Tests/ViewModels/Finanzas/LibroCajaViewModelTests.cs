@@ -58,8 +58,8 @@ public class LibroCajaViewModelTests
 
     /// <summary>El modo año también consulta enero: su saldo inicial es el saldo inicial del año.</summary>
     private static void ConEnero(Mock<IFinanzasVistasService> svc, decimal saldoInicial = 0m) =>
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), 1))
-            .ReturnsAsync((int anio, int _) => MesDe(anio, 1, saldoInicial, saldoInicial));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), 1))
+            .ReturnsAsync((Caja _, int anio, int _) => MesDe(anio, 1, saldoInicial, saldoInicial));
 
     private sealed class RelojFijo(DateTimeOffset ahora, TimeZoneInfo? zona = null) : TimeProvider
     {
@@ -76,7 +76,7 @@ public class LibroCajaViewModelTests
 
         Assert.Equal(2026, vm.Anio);
         Assert.Equal(10, vm.Mes);
-        svc.Verify(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()), Times.Never);
     }
 
     [Fact]
@@ -97,12 +97,12 @@ public class LibroCajaViewModelTests
     {
         var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
         vm.EsperaDebounce = TimeSpan.Zero;
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 9)).ReturnsAsync(MesDe(2026, 9, 0m, 0m));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 9)).ReturnsAsync(MesDe(2026, 9, 0m, 0m));
 
         vm.Mes = 9;
         await vm._tareaDebounce;
 
-        svc.Verify(s => s.ObtenerLibroCajaMesAsync(2026, 9), Times.Once);
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 9), Times.Once);
         Assert.Equal(9, vm.LibroMes!.Mes);
     }
 
@@ -111,12 +111,12 @@ public class LibroCajaViewModelTests
     {
         var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
         vm.EsperaDebounce = TimeSpan.Zero;
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2025, 10)).ReturnsAsync(MesDe(2025, 10, 0m, 0m));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2025, 10)).ReturnsAsync(MesDe(2025, 10, 0m, 0m));
 
         vm.Anio = 2025;
         await vm._tareaDebounce;
 
-        svc.Verify(s => s.ObtenerLibroCajaMesAsync(2025, 10), Times.Once);
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2025, 10), Times.Once);
     }
 
     [Fact]
@@ -124,14 +124,14 @@ public class LibroCajaViewModelTests
     {
         var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
         vm.EsperaDebounce = TimeSpan.Zero;
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 1, 0m, 0m));
-        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(2026)).ReturnsAsync(AnioDe(2026, DoceMeses()));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 1, 0m, 0m));
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, 2026)).ReturnsAsync(AnioDe(2026, DoceMeses()));
 
         vm.ModoSeleccionado = LibroCajaViewModel.ModoAnioCompleto;
         await vm._tareaDebounce;
 
         Assert.True(vm.VerAnioCompleto);
-        svc.Verify(s => s.ObtenerLibroCajaAnualAsync(2026), Times.Once);
+        svc.Verify(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, 2026), Times.Once);
         Assert.NotNull(vm.LibroAnual);
     }
 
@@ -139,15 +139,15 @@ public class LibroCajaViewModelTests
     public async Task CambiarAnio_EnAnioCompleto_RecargaElAnualDeEseAnio()
     {
         var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2025, 1, 0m, 0m));
-        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<int>())).ReturnsAsync(AnioDe(2025, DoceMeses()));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2025, 1, 0m, 0m));
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, It.IsAny<int>())).ReturnsAsync(AnioDe(2025, DoceMeses()));
         vm.VerAnioCompleto = true;
         vm.EsperaDebounce = TimeSpan.Zero;
 
         vm.Anio = 2025;
         await vm._tareaDebounce;
 
-        svc.Verify(s => s.ObtenerLibroCajaAnualAsync(2025), Times.Once);
+        svc.Verify(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, 2025), Times.Once);
     }
 
     [Fact]
@@ -161,8 +161,8 @@ public class LibroCajaViewModelTests
         vm.Mes = 3;
         await vm._tareaDebounce;
 
-        svc.Verify(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<int>()), Times.Never);
-        svc.Verify(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+        svc.Verify(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, It.IsAny<int>()), Times.Never);
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()), Times.Never);
     }
 
     [Fact]
@@ -170,14 +170,14 @@ public class LibroCajaViewModelTests
     {
         var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
         vm.EsperaDebounce = TimeSpan.FromMilliseconds(50);
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 8, 0m, 0m));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 8, 0m, 0m));
 
         vm.Mes = 9;
         vm.Mes = 8;
         await vm._tareaDebounce;
 
-        svc.Verify(s => s.ObtenerLibroCajaMesAsync(2026, 9), Times.Never);
-        svc.Verify(s => s.ObtenerLibroCajaMesAsync(2026, 8), Times.Once);
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 9), Times.Never);
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 8), Times.Once);
     }
 
     [Fact]
@@ -200,14 +200,14 @@ public class LibroCajaViewModelTests
     public async Task Reintentar_ConsultaElPeriodoQueEstaEnPantalla()
     {
         var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 10)).ThrowsAsync(new ServidorNoDisponibleException());
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 9)).ReturnsAsync(MesDe(2026, 9, 0m, 0m));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 10)).ThrowsAsync(new ServidorNoDisponibleException());
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 9)).ReturnsAsync(MesDe(2026, 9, 0m, 0m));
         await vm.CargarAsync();
         vm.Mes = 9;   // el debounce infinito deja el cambio en pantalla sin consultarlo
 
         await vm.ReintentarCargaCommand.ExecuteAsync(null);
 
-        svc.Verify(s => s.ObtenerLibroCajaMesAsync(2026, 9), Times.Once);
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 9), Times.Once);
         Assert.False(vm.SinConexion);
         Assert.Equal(9, vm.LibroMes!.Mes);
     }
@@ -217,7 +217,7 @@ public class LibroCajaViewModelTests
     {
         var (vm, svc, _, _, _, _, _) = Crear();
         var pendiente = new TaskCompletionSource<LibroCajaMesDto>();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).Returns(pendiente.Task);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>())).Returns(pendiente.Task);
 
         var carga = vm.CargarAsync();
         Assert.True(vm.Cargando);
@@ -232,7 +232,7 @@ public class LibroCajaViewModelTests
     public async Task CargarAsync_403_MarcaSinPermisoConSuMensaje()
     {
         var (vm, svc, _, _, _, _, _) = Crear();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()))
             .ThrowsAsync(new UnauthorizedAccessException("403"));
 
         await vm.CargarAsync();
@@ -245,7 +245,7 @@ public class LibroCajaViewModelTests
     public async Task ServidorCaido_TrasUnaCargaBuena_MarcaSinConexionYVaciaLoCargado()
     {
         var (vm, svc, _, _, _, _, _) = Crear();
-        svc.SetupSequence(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+        svc.SetupSequence(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync(MesDe(2026, 10, 0m, 500m, Mov(1, 500m, 0m, 500m)))
             .ThrowsAsync(new ServidorNoDisponibleException());
         await vm.CargarAsync();
@@ -263,7 +263,7 @@ public class LibroCajaViewModelTests
     public async Task Reintentar_TrasUnaCaida_VuelveACargar()
     {
         var (vm, svc, _, _, _, _, _) = Crear();
-        svc.SetupSequence(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+        svc.SetupSequence(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()))
             .ThrowsAsync(new ServidorNoDisponibleException())
             .ReturnsAsync(MesDe(2026, 10, 0m, 500m, Mov(1, 500m, 0m, 500m)));
         await vm.CargarAsync();
@@ -281,8 +281,8 @@ public class LibroCajaViewModelTests
         var (vm, svc, _, _, _, _, _) = Crear();
         var vieja = new TaskCompletionSource<LibroCajaMesDto>();
         var nueva = new TaskCompletionSource<LibroCajaMesDto>();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 9)).Returns(vieja.Task);
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 10)).Returns(nueva.Task);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 9)).Returns(vieja.Task);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 10)).Returns(nueva.Task);
         vm.Anio = 2026;
         vm.Mes = 9;
 
@@ -304,8 +304,8 @@ public class LibroCajaViewModelTests
         var (vm, svc, _, _, _, _, _) = Crear();
         ConEnero(svc);
         var mensual = new TaskCompletionSource<LibroCajaMesDto>();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 10)).Returns(mensual.Task);
-        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(2026))
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 10)).Returns(mensual.Task);
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, 2026))
             .ReturnsAsync(AnioDe(2026, DoceMeses(new TotalMensualDto(3, 100m, 0m, 100m))));
         vm.Anio = 2026;
         vm.Mes = 10;
@@ -326,8 +326,8 @@ public class LibroCajaViewModelTests
     {
         var (vm, svc, _, _, _, _, _) = Crear();
         var anual = new TaskCompletionSource<LibroCajaAnualDto>();
-        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(2026)).Returns(anual.Task);
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 10)).ReturnsAsync(MesDe(2026, 10, 0m, 10m, Mov(2, 10m, 0m, 10m)));
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, 2026)).Returns(anual.Task);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 10)).ReturnsAsync(MesDe(2026, 10, 0m, 10m, Mov(2, 10m, 0m, 10m)));
         vm.Anio = 2026;
         vm.Mes = 10;
         vm.VerAnioCompleto = true;
@@ -347,10 +347,10 @@ public class LibroCajaViewModelTests
     public async Task CargarAnual_TrasUnMes_QuitaLoDelMes()
     {
         var (vm, svc, _, _, _, _, _) = Crear();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(new LibroCajaMesDto(
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(new LibroCajaMesDto(
             2026, 10, 0m, 10m, new List<MovimientoCajaDto> { Mov(2, 10m, 0m, 10m) },
             new List<TotalPorClaveDto> { new("Combustibles", 5m) }, new List<TotalPorClaveDto> { new("Rentas", 10m) }));
-        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<int>()))
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, It.IsAny<int>()))
             .ReturnsAsync(AnioDe(2026, DoceMeses(new TotalMensualDto(3, 100m, 0m, 100m))));
         await vm.CargarAsync();
 
@@ -378,7 +378,7 @@ public class LibroCajaViewModelTests
     public async Task Mes_SinMovimientos_EsSinMovimientosEnElPeriodo()
     {
         var (vm, svc, _, _, _, _, _) = Crear();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 10, 300m, 300m));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 10, 300m, 300m));
 
         await vm.CargarAsync();
 
@@ -391,7 +391,7 @@ public class LibroCajaViewModelTests
     {
         var (vm, svc, _, _, _, _, _) = Crear();
         ConEnero(svc);
-        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<int>())).ReturnsAsync(AnioDe(2026, DoceMeses()));
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, It.IsAny<int>())).ReturnsAsync(AnioDe(2026, DoceMeses()));
         vm.VerAnioCompleto = true;
 
         await vm.CargarAsync();
@@ -406,7 +406,7 @@ public class LibroCajaViewModelTests
     {
         var (vm, svc, _, _, _, _, _) = Crear();
         ConEnero(svc);
-        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<int>()))
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, It.IsAny<int>()))
             .ReturnsAsync(AnioDe(2026, DoceMeses(new TotalMensualDto(3, 0m, 250m, -250m))));
         vm.VerAnioCompleto = true;
 
@@ -421,7 +421,7 @@ public class LibroCajaViewModelTests
     {
         var (vm, svc, _, _, _, _, _) = Crear();
         ConEnero(svc);
-        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<int>())).ReturnsAsync(AnioDe(2026, DoceMeses(
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, It.IsAny<int>())).ReturnsAsync(AnioDe(2026, DoceMeses(
             new TotalMensualDto(3, 0m, 250m, -250m), new TotalMensualDto(7, 1000m, 0m, 1000m))));
         vm.VerAnioCompleto = true;
 
@@ -436,14 +436,14 @@ public class LibroCajaViewModelTests
     {
         var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
         ConEnero(svc, saldoInicial: 812_430.55m);
-        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(2026)).ReturnsAsync(AnioDe(2026, DoceMeses(
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, 2026)).ReturnsAsync(AnioDe(2026, DoceMeses(
             new TotalMensualDto(1, 1_250_000m, 980_200m, 269_800m),
             new TotalMensualDto(3, 1_250_000m, 1_322_750m, -72_750m))));
         vm.VerAnioCompleto = true;
 
         await vm.CargarAsync();
 
-        svc.Verify(s => s.ObtenerLibroCajaMesAsync(2026, 1), Times.Once);
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 1), Times.Once);
         Assert.Equal(812_430.55m, vm.SaldoInicial);
         Assert.Equal(1_009_480.55m, vm.SaldoFinal);
     }
@@ -453,7 +453,7 @@ public class LibroCajaViewModelTests
     {
         var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
         ConEnero(svc, saldoInicial: 50_000m);
-        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(2026))
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, 2026))
             .ReturnsAsync(AnioDe(2026, DoceMeses(new TotalMensualDto(2, 0m, 80_000m, -80_000m))));
         vm.VerAnioCompleto = true;
 
@@ -466,8 +466,8 @@ public class LibroCajaViewModelTests
     public async Task Anual_403EnLaConsultaDeEnero_MarcaSinPermiso()
     {
         var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
-        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(2026)).ReturnsAsync(AnioDe(2026, DoceMeses()));
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 1)).ThrowsAsync(new UnauthorizedAccessException("403"));
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, 2026)).ReturnsAsync(AnioDe(2026, DoceMeses()));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 1)).ThrowsAsync(new UnauthorizedAccessException("403"));
         vm.VerAnioCompleto = true;
 
         await vm.CargarAsync();
@@ -480,9 +480,9 @@ public class LibroCajaViewModelTests
     {
         var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
         var enero = new TaskCompletionSource<LibroCajaMesDto>();
-        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(2026)).ReturnsAsync(AnioDe(2026, DoceMeses()));
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 1)).Returns(enero.Task);
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 10)).ReturnsAsync(MesDe(2026, 10, 7m, 17m, Mov(2, 10m, 0m, 17m)));
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, 2026)).ReturnsAsync(AnioDe(2026, DoceMeses()));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 1)).Returns(enero.Task);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 10)).ReturnsAsync(MesDe(2026, 10, 7m, 17m, Mov(2, 10m, 0m, 17m)));
         vm.VerAnioCompleto = true;
         var anual = vm.CargarAsync();
         vm.VerAnioCompleto = false;
@@ -501,7 +501,7 @@ public class LibroCajaViewModelTests
     public async Task SinConexion_TrasUnMesCargado_DejaLosSaldosEnCero()
     {
         var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
-        svc.SetupSequence(s => s.ObtenerLibroCajaMesAsync(2026, 10))
+        svc.SetupSequence(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 10))
             .ReturnsAsync(MesDe(2026, 10, 100m, 150m, Mov(1, 50m, 0m, 150m)))
             .ThrowsAsync(new ServidorNoDisponibleException());
         await vm.CargarAsync();
@@ -518,9 +518,9 @@ public class LibroCajaViewModelTests
     public async Task CargarAnual_TrasUnMes_NoDejaLosSaldosDelMes_SiLaCargaAnualFalla()
     {
         var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 10)).ReturnsAsync(MesDe(2026, 10, 100m, 150m, Mov(1, 50m, 0m, 150m)));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 10)).ReturnsAsync(MesDe(2026, 10, 100m, 150m, Mov(1, 50m, 0m, 150m)));
         await vm.CargarAsync();
-        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(2026)).ThrowsAsync(new ServidorNoDisponibleException());
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, 2026)).ThrowsAsync(new ServidorNoDisponibleException());
         vm.VerAnioCompleto = true;
 
         await vm.CargarAsync();
@@ -533,7 +533,7 @@ public class LibroCajaViewModelTests
     public async Task CargarAsync_PorDefecto_PideElMesActual()
     {
         var (vm, svc, _, _, _, _, _) = Crear();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync(new LibroCajaMesDto(
                 2026, 7, 100m, 100m,
                 new List<MovimientoCajaDto>(), new List<TotalPorClaveDto>(), new List<TotalPorClaveDto>()));
@@ -543,14 +543,14 @@ public class LibroCajaViewModelTests
         Assert.Equal(100m, vm.SaldoInicial);
         Assert.Equal(100m, vm.SaldoFinal);
         Assert.Empty(vm.Movimientos);
-        svc.Verify(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Once);
+        svc.Verify(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()), Times.Once);
     }
 
     [Fact]
     public async Task CargarAsync_ConMovimientos_PopulaLaGrilla()
     {
         var (vm, svc, _, _, _, _, _) = Crear();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync(new LibroCajaMesDto(
                 2026, 7, 0m, 500m,
                 new List<MovimientoCajaDto>
@@ -576,7 +576,7 @@ public class LibroCajaViewModelTests
     public async Task CargarAsync_SiObtenerLibroCajaMesLanzaUnauthorized_NoPropagaLaExcepcion()
     {
         var (vm, svc, _, _, _, _, _) = Crear();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()))
             .ThrowsAsync(new UnauthorizedAccessException());
 
         var excepcion = await Record.ExceptionAsync(() => vm.CargarAsync());
@@ -589,13 +589,13 @@ public class LibroCajaViewModelTests
     {
         var (vm, svc, _, _, _, _, _) = Crear();
         ConEnero(svc);
-        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<int>()))
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, It.IsAny<int>()))
             .ReturnsAsync(new LibroCajaAnualDto(2026, new List<TotalMensualDto>(), new List<TotalPorClaveDto>()));
 
         vm.VerAnioCompleto = true;
         await vm.CargarAsync();
 
-        svc.Verify(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<int>()), Times.Once);
+        svc.Verify(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, It.IsAny<int>()), Times.Once);
         Assert.NotNull(vm.LibroAnual);
     }
 
@@ -605,7 +605,7 @@ public class LibroCajaViewModelTests
         // spec §7.3: el toggle "Año completo" muestra "totales por mes y por rubro, sin gráficos".
         var (vm, svc, _, _, _, _, _) = Crear();
         ConEnero(svc);
-        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<int>()))
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, It.IsAny<int>()))
             .ReturnsAsync(new LibroCajaAnualDto(
                 2026,
                 new List<TotalMensualDto> { new(7, 1000m, 400m, 600m) },
@@ -623,7 +623,7 @@ public class LibroCajaViewModelTests
     public async Task FilasView_EsOrdenable()
     {
         var (vm, svc, _, _, _, _, _) = Crear();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync(new LibroCajaMesDto(
                 2026, 7, 0m, 0m, new List<MovimientoCajaDto>(), new List<TotalPorClaveDto>(), new List<TotalPorClaveDto>()));
 
@@ -643,7 +643,7 @@ public class LibroCajaViewModelTests
     {
         var (vm, svc, _, _, pdfExporterMock, _, _) = Crear();
         ConEnero(svc);
-        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(It.IsAny<int>()))
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, It.IsAny<int>()))
             .ReturnsAsync(new LibroCajaAnualDto(2026, DoceMeses(), new List<TotalPorClaveDto>()));
         vm.VerAnioCompleto = true;
         await vm.CargarAsync();
@@ -667,7 +667,7 @@ public class LibroCajaViewModelTests
     {
         var (vm, svc, guardado, _, pdf, _, _) = Crear(Octubre2026);
         ConEnero(svc, saldoInicial: 812_430.55m);
-        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(2026)).ReturnsAsync(anual);
+        svc.Setup(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, 2026)).ReturnsAsync(anual);
         vm.VerAnioCompleto = true;
         await vm.CargarAsync();
         pdf.Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaPdfMensual>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
@@ -748,7 +748,7 @@ public class LibroCajaViewModelTests
     public async Task Exportar_MesSinMovimientos_NoSePuede()
     {
         var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 10, 10m, 10m));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 10, 10m, 10m));
 
         await vm.CargarAsync();
 
@@ -776,10 +776,10 @@ public class LibroCajaViewModelTests
     public async Task Exportar_ConSinPermiso_NoSePuede()
     {
         var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 10, 0m, 5m, Mov(1, 5m, 0m, 5m)));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 10, 0m, 5m, Mov(1, 5m, 0m, 5m)));
         await vm.CargarAsync();
         Assert.True(vm.ExportarPdfCommand.CanExecute(null));
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ThrowsAsync(new UnauthorizedAccessException("403"));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>())).ThrowsAsync(new UnauthorizedAccessException("403"));
 
         await vm.CargarAsync();
 
@@ -792,10 +792,10 @@ public class LibroCajaViewModelTests
     public async Task Exportar_MientrasCarga_NoSePuede_YAlTerminarNotificaYVuelve()
     {
         var (vm, svc, _, _, _, _, _) = Crear(Octubre2026);
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 10, 0m, 5m, Mov(1, 5m, 0m, 5m)));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 10, 0m, 5m, Mov(1, 5m, 0m, 5m)));
         await vm.CargarAsync();
         var pendiente = new TaskCompletionSource<LibroCajaMesDto>();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).Returns(pendiente.Task);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>())).Returns(pendiente.Task);
         var avisos = 0;
         vm.ExportarPdfCommand.CanExecuteChanged += (_, _) => avisos++;
 
@@ -815,7 +815,7 @@ public class LibroCajaViewModelTests
     public async Task ExportarPdf_ConMesCambiadoSinRecargar_ExportaElMesCargado()
     {
         var (vm, svc, guardado, _, pdf, _, _) = Crear(Octubre2026);
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 9)).ReturnsAsync(MesDe(2026, 9, 0m, 5m, Mov(1, 5m, 0m, 5m)));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 9)).ReturnsAsync(MesDe(2026, 9, 0m, 5m, Mov(1, 5m, 0m, 5m)));
         vm.Mes = 9;
         await vm.CargarAsync();
         vm.Mes = 10;   // el debounce infinito deja octubre en el filtro y setiembre en pantalla
@@ -836,7 +836,7 @@ public class LibroCajaViewModelTests
     public async Task ExportarPdf_RecienPasadoAAnioSinRecargar_ExportaElMesCargado()
     {
         var (vm, svc, guardado, _, pdf, _, _) = Crear(Octubre2026);
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 10)).ReturnsAsync(MesDe(2026, 10, 0m, 5m, Mov(1, 5m, 0m, 5m)));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 10)).ReturnsAsync(MesDe(2026, 10, 0m, 5m, Mov(1, 5m, 0m, 5m)));
         await vm.CargarAsync();
         vm.VerAnioCompleto = true;   // sin recargar: en pantalla sigue octubre
         pdf.Setup(e => e.Exportar(It.IsAny<IEnumerable<MovimientoCajaDto>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
@@ -856,7 +856,7 @@ public class LibroCajaViewModelTests
     public async Task ExportarPdfCommand_SinItems_NoExporta()
     {
         var (vm, svc, _, _, pdfExporterMock, _, _) = Crear();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync(new LibroCajaMesDto(
                 2026, 7, 0m, 0m, new List<MovimientoCajaDto>(), new List<TotalPorClaveDto>(), new List<TotalPorClaveDto>()));
         await vm.CargarAsync();
@@ -871,10 +871,10 @@ public class LibroCajaViewModelTests
     public async Task ExportarPdfCommand_EjecutadoDirectoMientrasCarga_NoExporta()
     {
         var (vm, svc, _, _, pdfExporterMock, _, _) = Crear(Octubre2026);
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 10, 0m, 5m, Mov(1, 5m, 0m, 5m)));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 10, 0m, 5m, Mov(1, 5m, 0m, 5m)));
         await vm.CargarAsync();
         var pendiente = new TaskCompletionSource<LibroCajaMesDto>();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).Returns(pendiente.Task);
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>())).Returns(pendiente.Task);
         var carga = vm.CargarAsync();
         Assert.True(vm.Cargando);
 
@@ -890,9 +890,9 @@ public class LibroCajaViewModelTests
     public async Task ExportarPdfCommand_EjecutadoDirectoConSinPermiso_NoExporta()
     {
         var (vm, svc, _, _, pdfExporterMock, _, _) = Crear(Octubre2026);
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 10, 0m, 5m, Mov(1, 5m, 0m, 5m)));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>())).ReturnsAsync(MesDe(2026, 10, 0m, 5m, Mov(1, 5m, 0m, 5m)));
         await vm.CargarAsync();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>())).ThrowsAsync(new UnauthorizedAccessException("403"));
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>())).ThrowsAsync(new UnauthorizedAccessException("403"));
         await vm.CargarAsync();
         Assert.True(vm.SinPermiso);
         Assert.NotNull(vm.LibroMes);
@@ -923,7 +923,7 @@ public class LibroCajaViewModelTests
         };
 
         var (vm, svc, guardadoMock, _, pdfExporterMock, _, _) = Crear();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync(new LibroCajaMesDto(
                 2026, 7, 0m, 500m,
                 new List<MovimientoCajaDto> { CrearMovimiento() },
@@ -954,7 +954,7 @@ public class LibroCajaViewModelTests
     {
         var items = Enumerable.Range(1, 600).Select(_ => CrearMovimiento()).ToList();
         var (vm, svc, _, confirmMock, pdfExporterMock, _, _) = Crear();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync(new LibroCajaMesDto(2026, 7, 0m, 0m, items, new List<TotalPorClaveDto>(), new List<TotalPorClaveDto>()));
         await vm.CargarAsync();
         confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
@@ -970,7 +970,7 @@ public class LibroCajaViewModelTests
     public async Task ExportarPdfCommand_SiFallaGuardarBytesAsync_InformaYNoPropagaLaExcepcion()
     {
         var (vm, svc, guardadoMock, confirmMock, pdfExporterMock, _, _) = Crear();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync(new LibroCajaMesDto(
                 2026, 7, 0m, 500m, new List<MovimientoCajaDto> { CrearMovimiento() },
                 new List<TotalPorClaveDto>(), new List<TotalPorClaveDto>()));
@@ -991,7 +991,7 @@ public class LibroCajaViewModelTests
     public async Task ExportarPdfCommand_GuardadoExitoso_OfreceAbrirElArchivo()
     {
         var (vm, svc, guardadoMock, confirmMock, pdfExporterMock, aperturaMock, _) = Crear();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync(new LibroCajaMesDto(
                 2026, 7, 0m, 500m, new List<MovimientoCajaDto> { CrearMovimiento() },
                 new List<TotalPorClaveDto>(), new List<TotalPorClaveDto>()));
@@ -1017,7 +1017,7 @@ public class LibroCajaViewModelTests
     public async Task ExportarPdfCommand_GuardadoCancelado_NoOfreceAbrir()
     {
         var (vm, svc, guardadoMock, confirmMock, pdfExporterMock, aperturaMock, _) = Crear();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync(new LibroCajaMesDto(
                 2026, 7, 0m, 500m, new List<MovimientoCajaDto> { CrearMovimiento() },
                 new List<TotalPorClaveDto>(), new List<TotalPorClaveDto>()));
@@ -1041,7 +1041,7 @@ public class LibroCajaViewModelTests
     public async Task ExportarPdfCommand_PasaMetadatosConTituloFiltrosYUsuarioEmisor()
     {
         var (vm, svc, guardadoMock, _, pdfExporterMock, _, sessionMock) = Crear();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync(new LibroCajaMesDto(
                 2026, 7, 0m, 500m, new List<MovimientoCajaDto> { CrearMovimiento() },
                 new List<TotalPorClaveDto>(), new List<TotalPorClaveDto>()));
@@ -1081,7 +1081,7 @@ public class LibroCajaViewModelTests
     public async Task ExportarPdfCommand_PasaElResumenConSaldosYTotalesPorRubroYFuente()
     {
         var (vm, svc, guardadoMock, _, pdfExporterMock, _, _) = Crear();
-        svc.Setup(s => s.ObtenerLibroCajaMesAsync(It.IsAny<int>(), It.IsAny<int>()))
+        svc.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, It.IsAny<int>(), It.IsAny<int>()))
             .ReturnsAsync(new LibroCajaMesDto(
                 2026, 7, 100m, 400m,
                 new List<MovimientoCajaDto> { CrearMovimiento() },

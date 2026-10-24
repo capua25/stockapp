@@ -11,6 +11,7 @@ using CommunityToolkit.Mvvm.Input;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
+using StockApp.Domain.Enums;
 using StockApp.Presentation.Converters;
 using StockApp.Presentation.Services;
 
@@ -164,16 +165,16 @@ public partial class LibroCajaViewModel : ViewModelBase
         {
             if (anual)
             {
-                var libroAnual = await _service.ObtenerLibroCajaAnualAsync(anio);
+                var libroAnual = await _service.ObtenerLibroCajaAnualAsync(Caja.Local, anio);
                 // El año no trae saldos: el inicial del año es el inicial de enero (sin cambiar la API).
-                var enero = await _service.ObtenerLibroCajaMesAsync(anio, 1);
+                var enero = await _service.ObtenerLibroCajaMesAsync(Caja.Local, anio, 1);
                 if (!turno.EsLaUltima)
                     return;
                 AplicarAnual(libroAnual, enero.SaldoInicial);
                 return;
             }
 
-            var libroMes = await _service.ObtenerLibroCajaMesAsync(anio, mes);
+            var libroMes = await _service.ObtenerLibroCajaMesAsync(Caja.Local, anio, mes);
             if (!turno.EsLaUltima)
                 return;
             AplicarMes(libroMes);

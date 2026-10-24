@@ -44,8 +44,8 @@ public class ShellSidebarSigueNavegacionTests : IDisposable
 
     private sealed class FinanzasSinUsoFake : IFinanzasVistasService
     {
-        public Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(int anio, int mes) => throw new NotSupportedException();
-        public Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(int anio) => throw new NotSupportedException();
+        public Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(Caja caja, int anio, int mes) => throw new NotSupportedException();
+        public Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(Caja caja, int anio) => throw new NotSupportedException();
         public Task<IReadOnlyList<ControlPoaLineaDto>> ObtenerControlPoaAsync(int ejercicio) => throw new NotSupportedException();
         public Task<CalendarioPagosDto> ObtenerCalendarioPagosAsync(DateTime? fechaReferencia = null) => throw new NotSupportedException();
     }

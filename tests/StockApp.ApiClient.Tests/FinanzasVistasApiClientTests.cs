@@ -2,6 +2,7 @@ using System.Net;
 using StockApp.ApiClient;
 using StockApp.ApiClient.Tests.TestInfra;
 using StockApp.Application.Finanzas;
+using StockApp.Domain.Enums;
 using Xunit;
 
 namespace StockApp.ApiClient.Tests;
@@ -20,7 +21,7 @@ public class FinanzasVistasApiClientTests
         }));
         var client = new FinanzasVistasApiClient(TestHttp.CrearCliente(fake));
 
-        var dto = await client.ObtenerLibroCajaMesAsync(2026, 7);
+        var dto = await client.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 7);
 
         Assert.Equal("/finanzas/libro-caja", fake.UltimaRequest!.RequestUri!.AbsolutePath);
         Assert.Contains("anio=2026", fake.UltimaRequest.RequestUri.Query);
@@ -39,10 +40,45 @@ public class FinanzasVistasApiClientTests
         }));
         var client = new FinanzasVistasApiClient(TestHttp.CrearCliente(fake));
 
-        var dto = await client.ObtenerLibroCajaAnualAsync(2026);
+        var dto = await client.ObtenerLibroCajaAnualAsync(Caja.Local, 2026);
 
         Assert.DoesNotContain("mes=", fake.UltimaRequest!.RequestUri!.Query);
         Assert.Equal(2026, dto.Anio);
+    }
+
+    [Fact]
+    public async Task ObtenerLibroCajaMesAsync_EnviaCajaComoNumero()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(new
+        {
+            anio = 2026, mes = 7, saldoInicial = 0m, saldoFinal = 0m,
+            movimientos = Array.Empty<object>(),
+            totalesPorRubro = Array.Empty<object>(),
+            totalesPorFuente = Array.Empty<object>(),
+        }));
+        var client = new FinanzasVistasApiClient(TestHttp.CrearCliente(fake));
+
+        await client.ObtenerLibroCajaMesAsync(Caja.Poa, 2026, 7);
+
+        Assert.Contains("caja=1", fake.UltimaRequest!.RequestUri!.Query);
+        Assert.DoesNotContain("Poa", fake.UltimaRequest.RequestUri.Query);
+    }
+
+    [Fact]
+    public async Task ObtenerLibroCajaAnualAsync_EnviaCajaComoNumero()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(new
+        {
+            anio = 2026,
+            totalesPorMes = Array.Empty<object>(),
+            totalesPorRubro = Array.Empty<object>(),
+        }));
+        var client = new FinanzasVistasApiClient(TestHttp.CrearCliente(fake));
+
+        await client.ObtenerLibroCajaAnualAsync(Caja.Poa, 2026);
+
+        Assert.Contains("caja=1", fake.UltimaRequest!.RequestUri!.Query);
+        Assert.DoesNotContain("mes=", fake.UltimaRequest.RequestUri.Query);
     }
 
     [Fact]

@@ -33,10 +33,10 @@ public class InicioViewTests
 {
     private sealed class FinanzasVistasServiceFake : IFinanzasVistasService
     {
-        public Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(int anio, int mes)
+        public Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(Caja caja, int anio, int mes)
             => throw new NotSupportedException("No usado en este banco de pruebas.");
 
-        public Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(int anio)
+        public Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(Caja caja, int anio)
             => throw new NotSupportedException("No usado en este banco de pruebas.");
 
         public Task<IReadOnlyList<ControlPoaLineaDto>> ObtenerControlPoaAsync(int ejercicio)

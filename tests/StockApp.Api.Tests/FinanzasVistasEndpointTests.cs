@@ -152,4 +152,106 @@ public class FinanzasVistasEndpointTests : ApiTestBase
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
+
+    // ── Caja ─────────────────────────────────────────────────────────────────
+
+    // Montos con un único origen posible: Local = 1000 de ingreso y 5000 de pago; POA = 20 de ingreso y 3 de pago.
+    // Saldo inicial de julio: POA -500 y Local -60000 (pagos de junio). Los inactivos (ingreso POA 400, pago POA 70, gasto anulado con pagos 9000 POA y 80000 Local) no cuentan en ninguna caja.
+    private async Task SeedLibroDeDosCajasAsync()
+    {
+        await using var ctx = Factory.CrearContexto();
+        await DatosDePrueba.SeedUsuarioAsync(ctx, "admin.test", "Secreta123!", RolUsuario.Admin);
+        var fuente = new FuenteFinanciamiento { Nombre = "Literal local", Activo = true, Caja = Caja.Local };
+        var fuentePoa = new FuenteFinanciamiento { Nombre = "Literal POA", Activo = true, Caja = Caja.Poa };
+        var proveedor = new Proveedor { Nombre = $"Proveedor {Guid.NewGuid():N}" };
+        var rubro = new RubroGasto { Codigo = Random.Shared.Next(1, 1_000_000), Nombre = "Rubro caja" };
+        ctx.AddRange(fuente, fuentePoa, proveedor, rubro);
+        await ctx.SaveChangesAsync();
+
+        var fecha = new DateTime(2026, 7, 10, 0, 0, 0, DateTimeKind.Utc);
+        ctx.IngresosCaja.AddRange(
+            new IngresoCaja { Fecha = fecha, Concepto = "Ingreso local", FuenteFinanciamientoId = fuente.Id, Monto = 1000m, Caja = Caja.Local },
+            new IngresoCaja { Fecha = fecha, Concepto = "Ingreso POA", FuenteFinanciamientoId = fuentePoa.Id, Monto = 20m, Caja = Caja.Poa },
+            new IngresoCaja { Fecha = fecha, Concepto = "Ingreso POA anulado", FuenteFinanciamientoId = fuentePoa.Id, Monto = 400m, Caja = Caja.Poa, Activo = false });
+
+        Gasto NuevoGasto(string detalle, bool activo) => new()
+        {
+            ProveedorId = proveedor.Id, RubroGastoId = rubro.Id, Detalle = detalle, Fecha = fecha,
+            MontoTotal = 100000m, CondicionPago = CondicionPago.Credito, FechaVencimiento = fecha.AddDays(30), Activo = activo,
+        };
+        var activo = NuevoGasto("Gasto activo", true);
+        activo.Pagos.Add(new PagoGasto { Fecha = fecha, Monto = 5000m, Caja = Caja.Local, FuenteFinanciamientoId = fuente.Id });
+        activo.Pagos.Add(PagoGasto.Automatico(fecha, 3m, "automático POA", Caja.Poa, fuentePoa.Id));
+        activo.Pagos.Add(new PagoGasto { Fecha = fecha, Monto = 70m, Caja = Caja.Poa, Activo = false, FuenteFinanciamientoId = fuentePoa.Id });
+        // Pagos de junio: arman el saldo inicial de julio de cada caja (POA -500, Local -60000).
+        var junio = new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc);
+        activo.Pagos.Add(new PagoGasto { Fecha = junio, Monto = 500m, Caja = Caja.Poa, FuenteFinanciamientoId = fuentePoa.Id });
+        activo.Pagos.Add(new PagoGasto { Fecha = junio, Monto = 60000m, Caja = Caja.Local, FuenteFinanciamientoId = fuente.Id });
+        var anulado = NuevoGasto("Gasto anulado", false);
+        anulado.Pagos.Add(new PagoGasto { Fecha = fecha, Monto = 9000m, Caja = Caja.Poa, FuenteFinanciamientoId = fuentePoa.Id });
+        anulado.Pagos.Add(new PagoGasto { Fecha = fecha, Monto = 80000m, Caja = Caja.Local, FuenteFinanciamientoId = fuente.Id });
+        ctx.Gastos.AddRange(activo, anulado);
+        await ctx.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task GetLibroCaja_CajaPoa_NoIncluyeMovimientosLocales()
+    {
+        await SeedLibroDeDosCajasAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.GetAsync("/finanzas/libro-caja?anio=2026&mes=7&caja=1");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var dto = await response.Content.ReadFromJsonAsync<LibroCajaMesDto>();
+        Assert.Equal(new[] { "Gasto activo", "Ingreso POA" }, dto!.Movimientos.Select(m => m.Concepto));
+        Assert.Equal(new[] { 0m, 20m }, dto.Movimientos.Select(m => m.Ingreso));
+        Assert.Equal(new[] { 3m, 0m }, dto.Movimientos.Select(m => m.Egreso));
+        Assert.Equal(-500m, dto.SaldoInicial);
+        Assert.Equal(-483m, dto.SaldoFinal);
+    }
+
+    [Fact]
+    public async Task GetLibroCaja_SinCaja_EsLocal()
+    {
+        await SeedLibroDeDosCajasAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.GetAsync("/finanzas/libro-caja?anio=2026&mes=7");
+
+        var dto = await response.Content.ReadFromJsonAsync<LibroCajaMesDto>();
+        Assert.Equal(new[] { 0m, 1000m }, dto!.Movimientos.Select(m => m.Ingreso));
+        Assert.Equal(new[] { 5000m, 0m }, dto.Movimientos.Select(m => m.Egreso));
+        Assert.Equal(-60000m, dto.SaldoInicial);
+        Assert.Equal(-64000m, dto.SaldoFinal);
+    }
+
+    [Fact]
+    public async Task GetLibroCaja_AnualCajaPoa_SoloPoa()
+    {
+        await SeedLibroDeDosCajasAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.GetAsync("/finanzas/libro-caja?anio=2026&caja=1");
+
+        var dto = await response.Content.ReadFromJsonAsync<LibroCajaAnualDto>();
+        var julio = dto!.TotalesPorMes.Single(m => m.Mes == 7);
+        Assert.Equal(20m, julio.Ingresos);
+        Assert.Equal(3m, julio.Egresos);
+    }
+
+    [Theory]
+    [InlineData("anio=2026&mes=7&caja=7")]
+    [InlineData("anio=2026&caja=7")]
+    [InlineData("anio=2026&mes=7&caja=-1")]
+    [InlineData("anio=2026&mes=7&caja=abc")]
+    public async Task GetLibroCaja_Caja7_Devuelve400(string query)
+    {
+        await SeedUsuarioAdminAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.GetAsync("/finanzas/libro-caja?" + query);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
 }

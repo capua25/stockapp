@@ -27,9 +27,11 @@ public class FinanzasVistasService : IFinanzasVistasService
         _auth      = auth;
     }
 
-    public async Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(int anio, int mes)
+    public async Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(Caja caja, int anio, int mes)
     {
         _auth.Verificar(_session, Permisos.VerFinanzas);
+
+        CajaYLiteral.ValidarCaja(caja);
 
         if (mes is < 1 or > 12)
             throw new ArgumentException("El mes debe estar entre 1 y 12.");
@@ -38,10 +40,10 @@ public class FinanzasVistasService : IFinanzasVistasService
         var hasta = desde.AddMonths(1).AddTicks(-1);
 
         var saldoInicial =
-            await _ingresos.TotalActivosAntesDeAsync(desde) - await _gastos.TotalPagosActivosAntesDeAsync(desde);
+            await _ingresos.TotalActivosAntesDeAsync(caja, desde) - await _gastos.TotalPagosActivosAntesDeAsync(caja, desde);
 
-        var ingresos = await _ingresos.ListarPorRangoAsync(desde, hasta);
-        var pagos = await _gastos.ListarPagosActivosPorRangoAsync(desde, hasta);
+        var ingresos = await _ingresos.ListarPorRangoAsync(caja, desde, hasta);
+        var pagos = await _gastos.ListarPagosActivosPorRangoAsync(caja, desde, hasta);
 
         var crudos = ingresos
             .Select(i => (
@@ -89,15 +91,17 @@ public class FinanzasVistasService : IFinanzasVistasService
             anio, mes, saldoInicial, corrido, movimientos, totalesPorRubro, totalesPorFuente);
     }
 
-    public async Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(int anio)
+    public async Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(Caja caja, int anio)
     {
         _auth.Verificar(_session, Permisos.VerFinanzas);
+
+        CajaYLiteral.ValidarCaja(caja);
 
         var desde = new DateTime(anio, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var hasta = desde.AddYears(1).AddTicks(-1);
 
-        var ingresos = await _ingresos.ListarPorRangoAsync(desde, hasta);
-        var pagos = await _gastos.ListarPagosActivosPorRangoAsync(desde, hasta);
+        var ingresos = await _ingresos.ListarPorRangoAsync(caja, desde, hasta);
+        var pagos = await _gastos.ListarPagosActivosPorRangoAsync(caja, desde, hasta);
 
         var totalesPorMes = Enumerable.Range(1, 12)
             .Select(mes =>

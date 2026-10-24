@@ -1,5 +1,6 @@
 using StockApp.Application.Finanzas;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 
 namespace StockApp.Application.Interfaces;
 
@@ -58,14 +59,14 @@ public interface IGastoRepository
     Task DesvincularMovimientosAsync(int gastoId);
 
     /// <summary>
-    /// Pagos ACTIVOS de gastos ACTIVOS con Fecha (del PAGO, no de la factura) en
+    /// Pagos ACTIVOS de la <paramref name="caja"/> de gastos ACTIVOS con Fecha (del PAGO, no de la factura) en
     /// [desdeUtc, hastaUtc]. Include Gasto→Proveedor/RubroGasto y la FuenteFinanciamiento del
     /// PAGO (libro caja: cada fila de egreso necesita esos nombres). Ordena por Fecha, luego Id.
     /// </summary>
-    Task<IReadOnlyList<PagoGasto>> ListarPagosActivosPorRangoAsync(DateTime desdeUtc, DateTime hastaUtc);
+    Task<IReadOnlyList<PagoGasto>> ListarPagosActivosPorRangoAsync(Caja caja, DateTime desdeUtc, DateTime hastaUtc);
 
-    /// <summary>Suma de Monto de los pagos ACTIVOS de gastos ACTIVOS con Fecha &lt; fechaUtc (saldo inicial).</summary>
-    Task<decimal> TotalPagosActivosAntesDeAsync(DateTime fechaUtc);
+    /// <summary>Suma de Monto de los pagos ACTIVOS de la <paramref name="caja"/> de gastos ACTIVOS con Fecha &lt; fechaUtc (saldo inicial).</summary>
+    Task<decimal> TotalPagosActivosAntesDeAsync(Caja caja, DateTime fechaUtc);
 
     /// <summary>Gastos ACTIVOS con Includes (Proveedor/Rubro/LineaPoa/Pagos con su fuente) para el calendario de pagos.</summary>
     Task<IReadOnlyList<Gasto>> ListarActivosConSaldoAsync();

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Persistence;
 
 namespace StockApp.Infrastructure.Repositories;
@@ -36,16 +37,16 @@ public class IngresoCajaRepository : IIngresoCajaRepository
         return _ctx.SaveChangesAsync();
     }
 
-    public async Task<IReadOnlyList<IngresoCaja>> ListarPorRangoAsync(DateTime desdeUtc, DateTime hastaUtc)
+    public async Task<IReadOnlyList<IngresoCaja>> ListarPorRangoAsync(Caja caja, DateTime desdeUtc, DateTime hastaUtc)
         => await _ctx.IngresosCaja
             .Include(i => i.FuenteFinanciamiento)
-            .Where(i => i.Activo && i.Fecha >= desdeUtc && i.Fecha <= hastaUtc)
+            .Where(i => i.Activo && i.Caja == caja && i.Fecha >= desdeUtc && i.Fecha <= hastaUtc)
             .OrderBy(i => i.Fecha)
             .ThenBy(i => i.Id)
             .ToListAsync();
 
-    public async Task<decimal> TotalActivosAntesDeAsync(DateTime fechaUtc)
+    public async Task<decimal> TotalActivosAntesDeAsync(Caja caja, DateTime fechaUtc)
         => await _ctx.IngresosCaja
-            .Where(i => i.Activo && i.Fecha < fechaUtc)
+            .Where(i => i.Activo && i.Caja == caja && i.Fecha < fechaUtc)
             .SumAsync(i => (decimal?)i.Monto) ?? 0m;
 }

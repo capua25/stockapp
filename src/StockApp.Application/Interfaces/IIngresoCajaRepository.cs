@@ -1,4 +1,5 @@
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 
 namespace StockApp.Application.Interfaces;
 
@@ -13,9 +14,9 @@ public interface IIngresoCajaRepository
     Task<int> AgregarAsync(IngresoCaja ingreso);
     Task ActualizarAsync(IngresoCaja ingreso);
 
-    /// <summary>Incluye la fuente. Solo ACTIVOS con Fecha en [desdeUtc, hastaUtc]. Ordena por Fecha, luego Id.</summary>
-    Task<IReadOnlyList<IngresoCaja>> ListarPorRangoAsync(DateTime desdeUtc, DateTime hastaUtc);
+    /// <summary>Incluye la fuente. Solo ACTIVOS de la <paramref name="caja"/> con Fecha en [desdeUtc, hastaUtc]. Ordena por Fecha, luego Id.</summary>
+    Task<IReadOnlyList<IngresoCaja>> ListarPorRangoAsync(Caja caja, DateTime desdeUtc, DateTime hastaUtc);
 
-    /// <summary>Suma de Monto de los ingresos ACTIVOS con Fecha &lt; fechaUtc (saldo inicial del libro caja).</summary>
-    Task<decimal> TotalActivosAntesDeAsync(DateTime fechaUtc);
+    /// <summary>Suma de Monto de los ingresos ACTIVOS de la <paramref name="caja"/> con Fecha &lt; fechaUtc (saldo inicial del libro caja).</summary>
+    Task<decimal> TotalActivosAntesDeAsync(Caja caja, DateTime fechaUtc);
 }

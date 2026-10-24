@@ -142,12 +142,12 @@ public class SignoNegativoBadgeTests
 
         public FinanzasVistasServiceFake(decimal saldoFinal) => _saldoFinal = saldoFinal;
 
-        public Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(int anio, int mes)
+        public Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(Caja caja, int anio, int mes)
             => Task.FromResult(new LibroCajaMesDto(
                 anio, mes, 0m, _saldoFinal,
                 Array.Empty<MovimientoCajaDto>(), Array.Empty<TotalPorClaveDto>(), Array.Empty<TotalPorClaveDto>()));
 
-        public Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(int anio)
+        public Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(Caja caja, int anio)
             => Task.FromResult(new LibroCajaAnualDto(anio, Array.Empty<TotalMensualDto>(), Array.Empty<TotalPorClaveDto>()));
 
         public Task<IReadOnlyList<ControlPoaLineaDto>> ObtenerControlPoaAsync(int ejercicio)

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net.Http.Json;
 using StockApp.Application.Finanzas;
+using StockApp.Domain.Enums;
 
 namespace StockApp.ApiClient;
 
@@ -15,11 +16,12 @@ public sealed class FinanzasVistasApiClient : IFinanzasVistasService
 
     public FinanzasVistasApiClient(HttpClient http) => _http = http;
 
-    public async Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(int anio, int mes)
+    public async Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(Caja caja, int anio, int mes)
     {
         var query = ApiQuery.Construir(
             ("anio", anio.ToString(CultureInfo.InvariantCulture)),
-            ("mes", mes.ToString(CultureInfo.InvariantCulture)));
+            ("mes", mes.ToString(CultureInfo.InvariantCulture)),
+            ("caja", ((int)caja).ToString(CultureInfo.InvariantCulture)));
         var response = await ApiErrores.EnviarAsync(() => _http.GetAsync("finanzas/libro-caja" + query));
         await ApiErrores.AsegurarExitoAsync(response);
 
@@ -27,9 +29,11 @@ public sealed class FinanzasVistasApiClient : IFinanzasVistasService
             ?? throw new InvalidOperationException("Respuesta vacía del servidor al obtener el libro caja del mes.");
     }
 
-    public async Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(int anio)
+    public async Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(Caja caja, int anio)
     {
-        var query = ApiQuery.Construir(("anio", anio.ToString(CultureInfo.InvariantCulture)));
+        var query = ApiQuery.Construir(
+            ("anio", anio.ToString(CultureInfo.InvariantCulture)),
+            ("caja", ((int)caja).ToString(CultureInfo.InvariantCulture)));
         var response = await ApiErrores.EnviarAsync(() => _http.GetAsync("finanzas/libro-caja" + query));
         await ApiErrores.AsegurarExitoAsync(response);
 

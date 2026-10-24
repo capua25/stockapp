@@ -3,6 +3,7 @@ using StockApp.ApiClient;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
+using StockApp.Domain.Enums;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Finanzas;
@@ -87,9 +88,9 @@ public static class DatosLibroCaja
     public static LibroCajaViewModel Vm(Func<Task<LibroCajaMesDto>> octubre, Func<Task<LibroCajaAnualDto>>? anual = null)
     {
         var servicio = new Mock<IFinanzasVistasService>();
-        servicio.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 10)).Returns(octubre);
-        servicio.Setup(s => s.ObtenerLibroCajaMesAsync(2026, 1)).ReturnsAsync(Enero2026);
-        servicio.Setup(s => s.ObtenerLibroCajaAnualAsync(2026)).Returns(anual ?? (() => Task.FromResult(Anio2026)));
+        servicio.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 10)).Returns(octubre);
+        servicio.Setup(s => s.ObtenerLibroCajaMesAsync(Caja.Local, 2026, 1)).ReturnsAsync(Enero2026);
+        servicio.Setup(s => s.ObtenerLibroCajaAnualAsync(Caja.Local, 2026)).Returns(anual ?? (() => Task.FromResult(Anio2026)));
         var sesion = new Mock<ICurrentSession>();
         sesion.Setup(s => s.RolActual).Returns(DatosProductos.UsuarioAdmin.Rol);
         sesion.Setup(s => s.PermisosActuales).Returns(new HashSet<string>());

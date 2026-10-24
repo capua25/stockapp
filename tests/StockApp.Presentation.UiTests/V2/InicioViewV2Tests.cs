@@ -42,8 +42,8 @@ public class InicioViewV2Tests : IDisposable
     {
         private static readonly FacturaCalendarioDto Factura = new(1, "Proveedor", "A-0001", 1000m, new DateOnly(2026, 10, 9), "Pendiente");
 
-        public Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(int anio, int mes) => throw new NotSupportedException();
-        public Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(int anio) => throw new NotSupportedException();
+        public Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(Caja caja, int anio, int mes) => throw new NotSupportedException();
+        public Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(Caja caja, int anio) => throw new NotSupportedException();
         public Task<IReadOnlyList<ControlPoaLineaDto>> ObtenerControlPoaAsync(int ejercicio) => throw new NotSupportedException();
 
         public Task<CalendarioPagosDto> ObtenerCalendarioPagosAsync(DateTime? fechaReferencia = null) =>
@@ -55,8 +55,8 @@ public class InicioViewV2Tests : IDisposable
     {
         private static readonly FacturaCalendarioDto Factura = new(1, "Proveedor", "A-0001", 1000m, new DateOnly(2026, 10, 9), "Pendiente");
 
-        public Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(int anio, int mes) => throw new NotSupportedException();
-        public Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(int anio) => throw new NotSupportedException();
+        public Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(Caja caja, int anio, int mes) => throw new NotSupportedException();
+        public Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(Caja caja, int anio) => throw new NotSupportedException();
         public Task<IReadOnlyList<ControlPoaLineaDto>> ObtenerControlPoaAsync(int ejercicio) => throw new NotSupportedException();
 
         public Task<CalendarioPagosDto> ObtenerCalendarioPagosAsync(DateTime? fechaReferencia = null) =>

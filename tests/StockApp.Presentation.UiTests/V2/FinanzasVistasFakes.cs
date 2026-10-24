@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using StockApp.Application.Exportacion;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
+using StockApp.Domain.Enums;
 using StockApp.Presentation.Services;
 using StockApp.Domain.Entities;
 
@@ -44,7 +45,7 @@ internal sealed class FinanzasVistasFake : IFinanzasVistasService
     public List<string> ConsultasLibroCaja { get; } = new();
 
     /// <summary>Sin datos cargados para ese mes responde un mes vacío, como el servidor.</summary>
-    public Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(int anio, int mes)
+    public Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(Caja caja, int anio, int mes)
     {
         ConsultasLibroCaja.Add($"{anio}-{mes:00}");
         return FallaLibroCaja is not null ? Task.FromException<LibroCajaMesDto>(FallaLibroCaja)
@@ -53,7 +54,7 @@ internal sealed class FinanzasVistasFake : IFinanzasVistasService
     }
 
     /// <summary>Sin datos cargados para ese año responde los 12 meses en cero, como el servidor.</summary>
-    public Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(int anio)
+    public Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(Caja caja, int anio)
     {
         ConsultasLibroCaja.Add($"{anio}");
         return FallaLibroCaja is not null ? Task.FromException<LibroCajaAnualDto>(FallaLibroCaja)

@@ -1,3 +1,5 @@
+using StockApp.Domain.Enums;
+
 namespace StockApp.Application.Finanzas;
 
 /// <summary>
@@ -7,11 +9,11 @@ namespace StockApp.Application.Finanzas;
 /// </summary>
 public interface IFinanzasVistasService
 {
-    /// <summary>Libro caja de un mes puntual (1-12). Lanza ArgumentException si mes está fuera de rango.</summary>
-    Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(int anio, int mes);
+    /// <summary>Libro caja de un mes puntual de una caja (1-12). Lanza ArgumentException si la caja no existe o si mes está fuera de rango.</summary>
+    Task<LibroCajaMesDto> ObtenerLibroCajaMesAsync(Caja caja, int anio, int mes);
 
-    /// <summary>Libro caja anual: totales por mes y por rubro, sin gráficos.</summary>
-    Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(int anio);
+    /// <summary>Libro caja anual de una caja: totales por mes y por rubro, sin gráficos.</summary>
+    Task<LibroCajaAnualDto> ObtenerLibroCajaAnualAsync(Caja caja, int anio);
 
     /// <summary>Control presupuestal POA de un ejercicio: una fila por línea.</summary>
     Task<IReadOnlyList<ControlPoaLineaDto>> ObtenerControlPoaAsync(int ejercicio);

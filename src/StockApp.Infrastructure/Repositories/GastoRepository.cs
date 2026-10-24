@@ -3,6 +3,7 @@ using Npgsql;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Infrastructure.Persistence;
 using StockApp.Domain.Formato;
@@ -209,19 +210,19 @@ public class GastoRepository : IGastoRepository
         await _ctx.SaveChangesAsync();
     }
 
-    public async Task<IReadOnlyList<PagoGasto>> ListarPagosActivosPorRangoAsync(DateTime desdeUtc, DateTime hastaUtc)
+    public async Task<IReadOnlyList<PagoGasto>> ListarPagosActivosPorRangoAsync(Caja caja, DateTime desdeUtc, DateTime hastaUtc)
         => await _ctx.PagosGasto
             .Include(p => p.Gasto!).ThenInclude(g => g!.Proveedor)
             .Include(p => p.Gasto!).ThenInclude(g => g!.RubroGasto)
             .Include(p => p.FuenteFinanciamiento)
-            .Where(p => p.Activo && p.Gasto!.Activo && p.Fecha >= desdeUtc && p.Fecha <= hastaUtc)
+            .Where(p => p.Activo && p.Caja == caja && p.Gasto!.Activo && p.Fecha >= desdeUtc && p.Fecha <= hastaUtc)
             .OrderBy(p => p.Fecha)
             .ThenBy(p => p.Id)
             .ToListAsync();
 
-    public async Task<decimal> TotalPagosActivosAntesDeAsync(DateTime fechaUtc)
+    public async Task<decimal> TotalPagosActivosAntesDeAsync(Caja caja, DateTime fechaUtc)
         => await _ctx.PagosGasto
-            .Where(p => p.Activo && p.Gasto!.Activo && p.Fecha < fechaUtc)
+            .Where(p => p.Activo && p.Caja == caja && p.Gasto!.Activo && p.Fecha < fechaUtc)
             .SumAsync(p => (decimal?)p.Monto) ?? 0m;
 
     public async Task<IReadOnlyList<Gasto>> ListarActivosConSaldoAsync()

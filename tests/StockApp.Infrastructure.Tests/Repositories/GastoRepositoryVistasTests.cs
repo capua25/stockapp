@@ -54,7 +54,7 @@ public class GastoRepositoryVistasTests : PostgresRepositoryTestBase
 
         var desde = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc);
         var hasta = new DateTime(2026, 7, 31, 23, 59, 59, DateTimeKind.Utc);
-        var pagos = await _repo.ListarPagosActivosPorRangoAsync(desde, hasta);
+        var pagos = await _repo.ListarPagosActivosPorRangoAsync(Caja.Local, desde, hasta);
 
         var pago = Assert.Single(pagos);
         Assert.Equal(1000m, pago.Monto);
@@ -83,7 +83,7 @@ public class GastoRepositoryVistasTests : PostgresRepositoryTestBase
         await _repo.AgregarAsync(gasto);
         Context.ChangeTracker.Clear();
 
-        var pagos = await _repo.ListarPagosActivosPorRangoAsync(
+        var pagos = await _repo.ListarPagosActivosPorRangoAsync(Caja.Local,
             new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc), new DateTime(2026, 7, 31, 0, 0, 0, DateTimeKind.Utc));
 
         Assert.Equal(2, pagos.Count);
@@ -110,11 +110,11 @@ public class GastoRepositoryVistasTests : PostgresRepositoryTestBase
 
         var desdeJulio = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc);
         var hastaJulio = new DateTime(2026, 7, 31, 23, 59, 59, DateTimeKind.Utc);
-        var pagosJulio = await _repo.ListarPagosActivosPorRangoAsync(desdeJulio, hastaJulio);
+        var pagosJulio = await _repo.ListarPagosActivosPorRangoAsync(Caja.Local, desdeJulio, hastaJulio);
 
         var desdeJunio = new DateTime(2026, 6, 1, 0, 0, 0, DateTimeKind.Utc);
         var hastaJunio = new DateTime(2026, 6, 30, 23, 59, 59, DateTimeKind.Utc);
-        var pagosJunio = await _repo.ListarPagosActivosPorRangoAsync(desdeJunio, hastaJunio);
+        var pagosJunio = await _repo.ListarPagosActivosPorRangoAsync(Caja.Local, desdeJunio, hastaJunio);
 
         Assert.Single(pagosJulio);
         Assert.Empty(pagosJunio);
@@ -144,7 +144,7 @@ public class GastoRepositoryVistasTests : PostgresRepositoryTestBase
         await _repo.AgregarAsync(gastoAnulado);
         Context.ChangeTracker.Clear();
 
-        var pagos = await _repo.ListarPagosActivosPorRangoAsync(
+        var pagos = await _repo.ListarPagosActivosPorRangoAsync(Caja.Local,
             fecha.AddDays(-1), fecha.AddDays(1));
 
         Assert.Empty(pagos);
@@ -164,9 +164,69 @@ public class GastoRepositoryVistasTests : PostgresRepositoryTestBase
         await _repo.AgregarAsync(gasto);
         Context.ChangeTracker.Clear();
 
-        var total = await _repo.TotalPagosActivosAntesDeAsync(new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc));
+        var total = await _repo.TotalPagosActivosAntesDeAsync(Caja.Local, new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc));
 
         Assert.Equal(300m, total);
+    }
+
+    private static Gasto GastoCredito(int proveedorId, int rubroId, string detalle, DateTime fecha, bool activo = true)
+        => new()
+        {
+            ProveedorId = proveedorId, RubroGastoId = rubroId, Detalle = detalle, Fecha = fecha,
+            MontoTotal = 1000m, CondicionPago = CondicionPago.Credito, FechaVencimiento = fecha.AddDays(30), Activo = activo,
+        };
+
+    [Fact]
+    public async Task ListarPagosActivosPorRango_SoloLosDeLaCaja()
+    {
+        // Montos potencias de 2: cada suma tiene un único origen posible.
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var fecha = new DateTime(2026, 7, 10, 0, 0, 0, DateTimeKind.Utc);
+        var activo = GastoCredito(proveedorId, rubroId, "Activo", fecha);
+        activo.Pagos.Add(new PagoGasto { Fecha = fecha, Monto = 1m, Caja = Caja.Local, FuenteFinanciamientoId = fuenteId });
+        activo.Pagos.Add(PagoGasto.Automatico(fecha, 2m, "automático POA", Caja.Poa, fuenteId));
+        activo.Pagos.Add(new PagoGasto { Fecha = fecha, Monto = 4m, Caja = Caja.Poa, FuenteFinanciamientoId = fuenteId });
+        activo.Pagos.Add(new PagoGasto { Fecha = fecha, Monto = 8m, Caja = Caja.Poa, Activo = false, FuenteFinanciamientoId = fuenteId });
+        activo.Pagos.Add(new PagoGasto { Fecha = fecha, Monto = 16m, Caja = Caja.Local, Activo = false, FuenteFinanciamientoId = fuenteId });
+        await _repo.AgregarAsync(activo);
+        var anulado = GastoCredito(proveedorId, rubroId, "Gasto anulado", fecha, activo: false);
+        anulado.Pagos.Add(new PagoGasto { Fecha = fecha, Monto = 32m, Caja = Caja.Poa, FuenteFinanciamientoId = fuenteId });
+        anulado.Pagos.Add(new PagoGasto { Fecha = fecha, Monto = 64m, Caja = Caja.Local, FuenteFinanciamientoId = fuenteId });
+        await _repo.AgregarAsync(anulado);
+        Context.ChangeTracker.Clear();
+
+        var desde = fecha.AddDays(-1);
+        var hasta = fecha.AddDays(1);
+        var poa = await _repo.ListarPagosActivosPorRangoAsync(Caja.Poa, desde, hasta);
+        var local = await _repo.ListarPagosActivosPorRangoAsync(Caja.Local, desde, hasta);
+
+        Assert.Equal(6m, poa.Sum(p => p.Monto));
+        Assert.Equal(2, poa.Count);
+        Assert.Equal(1m, Assert.Single(local).Monto);
+    }
+
+    [Fact]
+    public async Task TotalActivosAntesDe_SoloLosDeLaCaja()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var antes = new DateTime(2026, 6, 10, 0, 0, 0, DateTimeKind.Utc);
+        var corte = new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc);
+        var activo = GastoCredito(proveedorId, rubroId, "Activo", antes);
+        activo.Pagos.Add(new PagoGasto { Fecha = antes, Monto = 1m, Caja = Caja.Local, FuenteFinanciamientoId = fuenteId });
+        activo.Pagos.Add(PagoGasto.Automatico(antes, 2m, "automático POA", Caja.Poa, fuenteId));
+        activo.Pagos.Add(new PagoGasto { Fecha = antes, Monto = 4m, Caja = Caja.Poa, FuenteFinanciamientoId = fuenteId });
+        activo.Pagos.Add(new PagoGasto { Fecha = antes, Monto = 8m, Caja = Caja.Poa, Activo = false, FuenteFinanciamientoId = fuenteId });
+        activo.Pagos.Add(new PagoGasto { Fecha = antes, Monto = 16m, Caja = Caja.Local, Activo = false, FuenteFinanciamientoId = fuenteId });
+        activo.Pagos.Add(new PagoGasto { Fecha = corte.AddDays(3), Monto = 32m, Caja = Caja.Poa, FuenteFinanciamientoId = fuenteId });
+        await _repo.AgregarAsync(activo);
+        var anulado = GastoCredito(proveedorId, rubroId, "Gasto anulado", antes, activo: false);
+        anulado.Pagos.Add(new PagoGasto { Fecha = antes, Monto = 64m, Caja = Caja.Poa, FuenteFinanciamientoId = fuenteId });
+        anulado.Pagos.Add(new PagoGasto { Fecha = antes, Monto = 128m, Caja = Caja.Local, FuenteFinanciamientoId = fuenteId });
+        await _repo.AgregarAsync(anulado);
+        Context.ChangeTracker.Clear();
+
+        Assert.Equal(6m, await _repo.TotalPagosActivosAntesDeAsync(Caja.Poa, corte));
+        Assert.Equal(1m, await _repo.TotalPagosActivosAntesDeAsync(Caja.Local, corte));
     }
 
     [Fact]
