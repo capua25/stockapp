@@ -30,7 +30,7 @@ namespace StockApp.Presentation.UiTests;
 /// "Proveedor"/"Detalle" (con contenido real adentro) y "Estado" queda en una "P" suelta.
 ///
 /// Este test monta la vista REAL (no el ViewModel -- un test de VM no custodia un gate de UI,
-/// ver memoria test-vm-no-custodia-gate-ui) con datos que llenan las 11 columnas, a un ancho de
+/// ver memoria test-vm-no-custodia-gate-ui) con datos que llenan las 12 columnas, a un ancho de
 /// ventana angosto (1300px, el mismo donde se reprodujo a mano), y mide ActualWidth de cada
 /// columna DESPUÉS del layout. El umbral (60px) está deliberadamente por encima del piso que
 /// causa el bug (40px) y por debajo del MinWidth más chico que declara el fix (70px) para que el
@@ -90,7 +90,7 @@ public class GastosViewColumnasAnchoTests
         """;
 
     /// <summary>
-    /// Un solo Gasto con datos REALES que llenan las 11 columnas (nombres/detalle largos, no
+    /// Un solo Gasto con datos REALES que llenan las 12 columnas (nombres/detalle largos, no
     /// "x" ni "abc" -- ese fue exactamente el escenario reproducido a mano: "Proveedor" y
     /// "Detalle" con contenido real adentro colapsando a 40px). Estado calculado "Pendiente" es
     /// el valor más largo del enum EstadoGasto (9 caracteres).
@@ -145,7 +145,7 @@ public class GastosViewColumnasAnchoTests
     {
         var (window, grid) = await MontarAsync(CrearGastoConDatosReales());
 
-        Assert.Equal(11, grid.Columns.Count);
+        Assert.Equal(12, grid.Columns.Count);
 
         var angostas = grid.Columns
             .Where(c => c.ActualWidth < UmbralLegiblePx)

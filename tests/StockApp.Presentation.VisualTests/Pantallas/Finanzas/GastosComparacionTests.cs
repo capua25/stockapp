@@ -13,7 +13,7 @@ namespace StockApp.Presentation.VisualTests.Pantallas.Finanzas;
 [Trait("Categoria", "ComparacionVisual")]
 public class GastosComparacionTests
 {
-    // DETALLE (*) queda en su piso de 200 en los dos tamaños (la grilla de once columnas hace scroll horizontal) y estos
+    // DETALLE (*) queda en su piso de 200 en los dos tamaños (la grilla de doce columnas hace scroll horizontal) y estos
     // detalles no entran: el mockup también los corta (v2-celda-cortada, col-detalle de 200 px) y el píxel coincide.
     private static readonly string[] CortesDelMockup =
     [

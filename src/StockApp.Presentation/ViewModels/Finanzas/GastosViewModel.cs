@@ -32,6 +32,8 @@ public sealed class GastoFila
 {
     public Gasto Gasto { get; }
 
+    private const string SinDato = "—";
+
     public GastoFila(Gasto gasto, DateTime fechaReferencia)
     {
         Gasto = gasto;
@@ -52,7 +54,9 @@ public sealed class GastoFila
     public string ProveedorNombre => Gasto.Proveedor?.Nombre ?? string.Empty;
     public string NumeroFactura => Gasto.NumeroFactura ?? string.Empty;
     public string Detalle => Gasto.Detalle;
-    public string FuenteNombre => Gasto.PagoAutomatico?.FuenteFinanciamiento?.Nombre ?? string.Empty;
+    /// <summary>Caja del pago automático del contado; en crédito (o dato viejo sin pago automático) todavía no hay caja ni literal.</summary>
+    public string CajaTexto => Gasto.PagoAutomatico?.Caja.Nombre() ?? SinDato;
+    public string FuenteNombre => Gasto.PagoAutomatico?.FuenteFinanciamiento?.Nombre ?? SinDato;
     public string RubroNombre => Gasto.RubroGasto?.Nombre ?? string.Empty;
     public string LineaPoaNombre => Gasto.LineaPoa?.Nombre ?? string.Empty;
     public decimal MontoTotal => Gasto.MontoTotal;
@@ -586,7 +590,7 @@ public partial class GastosViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Columnas del PDF (spec 2026-09-18): las 11 de la grilla.
+    /// Columnas del PDF (spec 2026-09-18): las 12 de la grilla.
     /// Peor caso de la spec: apaisado automático (Tarea 4, >6 columnas) con 4 columnas de texto
     /// libre potencialmente largo (Detalle, Proveedor, Fuente, Línea POA) que se envuelven sin
     /// truncar (Tarea 5).
@@ -597,6 +601,7 @@ public partial class GastosViewModel : ViewModelBase
         new ColumnaPdf(nameof(GastoFila.ProveedorNombre), "Proveedor"),
         new ColumnaPdf(nameof(GastoFila.NumeroFactura), "Factura"),
         new ColumnaPdf(nameof(GastoFila.Detalle), "Detalle"),
+        new ColumnaPdf(nameof(GastoFila.CajaTexto), "Caja"),
         new ColumnaPdf(nameof(GastoFila.FuenteNombre), "Fuente"),
         new ColumnaPdf(nameof(GastoFila.RubroNombre), "Rubro"),
         new ColumnaPdf(nameof(GastoFila.LineaPoaNombre), "Línea POA"),

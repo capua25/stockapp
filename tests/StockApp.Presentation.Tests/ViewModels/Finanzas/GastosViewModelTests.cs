@@ -101,19 +101,38 @@ public class GastosViewModelTests
     }
 
     [Fact]
-    public void Fila_FuenteNombre_EsLaDelPagoAutomatico()
+    public void Fila_Contado_MuestraCajaYFuenteDelPagoAutomatico()
     {
-        // El gasto ya no tiene fuente: la fila muestra la del pago automático del contado.
-        var contado = GastoDe(1, "Contado");
-        contado.CondicionPago = CondicionPago.Contado;
-        contado.FechaVencimiento = null;
-        var automatico = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)", Caja.Poa, 3);
-        automatico.FuenteFinanciamiento = new FuenteFinanciamiento { Id = 3, Nombre = "Literal B", Caja = Caja.Poa };
-        contado.Pagos.Add(automatico);
-        var credito = GastoDe(2, "Crédito");   // sin pago automático: no hay fuente que mostrar
+        // El gasto ya no tiene fuente: la fila muestra la caja y el literal del pago automático del contado.
+        var contadoPoa = GastoDe(1, "Contado POA");
+        contadoPoa.CondicionPago = CondicionPago.Contado;
+        contadoPoa.FechaVencimiento = null;
+        var poa = PagoGasto.Automatico(Hoy, 1000m, "Pago contado (automático)", Caja.Poa, 3);
+        poa.FuenteFinanciamiento = new FuenteFinanciamiento { Id = 3, Nombre = "Literal B", Caja = Caja.Poa };
+        contadoPoa.Pagos.Add(poa);
+        var contadoLocal = GastoDe(2, "Contado Local");
+        contadoLocal.CondicionPago = CondicionPago.Contado;
+        contadoLocal.FechaVencimiento = null;
+        var local = PagoGasto.Automatico(Hoy, 500m, "Pago contado (automático)", Caja.Local, 4);
+        local.FuenteFinanciamiento = new FuenteFinanciamiento { Id = 4, Nombre = "Rentas generales", Caja = Caja.Local };
+        contadoLocal.Pagos.Add(local);
 
-        Assert.Equal("Literal B", new GastoFila(contado, Hoy).FuenteNombre);
-        Assert.Equal(string.Empty, new GastoFila(credito, Hoy).FuenteNombre);
+        var filaPoa = new GastoFila(contadoPoa, Hoy);
+        var filaLocal = new GastoFila(contadoLocal, Hoy);
+        Assert.Equal("POA", filaPoa.CajaTexto);
+        Assert.Equal("Literal B", filaPoa.FuenteNombre);
+        Assert.Equal("Local", filaLocal.CajaTexto);
+        Assert.Equal("Rentas generales", filaLocal.FuenteNombre);
+    }
+
+    [Fact]
+    public void Fila_Credito_MuestraGuionEnCajaYFuente()
+    {
+        var credito = GastoDe(2, "Crédito");   // sin pago automático: caja y literal se eligen recién al pagar
+
+        var fila = new GastoFila(credito, Hoy);
+        Assert.Equal("—", fila.CajaTexto);
+        Assert.Equal("—", fila.FuenteNombre);
     }
 
     [Fact]
@@ -681,7 +700,7 @@ public class GastosViewModelTests
         confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
     }
 
-    // ── Export PDF (spec 2026-09-18): peor caso del diseño, 11 columnas apaisado, 4 de texto
+    // ── Export PDF (spec 2026-09-18): peor caso del diseño, 12 columnas apaisado, 4 de texto
     // libre (Detalle, Proveedor, Fuente, Línea POA), filtro de Estado APLICADO EN MEMORIA. ──
 
     private static void ConfigurarPdfYGuardadoExitosos(
@@ -696,7 +715,7 @@ public class GastosViewModelTests
     }
 
     [Fact]
-    public async Task ExportarPdfCommand_UsaLasOnceColumnasDeLaGrilla()
+    public async Task ExportarPdfCommand_UsaLasDoceColumnasDeLaGrilla()
     {
         var (vm, _, _, _, guardadoMock, pdfExporterMock, _) = Crear(new List<Gasto> { GastoDe(1, "Factura de luz") });
         await vm.CargarAsync();
@@ -712,6 +731,7 @@ public class GastosViewModelTests
             new ColumnaPdf("ProveedorNombre", "Proveedor"),
             new ColumnaPdf("NumeroFactura", "Factura"),
             new ColumnaPdf("Detalle", "Detalle"),
+            new ColumnaPdf("CajaTexto", "Caja"),
             new ColumnaPdf("FuenteNombre", "Fuente"),
             new ColumnaPdf("RubroNombre", "Rubro"),
             new ColumnaPdf("LineaPoaNombre", "Línea POA"),
@@ -722,7 +742,7 @@ public class GastosViewModelTests
         };
         pdfExporterMock.Verify(e => e.Exportar(
             It.IsAny<IEnumerable<GastoFila>>(),
-            It.Is<IReadOnlyList<ColumnaPdf>>(cols => cols.SequenceEqual(esperado) && cols.Count == 11),
+            It.Is<IReadOnlyList<ColumnaPdf>>(cols => cols.SequenceEqual(esperado) && cols.Count == 12),
             It.IsAny<MetadatosDocumento>()), Times.Once);
     }
 

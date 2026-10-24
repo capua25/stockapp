@@ -164,19 +164,45 @@ public class GastosViewV2Tests
     }
 
     [AvaloniaFact]
-    public void Grilla_OnceColumnasEnOrdenYEnMayusculas_Ordenable()
+    public void Grilla_DoceColumnasEnOrdenYEnMayusculas_Ordenable()
     {
         var grilla = Control<DataGrid>(Montar(Pendiente()), "Grilla");
 
-        Assert.Equal(new object?[] { "FECHA", "PROVEEDOR", "DETALLE", "MONTO", "PAGADO", "SALDO", "ESTADO", "FACTURA", "FUENTE", "RUBRO", "LÍNEA POA" },
+        Assert.Equal(new object?[] { "FECHA", "PROVEEDOR", "DETALLE", "MONTO", "PAGADO", "SALDO", "ESTADO", "FACTURA", "CAJA", "FUENTE", "RUBRO", "LÍNEA POA" },
             grilla.Columns.Select(c => c.Header).ToArray());
         Assert.True(grilla.CanUserSortColumns);
     }
 
     [AvaloniaFact]
+    public void Grilla_ColumnaCaja_ContadoPoaYCreditoGuion()
+    {
+        var fuentePoa = new FuenteFinanciamiento { Id = 7, Nombre = "Literal POA 1", Caja = Caja.Poa, Activo = true };
+        var contadoPoa = G(6, "Contado POA", 50_000m);
+        var pago = PagoAutomaticoDePrueba.Con(fuentePoa, Caja.Poa, contadoPoa.Fecha, 50_000m);
+        pago.GastoId = 6;
+        contadoPoa.Pagos.Add(pago);
+        var m = Montar(new GastosFake { Lista = [contadoPoa, Pendiente()] }, ancho: 1600);
+
+        var grilla = Control<DataGrid>(m, "Grilla");
+        string TextoDeCelda(int id, string header)
+        {
+            // Las celdas de la fila siguen el orden de las columnas (ancha: ninguna queda fuera de vista).
+            var celdas = Fila(m, id).GetVisualDescendants().OfType<DataGridCell>().ToList();
+            Assert.True(celdas.Count >= grilla.Columns.Count);   // el DataGrid suma una celda de relleno al final
+            var indice = grilla.Columns.ToList().FindIndex(c => (string?)c.Header == header);
+            Assert.True(indice >= 0, $"la grilla tiene que tener la columna {header}");
+            return celdas[indice].GetVisualDescendants().OfType<TextBlock>().Single().Text!;
+        }
+        Assert.Equal("POA", TextoDeCelda(6, "CAJA"));
+        Assert.Equal("Literal POA 1", TextoDeCelda(6, "FUENTE"));
+        Assert.Equal("—", TextoDeCelda(1, "CAJA"));   // crédito: sin pago automático
+        Assert.Equal("—", TextoDeCelda(1, "FUENTE"));
+    }
+
+    [AvaloniaFact]
     public void Celdas_FechaEnDdMmAaaa_EImportesEnEsUy()
     {
-        var m = Montar(new GastosFake { Lista = [Parcial()] }, ancho: 1600);   // ancha: las once columnas a la vista
+        var m = Montar(new GastosFake { Lista = [Parcial()] }, ancho: 1600);   // ancha: las doce columnas a la vista
         var textos = Fila(m, 2).GetVisualDescendants().OfType<TextBlock>().Where(Visible).Select(t => t.Text).ToList();
 
         Assert.Contains("06/10/2026", textos);

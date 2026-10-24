@@ -27,16 +27,17 @@
   .filas { flex: 1 1 0; min-height: 0; overflow: hidden; }
   .pie { margin-top: 12px; }
   /* Anchos medidos en headless (MedicionTemporal4d) con el tema v2, estos datos (las siete filas, la anulada incluida) y
-     los headers en mayúsculas, iguales a 1280 y a 1366: FECHA, PROVEEDOR, MONTO, PAGADO, SALDO, FACTURA, FUENTE, RUBRO y
+     los headers en mayúsculas, iguales a 1280 y a 1366: FECHA, PROVEEDOR, MONTO, PAGADO, SALDO, FACTURA, CAJA, FUENTE, RUBRO y
      LÍNEA POA miden su contenido (ColumnaAuto); DETALLE (*) queda en su piso de 200; ESTADO fija 90 (insignia "Pendiente" 74
-     + 16 de padding de celda). Orden D3: FECHA · PROVEEDOR · DETALLE · MONTO · PAGADO · SALDO · ESTADO · FACTURA · FUENTE ·
-     RUBRO · LÍNEA POA. Suma 1432 contra 948 y 1034 internos: scroll horizontal a los dos tamaños. Hasta ESTADO suman 866:
-     entran en la vista inicial a 1280 y a 1366. A 1280 se corta FACTURA (arranca en 866, se ven 82 de 92); a 1366 entra
-     FACTURA entera (hasta 958) y se corta FUENTE (se ven 76 de 123); RUBRO y LÍNEA POA quedan fuera en los dos. */
+     + 16 de padding de celda). Orden D3: FECHA · PROVEEDOR · DETALLE · MONTO · PAGADO · SALDO · ESTADO · FACTURA · CAJA · FUENTE ·
+     RUBRO · LÍNEA POA. Suma 1501 contra 948 y 1034 internos: scroll horizontal a los dos tamaños. Hasta ESTADO suman 866:
+     entran en la vista inicial a 1280 y a 1366. A 1280 se corta FACTURA (arranca en 866, se ven 82 de 92); a 1366 entran
+     FACTURA y CAJA enteras (hasta 1027) y se corta FUENTE (se ven 7 de 123); RUBRO y LÍNEA POA quedan fuera en los dos. */
   .col-fecha { flex: 0 0 90px; }
   .col-proveedor { flex: 0 0 177px; }
   .col-factura { flex: 0 0 92px; }
   .col-detalle { flex: 0 0 200px; }
+  .col-caja { flex: 0 0 69px; }
   .col-fuente { flex: 0 0 123px; }
   .col-rubro { flex: 0 0 183px; }
   .col-linea { flex: 0 0 168px; }
@@ -44,14 +45,14 @@
   .col-pagado { flex: 0 0 103px; }
   .col-saldo { flex: 0 0 103px; }
   .col-estado { flex: 0 0 90px; }
-  /* Largo del pulgar: ceil((interior - 32) x interior / 1432); interior 948 a 1280 y 1034 a 1366 (medido: 2 px a 5 del
+  /* Largo del pulgar: ceil((interior - 32) x interior / 1501); interior 948 a 1280 y 1034 a 1366 (medido: 2 px a 5 del
      borde inferior de la grilla, desde 16 del borde interior izquierdo). */
-  .v2-grilla-scroll-h { width: 607px; }
-  @media (min-width: 1366px) { .v2-grilla-scroll-h { width: 724px; } }
+  .v2-grilla-scroll-h { width: 579px; }
+  @media (min-width: 1366px) { .v2-grilla-scroll-h { width: 691px; } }
 </style>
 </head>
 <body>
-<!-- Datos: DatosGastos.ConGastos(): Admin; los seis gastos como los devuelve el servidor (fecha descendente), filtros vacíos y Estado en Todos, sin flecha de orden. Ninguna fila seleccionada: Editar, Pagos y Anular deshabilitados. Estado con los tonos aprobados: Pendiente neutra, Parcial advertencia, Pagada éxito, Vencida peligro. Las once columnas no entran (medido): scroll horizontal; a 1280 se ve hasta parte de LÍNEA POA y a 1366 hasta LÍNEA POA entera, los importes y ESTADO quedan a la derecha. El sidebar está para aprobar la pantalla entera; la comparación lo oculta. -->
+<!-- Datos: DatosGastos.ConGastos(): Admin; los seis gastos como los devuelve el servidor (fecha descendente), filtros vacíos y Estado en Todos, sin flecha de orden. Ninguna fila seleccionada: Editar, Pagos y Anular deshabilitados. Estado con los tonos aprobados: Pendiente neutra, Parcial advertencia, Pagada éxito, Vencida peligro. Las doce columnas no entran (medido): scroll horizontal; a 1280 se ve hasta parte de LÍNEA POA y a 1366 hasta LÍNEA POA entera, los importes y ESTADO quedan a la derecha. El sidebar está para aprobar la pantalla entera; la comparación lo oculta. -->
 <div class="v2-ventana">
   <aside class="v2-sidebar">
     <div class="v2-marca">Gestión Municipal</div>
@@ -150,6 +151,7 @@
             <div class="v2-grilla-celda col-saldo">SALDO</div>
             <div class="v2-grilla-celda col-estado">ESTADO</div>
             <div class="v2-grilla-celda col-factura">FACTURA</div>
+            <div class="v2-grilla-celda col-caja">CAJA</div>
             <div class="v2-grilla-celda col-fuente">FUENTE</div>
             <div class="v2-grilla-celda col-rubro">RUBRO</div>
             <div class="v2-grilla-celda col-linea">LÍNEA POA</div>
@@ -164,7 +166,8 @@
               <div class="v2-grilla-celda col-saldo v2-num"><span>$ 420.000,00</span></div>
               <div class="v2-grilla-celda col-estado"><span class="v2-insignia">Pendiente</span></div>
               <div class="v2-grilla-celda col-factura"><span class="v2-celda-cortada">A-0002210</span></div>
-              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada"></span></div>
+              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">—</span></div>
+              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">—</span></div>
               <div class="v2-grilla-celda col-rubro"><span class="v2-celda-cortada">Obras viales</span></div>
               <div class="v2-grilla-celda col-linea"><span class="v2-celda-cortada">Bacheo y caminería rural</span></div>
             </div>
@@ -177,7 +180,8 @@
               <div class="v2-grilla-celda col-saldo v2-num"><span>$ 160.000,00</span></div>
               <div class="v2-grilla-celda col-estado"><span class="v2-insignia v2-insignia--advertencia">Parcial</span></div>
               <div class="v2-grilla-celda col-factura"><span class="v2-celda-cortada">A-0001190</span></div>
-              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada"></span></div>
+              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">—</span></div>
+              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">—</span></div>
               <div class="v2-grilla-celda col-rubro"><span class="v2-celda-cortada">Alumbrado público</span></div>
               <div class="v2-grilla-celda col-linea"><span class="v2-celda-cortada">Alumbrado de plazas</span></div>
             </div>
@@ -190,6 +194,7 @@
               <div class="v2-grilla-celda col-saldo v2-num"><span>$ 0,00</span></div>
               <div class="v2-grilla-celda col-estado"><span class="v2-insignia v2-insignia--exito">Pagada</span></div>
               <div class="v2-grilla-celda col-factura"><span class="v2-celda-cortada">B-0012877</span></div>
+              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">Local</span></div>
               <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">Rentas generales</span></div>
               <div class="v2-grilla-celda col-rubro"><span class="v2-celda-cortada">Combustibles</span></div>
               <div class="v2-grilla-celda col-linea"></div>
@@ -203,6 +208,7 @@
               <div class="v2-grilla-celda col-saldo v2-num"><span>$ 0,00</span></div>
               <div class="v2-grilla-celda col-estado"><span class="v2-insignia v2-insignia--exito">Pagada</span></div>
               <div class="v2-grilla-celda col-factura"><span class="v2-celda-cortada">A-0004521</span></div>
+              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">Local</span></div>
               <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">FIGM Literal B</span></div>
               <div class="v2-grilla-celda col-rubro"><span class="v2-celda-cortada">Materiales de construcción</span></div>
               <div class="v2-grilla-celda col-linea"><span class="v2-celda-cortada">Bacheo y caminería rural</span></div>
@@ -216,7 +222,8 @@
               <div class="v2-grilla-celda col-saldo v2-num"><span>$ 64.800,00</span></div>
               <div class="v2-grilla-celda col-estado"><span class="v2-insignia v2-insignia--peligro">Vencida</span></div>
               <div class="v2-grilla-celda col-factura"><span class="v2-celda-cortada">A-0004377</span></div>
-              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada"></span></div>
+              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">—</span></div>
+              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">—</span></div>
               <div class="v2-grilla-celda col-rubro"><span class="v2-celda-cortada">Materiales de construcción</span></div>
               <div class="v2-grilla-celda col-linea"><span class="v2-celda-cortada">Bacheo y caminería rural</span></div>
             </div>
@@ -229,6 +236,7 @@
               <div class="v2-grilla-celda col-saldo v2-num"><span>$ 0,00</span></div>
               <div class="v2-grilla-celda col-estado"><span class="v2-insignia v2-insignia--exito">Pagada</span></div>
               <div class="v2-grilla-celda col-factura"><span class="v2-celda-cortada">A-0001102</span></div>
+              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">Local</span></div>
               <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">Rentas generales</span></div>
               <div class="v2-grilla-celda col-rubro"><span class="v2-celda-cortada">Alumbrado público</span></div>
               <div class="v2-grilla-celda col-linea"></div>

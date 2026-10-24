@@ -250,6 +250,14 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="CAJA" Width="Auto" SortMemberPath="CajaTexto" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:GastoFila">
+                                    <TextBlock Text="{Binding CajaTexto}" Classes.inactivo="{Binding !Gasto.Activo}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTemplateColumn Header="FUENTE" Width="Auto" SortMemberPath="FuenteNombre" b:ColumnaAuto.Medir="True">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="vm:GastoFila">

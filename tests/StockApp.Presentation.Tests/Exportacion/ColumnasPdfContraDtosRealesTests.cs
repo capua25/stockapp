@@ -143,6 +143,30 @@ public class ColumnasPdfContraDtosRealesTests
                 FechaFija));
 
     [Fact]
+    public void Gastos_Pdf_IncluyeLaColumnaCajaAntesDeFuente_ConElNombreDeLaCajaDelPago()
+    {
+        var pago = PagoGasto.Automatico(FechaFija, 1234567.89m, "Pago contado (automático)", Caja.Poa, 5);
+        pago.FuenteFinanciamiento = new FuenteFinanciamiento { Id = 5, Nombre = "Literal B", Caja = Caja.Poa };
+        var gasto = new Gasto
+        {
+            Id = 1, Detalle = "Compra", Fecha = FechaFija, MontoTotal = 1234567.89m,
+            CondicionPago = CondicionPago.Contado, Pagos = { pago },
+        };
+        var fila = new GastoFila(gasto, FechaFija);
+
+        var rotulos = GastosViewModel.ColumnasPdf.Select(c => c.Rotulo).ToList();
+        Assert.Equal(rotulos.IndexOf("Fuente") - 1, rotulos.IndexOf("Caja"));
+        Assert.Contains(GastosViewModel.ColumnasPdf, c => c.Propiedad == "CajaTexto");
+
+        var pdf = new PdfExporterMigraDoc().Exportar(new[] { fila }, GastosViewModel.ColumnasPdf, Metadatos);
+        using var documento = PdfDocument.Open(pdf);
+        var texto = string.Join(" ", documento.GetPages().SelectMany(p => p.GetWords()).Select(w => w.Text));
+        Assert.Contains("Caja", texto);
+        Assert.Contains("POA", texto);
+        Assert.Contains("Literal", texto);
+    }
+
+    [Fact]
     public void LibroCaja_ColumnasPdf_ResuelvenContraElDtoRealYGeneranPdf() =>
         VerificarPantalla(
             LibroCajaViewModel.ColumnasPdf,
