@@ -925,6 +925,127 @@ public class GastoFormViewModelTests
         Assert.False(vm.GuardarCommand.CanExecute(null));
     }
 
+    // ── Línea POA huérfana de un gasto legado ──
+
+    private static Gasto LegadoConLinea(Caja caja = Caja.Local, CondicionPago condicion = CondicionPago.Contado)
+    {
+        var gasto = GastoExistente(condicion: condicion, caja: caja);
+        gasto.LineaPoaId = 5;
+        return gasto;
+    }
+
+    [Fact]
+    public async Task Editar_LegadoLocalConLinea_MuestraLaLineaEnSoloLectura()
+    {
+        var (vm, _, _, _) = Crear();
+        vm.CargarParaEditar(LegadoConLinea());
+
+        await vm.InicializarAsync();
+
+        Assert.True(vm.LineaLegadaHuerfana);
+        Assert.False(vm.MostrarLineaPoa);
+        Assert.Equal(5, vm.LineaPoaSeleccionada?.Id);   // se conserva al cargar
+        Assert.Equal("Este gasto tiene una línea POA que ya no corresponde a su caja. Se conserva tal cual.",
+            GastoFormViewModel.TextoLineaLegadaHuerfana);
+    }
+
+    [Fact]
+    public async Task Editar_ContadoPoaConLinea_NoEsHuerfana()
+    {
+        var (vm, _, _, _) = Crear();
+        var gasto = GastoExistente(caja: Caja.Poa, fuenteId: 4);
+        gasto.LineaPoaId = 5;
+        vm.CargarParaEditar(gasto);
+
+        await vm.InicializarAsync();
+
+        Assert.False(vm.LineaLegadaHuerfana);
+        Assert.True(vm.MostrarLineaPoa);
+    }
+
+    [Fact]
+    public async Task Editar_LegadoLocalConLinea_QuitarLinea_ElGuardarMandaNull()
+    {
+        var (vm, svc, _, _) = Crear();
+        vm.CargarParaEditar(LegadoConLinea());
+        await vm.InicializarAsync();
+
+        vm.QuitarLineaLegadaCommand.Execute(null);
+
+        Assert.Null(vm.LineaPoaSeleccionada);
+        Assert.False(vm.LineaLegadaHuerfana);
+        await vm.GuardarCommand.ExecuteAsync(null);
+        svc.Verify(s => s.ModificarAsync(It.Is<Gasto>(g => g.Id == 9 && g.LineaPoaId == null), new PagoContadoDto(Caja.Local, 2)), Times.Once);
+    }
+
+    [Fact]
+    public async Task Editar_LegadoLocalConLinea_SoloDetalle_SeGuardaConLaLinea()
+    {
+        var (vm, svc, _, _) = Crear();
+        vm.CargarParaEditar(LegadoConLinea());
+        await vm.InicializarAsync();
+
+        vm.Detalle = "Detalle corregido";
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.ModificarAsync(
+            It.Is<Gasto>(g => g.Id == 9 && g.LineaPoaId == 5 && g.Detalle == "Detalle corregido"), new PagoContadoDto(Caja.Local, 2)), Times.Once);
+    }
+
+    [Fact]
+    public async Task Editar_CreditoLegadoConLinea_MuestraSoloLecturaYSePuedeQuitar()
+    {
+        var (vm, svc, _, _) = Crear();
+        vm.CargarParaEditar(LegadoConLinea(condicion: CondicionPago.Credito));
+        await vm.InicializarAsync();
+
+        Assert.True(vm.LineaLegadaHuerfana);
+        Assert.Equal(5, vm.LineaPoaSeleccionada?.Id);
+
+        vm.QuitarLineaLegadaCommand.Execute(null);
+
+        Assert.False(vm.LineaLegadaHuerfana);
+        await vm.GuardarCommand.ExecuteAsync(null);
+        svc.Verify(s => s.ModificarAsync(It.Is<Gasto>(g => g.Id == 9 && g.LineaPoaId == null), null), Times.Once);
+    }
+
+    [Fact]
+    public async Task LineaHuerfana_CambiarCajaOCondicion_NoLaBorraEnSilencio()
+    {
+        var (vm, _, _, _) = Crear();
+        vm.CargarParaEditar(LegadoConLinea());
+        await vm.InicializarAsync();
+
+        vm.CajaSeleccionada = Caja.Poa;                 // contado POA: vuelve al combo normal, editable, con la misma línea
+        Assert.False(vm.LineaLegadaHuerfana);
+        Assert.True(vm.MostrarLineaPoa);
+        Assert.Equal(5, vm.LineaPoaSeleccionada?.Id);
+
+        vm.CajaSeleccionada = Caja.Local;               // de vuelta: sigue huérfana, no se borró
+        Assert.True(vm.LineaLegadaHuerfana);
+        Assert.Equal(5, vm.LineaPoaSeleccionada?.Id);
+
+        vm.EsCredito = true;                            // crédito tampoco la borra
+        Assert.True(vm.LineaLegadaHuerfana);
+        Assert.Equal(5, vm.LineaPoaSeleccionada?.Id);
+    }
+
+    [Fact]
+    public async Task LineaHuerfana_ElegirOtraLineaEnModoPoa_YVolverALocal_LaLimpia()
+    {
+        var (vm, _, _, _) = Crear();
+        vm.CargarParaEditar(LegadoConLinea());
+        await vm.InicializarAsync();
+        vm.CajaSeleccionada = Caja.Poa;
+        vm.LineasPoaDisponibles.Add(new LineaPoa { Id = 6, Nombre = "OTRA", Programa = "X", Ejercicio = 2026, Activo = true });
+
+        vm.LineaPoaSeleccionada = vm.LineasPoaDisponibles.Single(l => l.Id == 6);
+        vm.CajaSeleccionada = Caja.Local;
+
+        Assert.Null(vm.LineaPoaSeleccionada);
+        Assert.False(vm.LineaLegadaHuerfana);
+    }
+
     // ── Errores por campo ───────────────────────────────────────────────────────
 
     private static readonly string[] Campos =

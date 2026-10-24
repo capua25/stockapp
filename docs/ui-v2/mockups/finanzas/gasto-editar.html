@@ -55,6 +55,11 @@
   .v2-input--deshabilitado .v2-glifo-fecha { color: var(--v2-color-deshabilitado-texto); }
   /* Alerta del error general: fila propia del Grid raíz (Margin 28,0,28,12), fuera del scroll, con el ancho de la card. */
   .alerta-error { position: absolute; left: 28px; bottom: 81px; width: var(--v2-ancho-formulario-max); }
+  /* Línea POA huérfana de un gasto legado (StackPanel Margin 16,0,0,0 con Spacing 8): la Alerta de advertencia y, debajo, el combo
+     deshabilitado con el botón Quitar línea a su derecha, alineado abajo (Grid *,16,*). */
+  .bloque-linea-huerfana { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+  .linea-huerfana { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; align-items: end; }
+  .boton-quitar-linea { justify-self: start; }
   /* Pie fijo (fuera del scroll): fondo superficie, borde superior, padding 16x28; Cancelar y Guardar alineados al borde
      derecho de la columna de 760 (el de la card), no al de la ventana. */
   .pie { position: absolute; left: 0; right: 0; bottom: 0; height: 69px; padding: 16px 28px;
@@ -63,16 +68,16 @@
   /* Pulgar de la barra vertical del ScrollViewer (Fluent en reposo, sin tema v2): 2 px #7A7A7A a 2 px del borde derecho
      de la vista. Largo y posición MEDIDOS en headless con este formulario. */
   .pulgar { position: absolute; right: 2px; width: 2px; background: #7A7A7A; }
-  .pulgar { top: 202px; height: 474px; }
-  @media (min-width: 1366px) { .pulgar { top: 198px; height: 485px; } }
+  .pulgar { top: 255px; height: 421px; }
+  @media (min-width: 1366px) { .pulgar { top: 252px; height: 431px; } }
   /* Contenido SCROLLEADO al final (offset máximo MEDIDO en headless: el borde inferior de la card queda 24 por
      encima del borde del scroll): se ve el final de la card y el pie pegado al borde. */
-  .pagina { transform: translateY(-271px); }
-  @media (min-width: 1366px) { .pagina { transform: translateY(-263px); } }
+  .pagina { transform: translateY(-392px); }
+  @media (min-width: 1366px) { .pagina { transform: translateY(-384px); } }
 </style>
 </head>
 <body>
-<!-- Datos: DatosGastos.Editar(): el gasto 4 (contado) para editar; el tilde A crédito deshabilitado sin tildar con el texto de la condición fija; el panel con el adjunto factura-A-0004521.pdf (182.400 bytes = 178 KB, alta el 03/10/2026) con Agregar, Ver y Quitar; Guardar habilitado; caja Local y literal del pago automático (la línea POA no se muestra: la caja no es POA). SCROLLEADO al final (offset 271 a 1280 y 263 a 1366). El pie queda fijo fuera del scroll; a los dos tamaños el contenido scrollea (pulgar medido). El sidebar está para aprobar la pantalla entera; la comparación lo oculta. -->
+<!-- Datos: DatosGastos.Editar(): el gasto 4 (contado) para editar; el tilde A crédito deshabilitado sin tildar con el texto de la condición fija; el panel con el adjunto factura-A-0004521.pdf (182.400 bytes = 178 KB, alta el 03/10/2026) con Agregar, Ver y Quitar; Guardar habilitado; caja Local y literal del pago automático; el gasto 4 es legado y trae la línea POA «Bacheo y caminería rural» con caja Local: no corresponde a su caja, así que se muestra la Alerta de advertencia, la línea en solo lectura (combo deshabilitado) y el botón Quitar línea. SCROLLEADO al final (offset 392 a 1280 y 384 a 1366). El pie queda fijo fuera del scroll; a los dos tamaños el contenido scrollea (pulgar medido). El sidebar está para aprobar la pantalla entera; la comparación lo oculta. -->
 <div class="v2-ventana">
   <aside class="v2-sidebar">
     <div class="v2-marca">Gestión Municipal</div>
@@ -137,6 +142,13 @@
             <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Rubro</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input"><span>Materiales de construcción</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
             <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Caja</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input"><span>Local</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
             <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Fuente de financiamiento</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input"><span>FIGM Literal B</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
+          </div>
+          <div class="bloque-linea-huerfana">
+            <div class="v2-alerta v2-alerta--advertencia">Este gasto tiene una línea POA que ya no corresponde a su caja. Se conserva tal cual.</div>
+            <div class="linea-huerfana">
+              <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Línea POA</span></div><div><div class="v2-input v2-input--deshabilitado"><span>Bacheo y caminería rural</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
+              <span class="v2-boton v2-boton--secundario boton-quitar-linea">Quitar línea</span>
+            </div>
           </div>
           <div class="separador"></div>
           <div class="v2-subtitulo-formulario subtitulo">Condición de pago</div>

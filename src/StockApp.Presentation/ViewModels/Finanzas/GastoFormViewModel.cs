@@ -87,6 +87,7 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     private List<FuenteFinanciamiento> _fuentesActivas = new();
     private FuenteFinanciamiento? _fuenteHistorica;
     private Caja? _cajaOriginal;   // la fuente histórica solo se ofrece en la caja original (puede ser de otra caja: legado)
+    private int? _lineaLegadaId;   // línea POA de un gasto legado que no es de contado POA; null si no hay
     private bool _fuentesCargadas;
 
     [ObservableProperty]
@@ -126,11 +127,14 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
     private RubroGasto? _rubroSeleccionado;
 
-    [ObservableProperty] private LineaPoa? _lineaPoaSeleccionada;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LineaLegadaHuerfana))]
+    private LineaPoa? _lineaPoaSeleccionada;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MostrarCajaYFuente))]
     [NotifyPropertyChangedFor(nameof(MostrarLineaPoa))]
+    [NotifyPropertyChangedFor(nameof(LineaLegadaHuerfana))]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
     private bool _esCredito;
 
@@ -140,6 +144,21 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     /// <summary>La línea POA solo se ofrece en un contado de la caja POA (el servidor rechaza una línea POA en crédito o
     /// en caja Local). No se deduce la caja desde la línea: se elige primero la caja.</summary>
     public bool MostrarLineaPoa => !EsCredito && CajaSeleccionada == Caja.Poa;
+
+    public const string TextoLineaLegadaHuerfana =
+        "Este gasto tiene una línea POA que ya no corresponde a su caja. Se conserva tal cual.";
+
+    /// <summary>La línea elegida es la que el gasto legado trajo.</summary>
+    private bool EsLaLineaLegada => _lineaLegadaId is not null && LineaPoaSeleccionada?.Id == _lineaLegadaId;
+
+    /// <summary>Gasto legado con una línea POA que no corresponde a su caja o condición (la migración dejó gastos de caja
+    /// Local con línea): la línea se muestra en solo lectura y se conserva hasta que el usuario la quite con
+    /// QuitarLineaLegada, o elija otra en modo POA. Con caja POA a contado la línea vuelve a ser editable (modo normal).
+    /// Cambiar caja o condición NO la borra en silencio.</summary>
+    public bool LineaLegadaHuerfana => EsLaLineaLegada && !MostrarLineaPoa;
+
+    [RelayCommand]
+    private void QuitarLineaLegada() => LineaPoaSeleccionada = null;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
@@ -227,16 +246,17 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     {
         AlCambiarCampo(nameof(CajaSeleccionada));
         OnPropertyChanged(nameof(MostrarLineaPoa));
+        OnPropertyChanged(nameof(LineaLegadaHuerfana));
         RefrescarFuentes();
         if (FuenteSeleccionada is not null && FuenteSeleccionada.Caja != value)
             FuenteSeleccionada = null;
-        if (value != Caja.Poa)
+        if (value != Caja.Poa && !EsLaLineaLegada)
             LineaPoaSeleccionada = null;
     }
 
     /// <summary>El vencimiento solo es regla a crédito y caja y literal solo a contado: tildar o destildar cambia sus
     /// errores sin tocar los campos. A crédito no hay caja ni literal: se limpian, así al volver a contado se eligen de nuevo
-    /// (nada queda elegido implícitamente). Una línea POA no sobrevive a un crédito.</summary>
+    /// (nada queda elegido implícitamente). Una línea POA no sobrevive a un crédito, salvo la legada, que solo se quita a mano.</summary>
     partial void OnEsCreditoChanged(bool value)
     {
         ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(nameof(FechaVencimientoSeleccionada)));
@@ -247,7 +267,8 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
         {
             CajaSeleccionada = null;
             FuenteSeleccionada = null;
-            LineaPoaSeleccionada = null;
+            if (!EsLaLineaLegada)
+                LineaPoaSeleccionada = null;
         }
     }
 
@@ -331,6 +352,10 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
         EsCredito        = gasto.CondicionPago == CondicionPago.Credito;
         FechaVencimientoSeleccionada = gasto.FechaVencimiento;
         _cajaOriginal    = gasto.PagoAutomatico?.Caja;
+        _lineaLegadaId   = gasto.LineaPoaId is not null
+                           && !(gasto.CondicionPago == CondicionPago.Contado && gasto.PagoAutomatico?.Caja == Caja.Poa)
+            ? gasto.LineaPoaId
+            : null;
         CajaSeleccionada = gasto.PagoAutomatico?.Caja;
         EsAnulado        = !gasto.Activo;
         EsEdicion        = true;

@@ -154,6 +154,25 @@
                                         </ComboBox>
                                     </v2:CampoFormulario>
                                 </Grid>
+                                <!-- Gasto legado con una línea POA que ya no corresponde a su caja: se muestra en solo lectura y se
+                                     conserva tal cual hasta que el usuario la quita. Con caja POA a contado vuelve el combo normal. -->
+                                <StackPanel x:Name="BloqueLineaHuerfana" Margin="0,16,0,0" Spacing="8"
+                                            IsVisible="{Binding LineaLegadaHuerfana}">
+                                    <v2:Alerta x:Name="AlertaLineaHuerfana" Variante="Advertencia"
+                                               Texto="{x:Static vm:GastoFormViewModel.TextoLineaLegadaHuerfana}" />
+                                    <Grid ColumnDefinitions="*,16,*">
+                                        <v2:CampoFormulario x:Name="CampoLineaHuerfana" Grid.Column="0" Etiqueta="Línea POA">
+                                            <ComboBox x:Name="ComboLineaHuerfana" HorizontalAlignment="Stretch" IsEnabled="False"
+                                                      ItemsSource="{Binding LineasPoaDisponibles}" SelectedItem="{Binding LineaPoaSeleccionada}">
+                                                <ComboBox.ItemTemplate>
+                                                    <DataTemplate x:DataType="e:LineaPoa"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                                </ComboBox.ItemTemplate>
+                                            </ComboBox>
+                                        </v2:CampoFormulario>
+                                        <Button x:Name="BotonQuitarLinea" Grid.Column="2" Classes="secundario" VerticalAlignment="Bottom"
+                                                HorizontalAlignment="Left" Content="Quitar línea" Command="{Binding QuitarLineaLegadaCommand}" />
+                                    </Grid>
+                                </StackPanel>
                                 <!-- La caja elegida no tiene literales activos: se avisa dónde configurarlos. -->
                                 <v2:Alerta x:Name="AlertaSinLiterales" Margin="0,8,0,0" Variante="Advertencia"
                                            Texto="{Binding AvisoSinLiterales}"

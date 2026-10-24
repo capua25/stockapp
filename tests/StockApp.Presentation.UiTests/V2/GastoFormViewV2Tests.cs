@@ -393,6 +393,82 @@ public class GastoFormViewV2Tests
         Assert.False(Parte<Button>(m, "BotonGuardar").IsEffectivelyEnabled);
     }
 
+    private static Gasto LegadoLocalConLinea()
+    {
+        var gasto = Existente();
+        gasto.LineaPoaId = 5;
+        gasto.LineaPoa = Prensa;
+        return gasto;
+    }
+
+    [AvaloniaFact]
+    public void Edicion_LegadoLocalConLinea_MuestraLaLineaEnSoloLectura_ConSuTextoYElBotonQuitar()
+    {
+        var m = Montar(vm => vm.CargarParaEditar(LegadoLocalConLinea()));
+
+        Assert.True(Visible(Parte<StackPanel>(m, "BloqueLineaHuerfana")));
+        Assert.False(Visible(Parte<CampoFormulario>(m, "CampoLineaPoa")));     // el combo normal no aparece
+        var combo = Parte<ComboBox>(m, "ComboLineaHuerfana");
+        Assert.False(combo.IsEnabled);
+        Assert.Same(Prensa, combo.SelectedItem);
+        var alerta = Parte<Alerta>(m, "AlertaLineaHuerfana");
+        Assert.Equal("Este gasto tiene una línea POA que ya no corresponde a su caja. Se conserva tal cual.", alerta.Texto);
+        Assert.Equal(VarianteAlerta.Advertencia, alerta.Variante);
+        var boton = Parte<Button>(m, "BotonQuitarLinea");
+        Assert.True(Visible(boton));
+        Assert.Equal("Quitar línea", boton.Content);
+        Assert.True(boton.IsEffectivelyEnabled);
+    }
+
+    [AvaloniaFact]
+    public void Edicion_LegadoLocalConLinea_QuitarLineaClickReal_OcultaElBloque_YGuardarMandaNull()
+    {
+        var m = Montar(vm => vm.CargarParaEditar(LegadoLocalConLinea()), alto: 1600);   // sin scroll: el botón queda a la vista
+
+        Clickear(m.Ventana, Parte<Button>(m, "BotonQuitarLinea"));
+
+        Assert.False(Visible(Parte<StackPanel>(m, "BloqueLineaHuerfana")));
+        Clickear(m.Ventana, Parte<Button>(m, "BotonGuardar"));
+        Assert.Null(Assert.Single(m.Servicio.Modificaciones).LineaPoaId);
+    }
+
+    [AvaloniaFact]
+    public void Edicion_LegadoLocalConLinea_SinQuitar_GuardarReenviaLaLinea()
+    {
+        var m = Montar(vm => vm.CargarParaEditar(LegadoLocalConLinea()));
+
+        Clickear(m.Ventana, Parte<Button>(m, "BotonGuardar"));
+
+        Assert.Equal(5, Assert.Single(m.Servicio.Modificaciones).LineaPoaId);
+    }
+
+    [AvaloniaFact]
+    public void Edicion_LegadoLocalConLinea_PasarACajaPoa_VuelveElComboNormalEditable()
+    {
+        var m = Montar(vm => vm.CargarParaEditar(LegadoLocalConLinea()));
+
+        Parte<ComboBox>(m, "ComboCaja").SelectedItem = Caja.Poa;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(Visible(Parte<StackPanel>(m, "BloqueLineaHuerfana")));
+        Assert.True(Visible(Parte<CampoFormulario>(m, "CampoLineaPoa")));
+        Assert.Same(Prensa, Parte<ComboBox>(m, "ComboLineaPoa").SelectedItem);
+        Assert.True(Parte<ComboBox>(m, "ComboLineaPoa").IsEffectivelyEnabled);
+    }
+
+    [AvaloniaFact]
+    public void Edicion_ContadoPoaConLinea_NoMuestraElBloqueHuerfano()
+    {
+        var gasto = Existente();
+        gasto.Pagos.Clear();
+        gasto.Pagos.Add(PagoAutomaticoDePrueba.Con(PoaObras, caja: Caja.Poa, fecha: gasto.Fecha, monto: gasto.MontoTotal));
+        gasto.LineaPoaId = 5;
+        gasto.LineaPoa = Prensa;
+        var m = Montar(vm => vm.CargarParaEditar(gasto));
+
+        Assert.False(Visible(Parte<StackPanel>(m, "BloqueLineaHuerfana")));
+    }
+
     [AvaloniaFact]
     public void Vencimiento_SoloACredito()
     {
