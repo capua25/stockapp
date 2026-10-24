@@ -1,7 +1,7 @@
 namespace StockApp.Infrastructure.Migrations;
 
 /// <summary>
-/// SQL crudo de la migración AgregaCajaYFuenteAlPago, en una constante compartida entre la
+/// SQL crudo de las migraciones AgregaCajaYFuenteAlPago y QuitaFuenteDelGasto, en una constante compartida entre la
 /// migración y su test (mismo criterio que NormalizacionCatalogosSql): el texto probado es el
 /// que realmente corre.
 /// </summary>

@@ -561,6 +561,56 @@ public class GastoServiceTests
     }
 
     [Fact]
+    public async Task ModificarAsync_ContadoPoaConLinea_PasaALocalSinTocarLaLinea_LanzaReglaDeNegocio()
+    {
+        var m = Crear();
+        FuenteEnCaja(m, 3, "Literal B", Caja.Poa);
+        LineaConAsignacion(m, 3, 5000m);
+        // El literal destino también tiene asignación: así la única regla que frena el cambio es la de la caja.
+        m.LineasPoa.Object.ObtenerPorIdAsync(5).Result!.Asignaciones
+            .Add(new AsignacionPresupuestal { FuenteFinanciamientoId = 2, Monto = 5000m });
+        var original = ContadoPersistido(Caja.Poa, 3, lineaPoaId: 5);
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        var editado = GastoValido(CondicionPago.Contado);
+        editado.Id = 1;
+        editado.LineaPoaId = 5;   // la línea no cambia: solo cambian la caja y el literal del pago
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => m.Svc.ModificarAsync(editado, ContadoLocal(2)));
+
+        Assert.Equal(CajaYLiteral.MensajeLineaPoaSoloContadoPoa, ex.Message);
+        m.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Gasto>()), Times.Never);
+        m.Audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), It.IsAny<AccionAuditada>(), It.IsAny<string>(),
+            It.IsAny<int>(), It.IsAny<string>()), Times.Never);
+        m.Version.Verify(v => v.Invalidar(), Times.Never);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_LegadoLocalConLineaPoa_CambiaElLiteral_LanzaReglaDeNegocio()
+    {
+        var m = Crear();
+        LineaConAsignacion(m, 2, 5000m);
+        // El literal destino también tiene asignación: así la única regla que frena el cambio es la de la caja.
+        m.LineasPoa.Object.ObtenerPorIdAsync(5).Result!.Asignaciones
+            .Add(new AsignacionPresupuestal { FuenteFinanciamientoId = 4, Monto = 5000m });
+        var original = ContadoPersistido(Caja.Local, 2, lineaPoaId: 5);
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        var editado = GastoValido(CondicionPago.Contado);
+        editado.Id = 1;
+        editado.LineaPoaId = 5;   // ni la línea ni la caja cambian: solo el literal (2 → 4, ambos Local)
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => m.Svc.ModificarAsync(editado, ContadoLocal(4)));
+
+        Assert.Equal(CajaYLiteral.MensajeLineaPoaSoloContadoPoa, ex.Message);
+        m.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Gasto>()), Times.Never);
+        m.Audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), It.IsAny<AccionAuditada>(), It.IsAny<string>(),
+            It.IsAny<int>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
     public async Task ModificarAsync_ContadoSinPagoAutomatico_LanzaReglaDeNegocio()
     {
         var m = Crear();

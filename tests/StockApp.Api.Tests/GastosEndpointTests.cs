@@ -707,6 +707,47 @@ public class GastosEndpointTests : ApiTestBase
         Assert.True(pago.EsAutomatico);
     }
 
+    [Fact]
+    public async Task Put_ContadoPoaConLinea_PasaALocalSinTocarLaLinea_Devuelve409YNoToca()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        var poaId = await SeedFuentePoaAsync();
+        int lineaId;
+        await using (var ctx = Factory.CrearContexto())
+        {
+            var linea = new LineaPoa
+            {
+                Nombre = $"PRENSA {Guid.NewGuid():N}", Programa = "Com", Ejercicio = 2026,
+                Asignaciones =
+                {
+                    new AsignacionPresupuestal { FuenteFinanciamientoId = poaId, Monto = 5000m },
+                    // El literal Local también tiene asignación: la única regla que frena el PUT es la de la caja.
+                    new AsignacionPresupuestal { FuenteFinanciamientoId = fuenteId, Monto = 5000m },
+                },
+            };
+            ctx.Add(linea);
+            await ctx.SaveChangesAsync();
+            lineaId = linea.Id;
+        }
+        var client = ClienteAutenticado(TokenAdmin());
+        var creado = await (await client.PostAsJsonAsync("/finanzas/gastos",
+                RequestValido(proveedorId, fuenteId, rubroId, factura: "PUTPOA-01")
+                    with { Caja = Caja.Poa, FuenteFinanciamientoId = poaId, LineaPoaId = lineaId }))
+            .Content.ReadFromJsonAsync<GastoGuardadoResponse>();
+
+        // Pasa a la caja Local con un literal Local, sin tocar la línea POA.
+        var response = await client.PutAsJsonAsync($"/finanzas/gastos/{creado!.Id}",
+            PutContado(proveedorId, rubroId, Caja.Local, fuenteId) with { LineaPoaId = lineaId });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        await using var verificacion = Factory.CrearContexto();
+        var gasto = await verificacion.Gastos.Include(g => g.Pagos).SingleAsync(g => g.Id == creado.Id);
+        Assert.Equal(lineaId, gasto.LineaPoaId);
+        var pago = Assert.Single(gasto.Pagos);
+        Assert.Equal(Caja.Poa, pago.Caja);
+        Assert.Equal(poaId, pago.FuenteFinanciamientoId);
+    }
+
     private static ModificarGastoRequest PutContado(int proveedorId, int rubroId, Caja caja, int fuenteId) => new(
         ProveedorId: proveedorId, NumeroFactura: "PUTCAJA", NumeroOrden: null,
         Detalle: "Gasto vía API", Destino: null, Fecha: DateTime.UtcNow, MontoTotal: 1500m,

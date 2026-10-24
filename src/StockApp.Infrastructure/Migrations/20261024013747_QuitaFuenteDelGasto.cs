@@ -10,6 +10,8 @@ namespace StockApp.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            // Un gasto a crédito sin pagos pierde su fuente: no hay pago del que heredarla. Lo acepta la
+            // spec §2.4; en producción hay 0 casos (medido el 2026-10-23).
             migrationBuilder.DropForeignKey(
                 name: "FK_Gastos_FuentesFinanciamiento_FuenteFinanciamientoId",
                 table: "Gastos");
