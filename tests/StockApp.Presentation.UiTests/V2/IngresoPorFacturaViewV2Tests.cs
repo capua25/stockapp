@@ -29,6 +29,8 @@ namespace StockApp.Presentation.UiTests.V2;
 /// </summary>
 public class IngresoPorFacturaViewV2Tests
 {
+    private static readonly FuenteFinanciamiento Rentas = new() { Id = 1, Nombre = "Rentas generales", Activo = true, Caja = Caja.Local };
+    private static readonly FuenteFinanciamiento PoaObras = new() { Id = 4, Nombre = "POA Obras", Activo = true, Caja = Caja.Poa };
     private static readonly UnidadMedida Unidad = new() { Id = 1, Nombre = "Unidad", Abreviatura = "u", Activo = true };
 
     private static ProductoDto P(int id, string nombre, decimal costo = 100m) => new(
@@ -39,9 +41,9 @@ public class IngresoPorFacturaViewV2Tests
         NavigationRecorderFake Nav);
 
     private static Montaje Montar(double ancho = 1040, double alto = 760, IAdjuntoService? adjuntosServicio = null,
-        IServicioSeleccionArchivo? seleccion = null)
+        IServicioSeleccionArchivo? seleccion = null, IReadOnlyList<FuenteFinanciamiento>? fuentes = null)
     {
-        var (vm, servicio, alta, precios, nav) = CrearVm(adjuntosServicio, seleccion);
+        var (vm, servicio, alta, precios, nav) = CrearVm(adjuntosServicio, seleccion, fuentes);
         var vista = new IngresoPorFacturaView();
         var ventana = new Window { Width = ancho, Height = alto, Content = vista };
         // Con un servicio de adjuntos propio el test usa el panel: el ViewLocator lo materializa como en la app.
@@ -56,7 +58,8 @@ public class IngresoPorFacturaViewV2Tests
 
     private static (IngresoPorFacturaViewModel Vm, IngresoPorFacturaServiceFake Servicio, AltaProductoRapidaDialogServiceFake Alta,
         ConfirmacionPreciosDialogServiceFake Precios, NavigationRecorderFake Nav) CrearVm(
-        IAdjuntoService? adjuntosServicio = null, IServicioSeleccionArchivo? seleccion = null)
+        IAdjuntoService? adjuntosServicio = null, IServicioSeleccionArchivo? seleccion = null,
+        IReadOnlyList<FuenteFinanciamiento>? fuentes = null)
     {
         var servicio = new IngresoPorFacturaServiceFake();
         var alta = new AltaProductoRapidaDialogServiceFake();
@@ -69,9 +72,9 @@ public class IngresoPorFacturaViewV2Tests
             new ProductoServiceIngresoFake(new[] { P(1, "Cemento portland 50 kg", 480m), P(2, "Arena gruesa", 890m) }),
             new CategoriaServiceFake(Array.Empty<Categoria>()), new UnidadMedidaServiceFake(new[] { Unidad }),
             new ProveedorServiceFake(new[] { new Proveedor { Id = 1, Nombre = "Barraca Carmelo S.A.", Activo = true } }),
-            new FuenteFinanciamientoServiceFake(new[] { new FuenteFinanciamiento { Id = 1, Nombre = "Rentas generales", Activo = true } }),
+            new FuenteFinanciamientoServiceFake(fuentes ?? new[] { Rentas, PoaObras }),
             new RubroGastoServiceFake(new[] { new RubroGasto { Id = 1, Codigo = 231, Nombre = "Materiales", Activo = true } }),
-            new LineaPoaServiceFake(Array.Empty<LineaPoa>()),
+            new LineaPoaServiceFake(new[] { new LineaPoa { Id = 5, Nombre = "PRENSA", Programa = "Com", Ejercicio = 2026, Activo = true } }),
             nav, confirmacion, adjuntos, alta, precios);
         return (vm, servicio, alta, precios, nav);
     }
@@ -102,6 +105,7 @@ public class IngresoPorFacturaViewV2Tests
     private static void CompletarCabecera(IngresoPorFacturaViewModel vm, string total = "4.800,00")
     {
         vm.ProveedorSeleccionado = vm.ProveedoresDisponibles[0];
+        vm.CajaSeleccionada = Caja.Local;
         vm.FuenteSeleccionada = vm.FuentesDisponibles[0];
         vm.RubroSeleccionado = vm.RubrosDisponibles[0];
         vm.Detalle = "Materiales para la reparación de la rambla";
@@ -170,12 +174,117 @@ public class IngresoPorFacturaViewV2Tests
         Assert.True(ArbolVisual.EsVisibleEnArbol(N<TarjetaContenido>(m, "TarjetaAdjuntos")));
     }
 
+    // ── Caja y literal del pago de contado (explícitos, sin preselección) ───────
+
+    [AvaloniaFact]
+    public void Contado_MuestraCajaYFuente_SinPreseleccion()
+    {
+        var m = Montar();
+
+        Assert.True(ArbolVisual.EsVisibleEnArbol(N<CampoFormulario>(m, "CampoCaja")));
+        Assert.True(ArbolVisual.EsVisibleEnArbol(N<CampoFormulario>(m, "CampoFuente")));
+        Assert.Null(N<ComboBox>(m, "ComboCaja").SelectedItem);
+        Assert.Empty(N<ComboBox>(m, "ComboFuente").Items);
+        Assert.Equal(new[] { Caja.Local, Caja.Poa }, N<ComboBox>(m, "ComboCaja").Items.Cast<Caja>().ToArray());
+    }
+
+    [AvaloniaFact]
+    public void Credito_OcultaCajaYFuente()
+    {
+        var m = Montar();
+
+        m.Vm.EsCredito = true;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(ArbolVisual.EsVisibleEnArbol(N<CampoFormulario>(m, "CampoCaja")));
+        Assert.False(ArbolVisual.EsVisibleEnArbol(N<CampoFormulario>(m, "CampoFuente")));
+    }
+
+    [AvaloniaFact]
+    public void LineaPoa_SoloVisibleConContadoYCajaPoa()
+    {
+        var m = Montar();
+        var linea = N<CampoFormulario>(m, "CampoLineaPoa");
+        Assert.False(ArbolVisual.EsVisibleEnArbol(linea));                       // contado sin caja
+
+        N<ComboBox>(m, "ComboCaja").SelectedItem = Caja.Local;
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(ArbolVisual.EsVisibleEnArbol(linea));                       // contado Local
+
+        N<ComboBox>(m, "ComboCaja").SelectedItem = Caja.Poa;
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(ArbolVisual.EsVisibleEnArbol(linea));                        // contado POA
+
+        m.Vm.EsCredito = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(ArbolVisual.EsVisibleEnArbol(linea));                       // crédito
+    }
+
+    [AvaloniaFact]
+    public void CajaPoa_ElComboDeFuenteSoloTieneLiteralesPoa()
+    {
+        var m = Montar();
+        var fuente = N<ComboBox>(m, "ComboFuente");
+
+        N<ComboBox>(m, "ComboCaja").SelectedItem = Caja.Poa;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(new[] { PoaObras }, fuente.Items.Cast<FuenteFinanciamiento>().ToArray());
+        Assert.False(ArbolVisual.EsVisibleEnArbol(N<Alerta>(m, "AlertaSinLiterales")));
+    }
+
+    [AvaloniaFact]
+    public void CajaSinLiterales_AlertaVisibleConElTexto()
+    {
+        var m = Montar(fuentes: new[] { Rentas });
+
+        N<ComboBox>(m, "ComboCaja").SelectedItem = Caja.Poa;
+        Dispatcher.UIThread.RunJobs();
+
+        var alerta = N<Alerta>(m, "AlertaSinLiterales");
+        Assert.True(ArbolVisual.EsVisibleEnArbol(alerta));
+        Assert.Equal("No hay literales asignados a la caja POA; configuralos en Fuentes de financiamiento", alerta.Texto);
+    }
+
+    [AvaloniaFact]
+    public void Alta_SinCaja_GuardarDeshabilitado()
+    {
+        var m = Montar();
+        CompletarCabecera(m.Vm, "480,00");
+        Renglones(m.Vm, 1);
+        var literal = m.Vm.FuenteSeleccionada;
+        m.Vm.CajaSeleccionada = null;
+        m.Vm.FuenteSeleccionada = literal;   // todo lo demás válido: solo la caja falta
+        Dispatcher.UIThread.RunJobs();
+
+        var guardar = N<Button>(m, "BotonGuardar");
+        Assert.False(guardar.IsEffectivelyEnabled);
+        Assert.False(guardar.Command!.CanExecute(null));
+    }
+
+    [AvaloniaFact]
+    public void Guardar_ClickReal_EnviaLaCajaPoaYElLiteralElegidos()
+    {
+        var m = Montar();
+        CompletarCabecera(m.Vm, "480,00");
+        N<ComboBox>(m, "ComboCaja").SelectedItem = Caja.Poa;
+        Dispatcher.UIThread.RunJobs();
+        N<ComboBox>(m, "ComboFuente").SelectedItem = PoaObras;
+        Renglones(m.Vm, 1);
+        Dispatcher.UIThread.RunJobs();
+
+        Clickear(m, N<Button>(m, "BotonGuardar"));
+
+        var dto = Assert.Single(m.Servicio.Registrados);
+        Assert.Equal(new PagoContadoDto(Caja.Poa, 4), dto.PagoContado);
+    }
+
     [AvaloniaFact]
     public void Requeridos_SoloLoQueExigeGuardar()
     {
         var m = Montar();
 
-        foreach (var campo in new[] { "CampoProveedor", "CampoDetalle", "CampoFuente", "CampoRubro" })
+        foreach (var campo in new[] { "CampoProveedor", "CampoDetalle", "CampoCaja", "CampoFuente", "CampoRubro" })
             Assert.True(N<CampoFormulario>(m, campo).Requerido, $"{campo} sin asterisco.");
         foreach (var campo in new[] { "CampoNumeroFactura", "CampoOrdenCompra", "CampoFecha", "CampoDestino", "CampoLineaPoa" })
             Assert.False(N<CampoFormulario>(m, campo).Requerido, $"{campo} con asterisco y es opcional.");

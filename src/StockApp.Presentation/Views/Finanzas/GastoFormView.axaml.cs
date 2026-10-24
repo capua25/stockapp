@@ -24,6 +24,7 @@ public partial class GastoFormView : UserControl
         TocarAlSalir(SelectorFecha, nameof(GastoFormViewModel.FechaSeleccionada));
         TocarAlSalir(CajaDetalle, nameof(GastoFormViewModel.Detalle));
         TocarAlSalir(CajaMonto, nameof(GastoFormViewModel.MontoTexto));
+        TocarAlSalir(ComboCaja, nameof(GastoFormViewModel.CajaSeleccionada));
         TocarAlSalir(ComboFuente, nameof(GastoFormViewModel.FuenteSeleccionada));
         TocarAlSalir(ComboRubro, nameof(GastoFormViewModel.RubroSeleccionado));
         TocarAlSalir(SelectorVencimiento, nameof(GastoFormViewModel.FechaVencimientoSeleccionada));

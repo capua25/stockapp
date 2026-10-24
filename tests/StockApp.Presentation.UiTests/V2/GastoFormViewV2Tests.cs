@@ -33,7 +33,9 @@ namespace StockApp.Presentation.UiTests.V2;
 public class GastoFormViewV2Tests
 {
     private static readonly Proveedor Barraca = new() { Id = 1, Nombre = "Barraca Carmelo S.A.", Activo = true };
-    private static readonly FuenteFinanciamiento Figm = new() { Id = 1, Nombre = "FIGM Literal B", Activo = true };
+    private static readonly FuenteFinanciamiento Figm = new() { Id = 1, Nombre = "FIGM Literal B", Activo = true, Caja = Caja.Local };
+    private static readonly FuenteFinanciamiento PoaObras = new() { Id = 4, Nombre = "POA Obras", Activo = true, Caja = Caja.Poa };
+    private static readonly LineaPoa Prensa = new() { Id = 5, Nombre = "PRENSA", Programa = "Comunicación", Ejercicio = 2026, Activo = true };
     private static readonly RubroGasto Materiales = new() { Id = 1, Codigo = 10, Nombre = "Materiales de construcción", Activo = true };
 
     private static Gasto Existente(bool activo = true, CondicionPago condicion = CondicionPago.Contado)
@@ -67,23 +69,24 @@ public class GastoFormViewV2Tests
     private sealed record Montaje(Window Ventana, GastoFormView Vista, GastoFormViewModel Vm, GastosFake Servicio, NavigationRecorderFake Navegacion);
 
     private static GastoFormViewModel NuevoVm(GastosFake servicio, ICurrentSession sesion, INavigationService navegacion,
-        ProveedoresFake? proveedores = null, AdjuntoServiceFake? adjuntos = null)
+        ProveedoresFake? proveedores = null, AdjuntoServiceFake? adjuntos = null,
+        IReadOnlyList<FuenteFinanciamiento>? fuentes = null)
     {
         var confirmacion = new ConfirmacionServiceFake();
         var panel = new AdjuntosPanelViewModel(adjuntos ?? new AdjuntoServiceFake(), new ServicioSeleccionArchivoFake(),
             new ServicioAperturaArchivoFake(), confirmacion, sesion);
         return new GastoFormViewModel(servicio, sesion, proveedores ?? new ProveedoresFake { Activos = [Barraca] },
-            new FuenteFinanciamientoServiceFake([Figm]), new RubroGastoServiceFake([Materiales]),
-            new LineaPoaServiceFake(Array.Empty<LineaPoa>()), navegacion, confirmacion, panel);
+            new FuenteFinanciamientoServiceFake(fuentes ?? [Figm, PoaObras]), new RubroGastoServiceFake([Materiales]),
+            new LineaPoaServiceFake([Prensa]), navegacion, confirmacion, panel);
     }
 
     private static Montaje Montar(Action<GastoFormViewModel>? preparar = null, ICurrentSession? sesion = null,
         double ancho = 1040, double alto = 760, ProveedoresFake? proveedores = null, AdjuntoServiceFake? adjuntos = null,
-        GastosFake? servicio = null)
+        GastosFake? servicio = null, IReadOnlyList<FuenteFinanciamiento>? fuentes = null)
     {
         servicio ??= new GastosFake();
         var navegacion = new NavigationRecorderFake();
-        var vm = NuevoVm(servicio, sesion ?? ConPermiso(), navegacion, proveedores, adjuntos);
+        var vm = NuevoVm(servicio, sesion ?? ConPermiso(), navegacion, proveedores, adjuntos, fuentes);
         preparar?.Invoke(vm);
         var vista = new GastoFormView { DataContext = vm };
         var ventana = new Window { Width = ancho, Height = alto, Content = vista };
@@ -114,6 +117,7 @@ public class GastoFormViewV2Tests
         vm.ProveedorSeleccionado = Barraca;
         vm.Detalle = "Materiales para bacheo";
         vm.MontoTexto = "186.540,00";
+        vm.CajaSeleccionada = Caja.Local;
         vm.FuenteSeleccionada = Figm;
         vm.RubroSeleccionado = Materiales;
         Dispatcher.UIThread.RunJobs();
@@ -197,12 +201,162 @@ public class GastoFormViewV2Tests
         Assert.Equal(R("CampoProveedor").Y, R("CampoNumeroFactura").Y);
         Assert.Equal(R("CampoProveedor").Right + 16, R("CampoNumeroFactura").X, 1);
         Assert.Equal(R("CampoOrdenCompra").Y, R("CampoFecha").Y);
-        Assert.Equal(R("CampoMonto").Y, R("CampoFuente").Y);
-        Assert.Equal(R("CampoRubro").Y, R("CampoLineaPoa").Y);
+        Assert.Equal(R("CampoMonto").Y, R("CampoRubro").Y);
+        Assert.Equal(R("CampoCaja").Y, R("CampoFuente").Y);
+        Assert.Equal(R("CampoMonto").X, R("CampoCaja").X);
+        Assert.Equal(R("CampoRubro").X, R("CampoFuente").X);
+        Assert.True(R("CampoCaja").Y > R("CampoMonto").Bottom);
         Assert.Equal(R("CampoProveedor").X, R("CampoDetalle").X);
         Assert.Equal(R("CampoNumeroFactura").Right, R("CampoDetalle").Right, 1);
         Assert.Equal(R("CampoDetalle").Width, R("CampoDestino").Width, 1);
         Assert.True(R("CampoDestino").Y > R("CampoDetalle").Bottom);
+    }
+
+    // ── Caja y literal del pago de contado (explícitos, sin preselección) ───────
+
+    [AvaloniaFact]
+    public void Contado_MuestraCajaYFuente_SinPreseleccion()
+    {
+        var m = Montar();
+
+        Assert.True(Visible(Parte<CampoFormulario>(m, "CampoCaja")));
+        Assert.True(Visible(Parte<CampoFormulario>(m, "CampoFuente")));
+        Assert.Null(Parte<ComboBox>(m, "ComboCaja").SelectedItem);
+        Assert.Empty(Parte<ComboBox>(m, "ComboFuente").Items);
+        Assert.Equal(new[] { Caja.Local, Caja.Poa }, Parte<ComboBox>(m, "ComboCaja").Items.Cast<Caja>().ToArray());
+    }
+
+    [AvaloniaFact]
+    public void Credito_OcultaCajaYFuente()
+    {
+        var m = Montar();
+
+        m.Vm.EsCredito = true;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(Visible(Parte<CampoFormulario>(m, "CampoCaja")));
+        Assert.False(Visible(Parte<CampoFormulario>(m, "CampoFuente")));
+    }
+
+    [AvaloniaFact]
+    public void LineaPoa_SoloVisibleConContadoYCajaPoa()
+    {
+        var m = Montar();
+        var linea = Parte<CampoFormulario>(m, "CampoLineaPoa");
+        Assert.False(Visible(linea));                                            // contado sin caja
+
+        Parte<ComboBox>(m, "ComboCaja").SelectedItem = Caja.Local;
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(Visible(linea));                                            // contado Local
+
+        Parte<ComboBox>(m, "ComboCaja").SelectedItem = Caja.Poa;
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(Visible(linea));                                             // contado POA
+
+        m.Vm.EsCredito = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(Visible(linea));                                            // crédito
+    }
+
+    [AvaloniaFact]
+    public void CajaPoa_ElComboDeFuenteSoloTieneLiteralesPoa()
+    {
+        var m = Montar();
+        var fuente = Parte<ComboBox>(m, "ComboFuente");
+
+        Parte<ComboBox>(m, "ComboCaja").SelectedItem = Caja.Poa;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(new[] { PoaObras }, fuente.Items.Cast<FuenteFinanciamiento>().ToArray());
+        Assert.False(Visible(Parte<Alerta>(m, "AlertaSinLiterales")));
+    }
+
+    [AvaloniaFact]
+    public void CajaPoaSinLiterales_AlertaVisibleConElTexto()
+    {
+        var m = Montar(fuentes: [Figm]);
+
+        Parte<ComboBox>(m, "ComboCaja").SelectedItem = Caja.Poa;
+        Dispatcher.UIThread.RunJobs();
+
+        var alerta = Parte<Alerta>(m, "AlertaSinLiterales");
+        Assert.True(Visible(alerta));
+        Assert.Equal("No hay literales asignados a la caja POA; configuralos en Fuentes de financiamiento", alerta.Texto);
+        Assert.Equal(VarianteAlerta.Advertencia, alerta.Variante);
+    }
+
+    [AvaloniaFact]
+    public void Alta_SinCaja_GuardarDeshabilitado()
+    {
+        var m = Montar();
+        Completar(m.Vm);
+        Assert.True(Parte<Button>(m, "BotonGuardar").IsEffectivelyEnabled);
+        m.Vm.CajaSeleccionada = null;
+        m.Vm.FuenteSeleccionada = Figm;   // todo lo demás válido: solo la caja falta
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(Parte<Button>(m, "BotonGuardar").IsEffectivelyEnabled);
+    }
+
+    [AvaloniaFact]
+    public void SalirDeLaCajaSinElegir_MensajeEnElCombo()
+    {
+        var m = Montar();
+        var combo = Parte<ComboBox>(m, "ComboCaja");
+        combo.Focus();
+        Dispatcher.UIThread.RunJobs();
+
+        Parte<TextBox>(m, "CajaMonto").Focus();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(new[] { GastoFormViewModel.MensajeCajaObligatoria }, Errores(combo));
+    }
+
+    [AvaloniaFact]
+    public void Guardar_ClickReal_ContadoPoa_EnviaLaCajaElLiteralYLaLinea()
+    {
+        var m = Montar();
+        Completar(m.Vm);
+        Parte<ComboBox>(m, "ComboCaja").SelectedItem = Caja.Poa;
+        Dispatcher.UIThread.RunJobs();
+        Parte<ComboBox>(m, "ComboFuente").SelectedItem = PoaObras;
+        Parte<ComboBox>(m, "ComboLineaPoa").SelectedItem = Prensa;
+        Dispatcher.UIThread.RunJobs();
+
+        Clickear(m.Ventana, Parte<Button>(m, "BotonGuardar"));
+
+        Assert.Equal(new PagoContadoDto(Caja.Poa, 4), Assert.Single(m.Servicio.PagosContado));
+        Assert.Equal(5, Assert.Single(m.Servicio.Altas).LineaPoaId);
+    }
+
+    [AvaloniaFact]
+    public void Guardar_ClickReal_Credito_NoMandaCajaNiLiteral()
+    {
+        var m = Montar();
+        Completar(m.Vm);
+        m.Vm.EsCredito = true;
+        m.Vm.FechaVencimientoSeleccionada = new DateTime(2030, 12, 31);
+        Dispatcher.UIThread.RunJobs();
+
+        Clickear(m.Ventana, Parte<Button>(m, "BotonGuardar"));
+
+        Assert.Null(Assert.Single(m.Servicio.PagosContado));
+    }
+
+    [AvaloniaFact]
+    public void Edicion_ContadoPoa_MuestraCajaLiteralYLinea()
+    {
+        var gasto = Existente();
+        gasto.Pagos.Clear();
+        gasto.Pagos.Add(PagoAutomaticoDePrueba.Con(PoaObras, caja: Caja.Poa, fecha: gasto.Fecha, monto: gasto.MontoTotal));
+        gasto.LineaPoaId = 5;
+        gasto.LineaPoa = Prensa;
+        var m = Montar(vm => vm.CargarParaEditar(gasto));
+
+        Assert.Equal(Caja.Poa, Parte<ComboBox>(m, "ComboCaja").SelectedItem);
+        Assert.Same(PoaObras, Parte<ComboBox>(m, "ComboFuente").SelectedItem);
+        Assert.True(Visible(Parte<CampoFormulario>(m, "CampoLineaPoa")));
+        Assert.Same(Prensa, Parte<ComboBox>(m, "ComboLineaPoa").SelectedItem);
     }
 
     [AvaloniaFact]

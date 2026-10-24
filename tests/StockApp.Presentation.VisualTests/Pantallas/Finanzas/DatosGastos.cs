@@ -217,6 +217,7 @@ public static class DatosGastos
         vm.NumeroFactura = "B-0012950";
         vm.Detalle = "Combustible de la flota municipal";
         vm.MontoTexto = "0,00";
+        vm.CajaSeleccionada = Caja.Local;
         vm.FuenteSeleccionada = Fuentes[1];
         vm.RubroSeleccionado = Rubros[1];
         vm.MensajeError = "El monto total del gasto debe ser mayor a cero.";
@@ -231,7 +232,6 @@ public static class DatosGastos
         vm.NumeroFactura = "A-0002301";
         vm.Detalle = "Hormigón para badenes en camino Las Flores";
         vm.MontoTexto = "245.000,00";
-        vm.FuenteSeleccionada = Fuentes[2];
         vm.RubroSeleccionado = Rubros[3];
         vm.EsCredito = true;
         vm.FechaVencimientoSeleccionada = new DateTime(2026, 11, 5);
@@ -281,6 +281,7 @@ public static class DatosGastos
         vm.ProveedorSeleccionado = Proveedores[0];
         vm.NumeroFactura = "A-0004521";
         vm.Detalle = "Materiales para bacheo de calle Zorrilla";
+        vm.CajaSeleccionada = Caja.Local;
         vm.FuenteSeleccionada = Fuentes[0];
         vm.RubroSeleccionado = Rubros[0];
         vm.GuardarCommand.ExecuteAsync(null).GetAwaiter().GetResult();

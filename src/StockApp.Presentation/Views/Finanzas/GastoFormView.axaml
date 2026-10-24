@@ -3,6 +3,8 @@
              xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
              xmlns:e="using:StockApp.Domain.Entities"
+             xmlns:en="using:StockApp.Domain.Enums"
+             xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:v2="using:StockApp.Presentation.Controls.V2"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -109,19 +111,11 @@
 
                                 <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
                                 <TextBlock Classes="subtitulo-formulario" Text="Importe e imputación" Margin="0,0,0,12" />
-                                <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto">
+                                <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto,Auto">
                                     <v2:CampoFormulario x:Name="CampoMonto" Grid.Row="0" Grid.Column="0" Etiqueta="Monto total" Requerido="True">
                                         <TextBox x:Name="CajaMonto" Text="{Binding MontoTexto}" PlaceholderText="0,00" TextAlignment="Right" />
                                     </v2:CampoFormulario>
-                                    <v2:CampoFormulario x:Name="CampoFuente" Grid.Row="0" Grid.Column="2" Etiqueta="Fuente de financiamiento" Requerido="True">
-                                        <ComboBox x:Name="ComboFuente" HorizontalAlignment="Stretch" PlaceholderText="Elegí la fuente"
-                                                  ItemsSource="{Binding FuentesDisponibles}" SelectedItem="{Binding FuenteSeleccionada}">
-                                            <ComboBox.ItemTemplate>
-                                                <DataTemplate x:DataType="e:FuenteFinanciamiento"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
-                                            </ComboBox.ItemTemplate>
-                                        </ComboBox>
-                                    </v2:CampoFormulario>
-                                    <v2:CampoFormulario x:Name="CampoRubro" Grid.Row="1" Grid.Column="0" Margin="0,16,0,0" Etiqueta="Rubro" Requerido="True">
+                                    <v2:CampoFormulario x:Name="CampoRubro" Grid.Row="0" Grid.Column="2" Etiqueta="Rubro" Requerido="True">
                                         <ComboBox x:Name="ComboRubro" HorizontalAlignment="Stretch" PlaceholderText="Elegí el rubro"
                                                   ItemsSource="{Binding RubrosDisponibles}" SelectedItem="{Binding RubroSeleccionado}">
                                             <ComboBox.ItemTemplate>
@@ -129,7 +123,29 @@
                                             </ComboBox.ItemTemplate>
                                         </ComboBox>
                                     </v2:CampoFormulario>
-                                    <v2:CampoFormulario x:Name="CampoLineaPoa" Grid.Row="1" Grid.Column="2" Margin="0,16,0,0" Etiqueta="Línea POA">
+                                    <!-- Caja y literal son del pago de contado: a crédito no se piden. Sin preselección. -->
+                                    <v2:CampoFormulario x:Name="CampoCaja" Grid.Row="1" Grid.Column="0" Margin="0,16,0,0" Etiqueta="Caja" Requerido="True"
+                                                        IsVisible="{Binding MostrarCajaYFuente}">
+                                        <ComboBox x:Name="ComboCaja" HorizontalAlignment="Stretch" PlaceholderText="Elegí la caja"
+                                                  ItemsSource="{Binding Cajas}" SelectedItem="{Binding CajaSeleccionada}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="en:Caja">
+                                                    <TextBlock Text="{Binding ., Converter={x:Static conv:CajaNombreConverter.Instance}}" />
+                                                </DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </v2:CampoFormulario>
+                                    <v2:CampoFormulario x:Name="CampoFuente" Grid.Row="1" Grid.Column="2" Margin="0,16,0,0" Etiqueta="Fuente de financiamiento" Requerido="True"
+                                                        IsVisible="{Binding MostrarCajaYFuente}">
+                                        <ComboBox x:Name="ComboFuente" HorizontalAlignment="Stretch" PlaceholderText="Elegí la fuente"
+                                                  ItemsSource="{Binding FuentesDisponibles}" SelectedItem="{Binding FuenteSeleccionada}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="e:FuenteFinanciamiento"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </v2:CampoFormulario>
+                                    <v2:CampoFormulario x:Name="CampoLineaPoa" Grid.Row="2" Grid.Column="0" Margin="0,16,0,0" Etiqueta="Línea POA"
+                                                        IsVisible="{Binding MostrarLineaPoa}">
                                         <ComboBox x:Name="ComboLineaPoa" HorizontalAlignment="Stretch" PlaceholderText="Sin línea POA"
                                                   ItemsSource="{Binding LineasPoaDisponibles}" SelectedItem="{Binding LineaPoaSeleccionada}">
                                             <ComboBox.ItemTemplate>
@@ -138,6 +154,10 @@
                                         </ComboBox>
                                     </v2:CampoFormulario>
                                 </Grid>
+                                <!-- La caja elegida no tiene literales activos: se avisa dónde configurarlos. -->
+                                <v2:Alerta x:Name="AlertaSinLiterales" Margin="0,8,0,0" Variante="Advertencia"
+                                           Texto="{Binding AvisoSinLiterales}"
+                                           IsVisible="{Binding AvisoSinLiterales, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
                                 <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
                                 <TextBlock Classes="subtitulo-formulario" Text="Condición de pago" Margin="0,0,0,12" />

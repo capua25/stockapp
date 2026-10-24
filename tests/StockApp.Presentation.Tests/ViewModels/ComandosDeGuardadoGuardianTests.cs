@@ -99,9 +99,16 @@ public class ComandosDeGuardadoGuardianTests
         // Guardar exige elegir la caja (sin default) y LlenarCampos no completa un enum nulo.
         [nameof(IngresoFormViewModel)] = vm =>
             ((IngresoFormViewModel)vm).CajaSeleccionada = Caja.Local,
-        // Guardar exige al menos un renglón cargado.
+        // Guardar exige elegir la caja del pago de contado (sin default) y LlenarCampos no completa un enum nulo.
+        [nameof(GastoFormViewModel)] = vm =>
+            ((GastoFormViewModel)vm).CajaSeleccionada = Caja.Local,
+        // Guardar exige al menos un renglón cargado y elegir la caja del pago de contado (sin default).
         [nameof(IngresoPorFacturaViewModel)] = vm =>
-            ((IngresoPorFacturaViewModel)vm).Renglones.Add(new FilaRenglonFacturaVm()),
+        {
+            var factura = (IngresoPorFacturaViewModel)vm;
+            factura.CajaSeleccionada = Caja.Local;
+            factura.Renglones.Add(new FilaRenglonFacturaVm());
+        },
     };
 
     /// <summary>

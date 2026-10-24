@@ -7,6 +7,7 @@ using StockApp.Application.Interfaces;
 using StockApp.Application.Movimientos;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
+using StockApp.Presentation.Helpers;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Finanzas;
@@ -36,7 +37,7 @@ public class IngresoPorFacturaViewModelTests
                     Mock<INavigationService> navMock,
                     Mock<IAltaProductoRapidaDialogService> altaMock,
                     Mock<IConfirmacionPreciosDialogService> preciosMock)
-        CrearConDialogos()
+        CrearConDialogos(List<FuenteFinanciamiento>? fuentesActivas = null)
     {
         var svc = new Mock<IIngresoPorFacturaService>();
         var productos = new Mock<IProductoService>();
@@ -64,9 +65,10 @@ public class IngresoPorFacturaViewModelTests
             new() { Id = 1, Nombre = "Proveedor Uno", Activo = true },
         });
         var fuentes = new Mock<IFuenteFinanciamientoService>();
-        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(fuentesActivas ?? new List<FuenteFinanciamiento>
         {
-            new() { Id = 1, Nombre = "Fuente Uno", Activo = true },
+            new() { Id = 1, Nombre = "Fuente Uno", Caja = Caja.Local, Activo = true },
+            new() { Id = 2, Nombre = "Fuente POA", Caja = Caja.Poa, Activo = true },
         });
         var rubros = new Mock<IRubroGastoService>();
         rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>
@@ -74,7 +76,10 @@ public class IngresoPorFacturaViewModelTests
             new() { Id = 1, Codigo = 1, Nombre = "Rubro Uno", Activo = true },
         });
         var lineas = new Mock<ILineaPoaService>();
-        lineas.Setup(l => l.ListarActivasAsync()).ReturnsAsync(new List<LineaPoa>());
+        lineas.Setup(l => l.ListarActivasAsync()).ReturnsAsync(new List<LineaPoa>
+        {
+            new() { Id = 5, Nombre = "PRENSA", Programa = "Com", Ejercicio = 2026, Activo = true },
+        });
 
         var nav = new Mock<INavigationService>();
         var confirm = new Mock<IConfirmacionService>();
@@ -106,6 +111,7 @@ public class IngresoPorFacturaViewModelTests
     {
         await vm.InicializarAsync();
         vm.ProveedorSeleccionado = vm.ProveedoresDisponibles[0];
+        vm.CajaSeleccionada = Caja.Local;
         vm.FuenteSeleccionada = vm.FuentesDisponibles[0];
         vm.RubroSeleccionado = vm.RubrosDisponibles[0];
         vm.Detalle = "Compra de insumos";
@@ -567,6 +573,166 @@ public class IngresoPorFacturaViewModelTests
 
         svc.Verify(s => s.RegistrarAsync(It.Is<IngresoPorFacturaDto>(d =>
             d.CondicionPago == CondicionPago.Credito && d.PagoContado == null)), Times.Once);
+    }
+
+    // ── Caja y literal explícitos del pago de contado (Caja POA) ────────────────
+
+    [Fact]
+    public async Task Alta_ArrancaSinCajaNiLiteral_YGuardarDeshabilitado()
+    {
+        var (vm, _, _, _, _) = CrearConDialogos();
+        await vm.InicializarAsync();
+
+        Assert.Null(vm.CajaSeleccionada);
+        Assert.Null(vm.FuenteSeleccionada);
+        Assert.Empty(vm.FuentesDisponibles);
+    }
+
+    [Fact]
+    public async Task Contado_SinCaja_AunConLiteralYTodoLoDemasValido_NoSePuedeGuardar()
+    {
+        var (vm, svc, _, _, _) = CrearConDialogos();
+        await InicializarYCompletarCabeceraAsync(vm);
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 10m);
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+        var literal = vm.FuenteSeleccionada;
+        vm.CajaSeleccionada = null;        // limpia el literal de la caja anterior...
+        vm.FuenteSeleccionada = literal;   // ...y se lo devolvemos: falta SOLO la caja
+
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+        svc.Verify(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Contado_ConCajaSinLiteral_AunConTodoLoDemasValido_NoSePuedeGuardar()
+    {
+        var (vm, _, _, _, _) = CrearConDialogos();
+        await InicializarYCompletarCabeceraAsync(vm);
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 10m);
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+
+        vm.FuenteSeleccionada = null;      // la caja queda elegida: falta SOLO el literal
+
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Credito_OcultaCajaFuenteYLinea_YNoAvisa()
+    {
+        var (vm, _, _, _, _) = CrearConDialogos(new List<FuenteFinanciamiento>
+        {
+            new() { Id = 1, Nombre = "Fuente Uno", Caja = Caja.Local, Activo = true },
+        });
+        await vm.InicializarAsync();
+        vm.CajaSeleccionada = Caja.Poa;     // POA sin literales: avisa en contado
+        Assert.NotNull(vm.AvisoSinLiterales);
+        Assert.True(vm.MostrarCajaYFuente);
+        Assert.True(vm.MostrarLineaPoa);
+
+        vm.EsCredito = true;
+
+        Assert.False(vm.MostrarCajaYFuente);
+        Assert.False(vm.MostrarLineaPoa);
+        Assert.Null(vm.AvisoSinLiterales);
+    }
+
+    [Fact]
+    public async Task ContadoPoa_MuestraLaLineaPoa_YLocalNo()
+    {
+        var (vm, _, _, _, _) = CrearConDialogos();
+        await vm.InicializarAsync();
+        Assert.False(vm.MostrarLineaPoa);
+
+        vm.CajaSeleccionada = Caja.Local;
+        Assert.False(vm.MostrarLineaPoa);
+
+        vm.CajaSeleccionada = Caja.Poa;
+        Assert.True(vm.MostrarLineaPoa);
+    }
+
+    [Fact]
+    public async Task ElegirUnaLineaPoa_NoDeduceLaCaja()
+    {
+        var (vm, _, _, _, _) = CrearConDialogos();
+        await vm.InicializarAsync();
+
+        vm.LineaPoaSeleccionada = vm.LineasPoaDisponibles[0];
+
+        Assert.Null(vm.CajaSeleccionada);
+    }
+
+    [Fact]
+    public async Task PasarDePoaALocal_LimpiaLaLineaPoaElegida()
+    {
+        var (vm, _, _, _, _) = CrearConDialogos();
+        await vm.InicializarAsync();
+        vm.CajaSeleccionada = Caja.Poa;
+        vm.LineaPoaSeleccionada = vm.LineasPoaDisponibles[0];
+
+        vm.CajaSeleccionada = Caja.Local;
+
+        Assert.Null(vm.LineaPoaSeleccionada);
+    }
+
+    [Fact]
+    public async Task PasarACredito_LimpiaLaLineaPoaElegida()
+    {
+        var (vm, _, _, _, _) = CrearConDialogos();
+        await vm.InicializarAsync();
+        vm.CajaSeleccionada = Caja.Poa;
+        vm.LineaPoaSeleccionada = vm.LineasPoaDisponibles[0];
+
+        vm.EsCredito = true;
+
+        Assert.Null(vm.LineaPoaSeleccionada);
+    }
+
+    [Fact]
+    public async Task CambiarCaja_FiltraYLimpiaLaFuenteIncompatible()
+    {
+        var (vm, _, _, _, _) = CrearConDialogos();
+        await vm.InicializarAsync();
+        vm.CajaSeleccionada = Caja.Local;
+        Assert.Equal(new[] { 1 }, vm.FuentesDisponibles.Select(f => f.Id));
+        vm.FuenteSeleccionada = vm.FuentesDisponibles[0];
+
+        vm.CajaSeleccionada = Caja.Poa;
+
+        Assert.Equal(new[] { 2 }, vm.FuentesDisponibles.Select(f => f.Id));
+        Assert.Null(vm.FuenteSeleccionada);
+    }
+
+    [Fact]
+    public async Task CajaSinLiterales_Avisa()
+    {
+        var (vm, _, _, _, _) = CrearConDialogos(new List<FuenteFinanciamiento>
+        {
+            new() { Id = 1, Nombre = "Fuente Uno", Caja = Caja.Local, Activo = true },
+        });
+        await vm.InicializarAsync();
+
+        vm.CajaSeleccionada = Caja.Poa;
+
+        Assert.Equal(LiteralesPorCaja.Aviso(Caja.Poa, 0), vm.AvisoSinLiterales);
+        Assert.Empty(vm.FuentesDisponibles);
+    }
+
+    [Fact]
+    public async Task Guardar_ContadoPoa_EnviaPagoContadoPoaConLaFuenteYLaLinea()
+    {
+        var (vm, svc, _, _, _) = CrearConDialogos();
+        svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()))
+            .ReturnsAsync(new IngresoPorFacturaResultadoDto(1, new List<int> { 1 }, 10m, 0m));
+        await InicializarYCompletarCabeceraAsync(vm);
+        vm.CajaSeleccionada = Caja.Poa;
+        vm.FuenteSeleccionada = vm.FuentesDisponibles[0];
+        vm.LineaPoaSeleccionada = vm.LineasPoaDisponibles[0];
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 10m);
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.RegistrarAsync(It.Is<IngresoPorFacturaDto>(d =>
+            d.PagoContado == new PagoContadoDto(Caja.Poa, 2) && d.LineaPoaId == 5)), Times.Once);
     }
 
     [Fact]

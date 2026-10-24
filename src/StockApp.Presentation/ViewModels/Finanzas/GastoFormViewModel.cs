@@ -84,6 +84,9 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     private int _idEdicion;
     private Gasto? _gastoParaEditar;
     private int? _movimientoVinculado;   // modo "desde entrada de stock"
+    private List<FuenteFinanciamiento> _fuentesActivas = new();
+    private FuenteFinanciamiento? _fuenteHistorica;
+    private bool _fuentesCargadas;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
@@ -106,9 +109,17 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
     private string _montoTexto = string.Empty;
 
+    /// <summary>Sin default: la caja del pago de contado se elige explícitamente (el crédito no la pide).</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
+    private Caja? _cajaSeleccionada;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
     private FuenteFinanciamiento? _fuenteSeleccionada;
+
+    /// <summary>Aviso cuando la caja elegida no tiene literales activos asignados; null si los tiene, no hay caja o es crédito.</summary>
+    [ObservableProperty] private string? _avisoSinLiterales;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
@@ -117,8 +128,17 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     [ObservableProperty] private LineaPoa? _lineaPoaSeleccionada;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MostrarCajaYFuente))]
+    [NotifyPropertyChangedFor(nameof(MostrarLineaPoa))]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
     private bool _esCredito;
+
+    /// <summary>Caja y literal son del pago de contado: a crédito no se piden (cada pago elige los suyos).</summary>
+    public bool MostrarCajaYFuente => !EsCredito;
+
+    /// <summary>La línea POA solo se ofrece en un contado de la caja POA (el servidor rechaza una línea POA en crédito o
+    /// en caja Local). No se deduce la caja desde la línea: se elige primero la caja.</summary>
+    public bool MostrarLineaPoa => !EsCredito && CajaSeleccionada == Caja.Poa;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
@@ -145,6 +165,7 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
 
     public ObservableCollection<Proveedor> ProveedoresDisponibles { get; } = new();
     public ObservableCollection<FuenteFinanciamiento> FuentesDisponibles { get; } = new();
+    public IReadOnlyList<Caja> Cajas => CajaExtensions.Todas;
     public ObservableCollection<RubroGasto> RubrosDisponibles { get; } = new();
     public ObservableCollection<LineaPoa> LineasPoaDisponibles { get; } = new();
 
@@ -153,6 +174,7 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     public const string MensajeDetalleObligatorio = "El detalle es obligatorio.";
     public const string MensajeMontoObligatorio = "El monto total es obligatorio.";
     public const string MensajeFuenteObligatoria = "Elegí la fuente de financiamiento.";
+    public const string MensajeCajaObligatoria = "Elegí la caja.";
     public const string MensajeRubroObligatorio = "Elegí el rubro.";
     public const string MensajeVencimientoObligatorio = "Un gasto a crédito exige fecha de vencimiento.";
 
@@ -161,7 +183,8 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     private static readonly string[] CamposValidados =
     [
         nameof(ProveedorSeleccionado), nameof(FechaSeleccionada), nameof(Detalle), nameof(MontoTexto),
-        nameof(FuenteSeleccionada), nameof(RubroSeleccionado), nameof(FechaVencimientoSeleccionada),
+        nameof(CajaSeleccionada), nameof(FuenteSeleccionada), nameof(RubroSeleccionado),
+        nameof(FechaVencimientoSeleccionada),
     ];
 
     /// <summary>Campos que el usuario ya tocó (cambió el valor, salió del campo o intentó guardar). Un campo sin tocar no
@@ -199,13 +222,45 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     partial void OnRubroSeleccionadoChanged(RubroGasto? value) => AlCambiarCampo(nameof(RubroSeleccionado));
     partial void OnFechaVencimientoSeleccionadaChanged(DateTime? value) => AlCambiarCampo(nameof(FechaVencimientoSeleccionada));
 
-    /// <summary>El vencimiento solo es regla a crédito y la fuente solo a contado: tildar o destildar cambia sus errores
-    /// sin tocar el campo.</summary>
+    partial void OnCajaSeleccionadaChanged(Caja? value)
+    {
+        AlCambiarCampo(nameof(CajaSeleccionada));
+        OnPropertyChanged(nameof(MostrarLineaPoa));
+        RefrescarFuentes();
+        if (FuenteSeleccionada is not null && FuenteSeleccionada.Caja != value)
+            FuenteSeleccionada = null;
+        if (value != Caja.Poa)
+            LineaPoaSeleccionada = null;
+    }
+
+    /// <summary>El vencimiento solo es regla a crédito y caja y literal solo a contado: tildar o destildar cambia sus
+    /// errores sin tocar los campos. Una línea POA no sobrevive a un crédito.</summary>
     partial void OnEsCreditoChanged(bool value)
     {
         ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(nameof(FechaVencimientoSeleccionada)));
+        ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(nameof(CajaSeleccionada)));
         ErrorsChanged?.Invoke(this, new DataErrorsChangedEventArgs(nameof(FuenteSeleccionada)));
+        ActualizarAvisoSinLiterales();
+        if (value)
+            LineaPoaSeleccionada = null;
     }
+
+    /// <summary>Rellena el combo de fuentes con los literales de la caja elegida (sin caja, vacío).</summary>
+    private void RefrescarFuentes()
+    {
+        if (CajaSeleccionada is not { } caja)
+            FuentesDisponibles.Clear();
+        else
+            LiteralesPorCaja.Refrescar(FuentesDisponibles, _fuentesActivas, caja, _fuenteHistorica);
+        ActualizarAvisoSinLiterales();
+    }
+
+    /// <summary>Antes de que lleguen las fuentes no avisa: la lista vacía todavía no quiere decir "sin literales". A crédito
+    /// tampoco: no se pide literal.</summary>
+    private void ActualizarAvisoSinLiterales() =>
+        AvisoSinLiterales = _fuentesCargadas && !EsCredito && CajaSeleccionada is { } caja
+            ? LiteralesPorCaja.Aviso(caja, _fuentesActivas.Count(f => f.Caja == caja))
+            : null;
 
     /// <summary>
     /// Reglas del cliente, las de antes: proveedor, fuente y rubro elegidos; detalle y monto no vacíos; monto numérico en
@@ -218,6 +273,7 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
         nameof(FechaSeleccionada) => FechaSeleccionada is null ? MensajeFechaObligatoria : null,
         nameof(Detalle) => string.IsNullOrWhiteSpace(Detalle) ? MensajeDetalleObligatorio : null,
         nameof(MontoTexto) => ReglaDelMonto(),
+        nameof(CajaSeleccionada) => !EsCredito && CajaSeleccionada is null ? MensajeCajaObligatoria : null,
         nameof(FuenteSeleccionada) => !EsCredito && FuenteSeleccionada is null ? MensajeFuenteObligatoria : null,
         nameof(RubroSeleccionado) => RubroSeleccionado is null ? MensajeRubroObligatorio : null,
         nameof(FechaVencimientoSeleccionada) => EsCredito && FechaVencimientoSeleccionada is null ? MensajeVencimientoObligatorio : null,
@@ -268,6 +324,7 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
         MontoTexto       = FormatoEsUy.Decimal(gasto.MontoTotal);
         EsCredito        = gasto.CondicionPago == CondicionPago.Credito;
         FechaVencimientoSeleccionada = gasto.FechaVencimiento;
+        CajaSeleccionada = gasto.PagoAutomatico?.Caja;
         EsAnulado        = !gasto.Activo;
         EsEdicion        = true;
 
@@ -309,10 +366,8 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
             foreach (var p in proveedores)
                 ProveedoresDisponibles.Add(p);
 
-            var fuentes = await _fuentesService.ListarActivasAsync();
-            FuentesDisponibles.Clear();
-            foreach (var f in fuentes)
-                FuentesDisponibles.Add(f);
+            _fuentesActivas = (await _fuentesService.ListarActivasAsync()).ToList();
+            _fuentesCargadas = true;
 
             var rubros = await _rubrosService.ListarActivosAsync();
             RubrosDisponibles.Clear();
@@ -334,9 +389,16 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
                 // La fuente de un gasto de contado es la de su pago automático; un crédito no tiene.
                 var automatico = _gastoParaEditar.PagoAutomatico;
                 if (automatico is not null)
-                    FuenteSeleccionada =
-                        FuentesDisponibles.FirstOrDefault(f => f.Id == automatico.FuenteFinanciamientoId)
-                        ?? Agregar(FuentesDisponibles, automatico.FuenteFinanciamiento);
+                {
+                    // El literal puede estar dado de baja: sigue en el combo de SU caja y elegido.
+                    _fuenteHistorica =
+                        _fuentesActivas.FirstOrDefault(f => f.Id == automatico.FuenteFinanciamientoId)
+                        ?? automatico.FuenteFinanciamiento;
+                    RefrescarFuentes();
+                    FuenteSeleccionada = FuentesDisponibles.FirstOrDefault(f => f.Id == _fuenteHistorica?.Id);
+                }
+                else
+                    RefrescarFuentes();
                 RubroSeleccionado =
                     RubrosDisponibles.FirstOrDefault(r => r.Id == _gastoParaEditar.RubroGastoId)
                     ?? Agregar(RubrosDisponibles, _gastoParaEditar.RubroGasto);
@@ -345,6 +407,8 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
                         LineasPoaDisponibles.FirstOrDefault(l => l.Id == _gastoParaEditar.LineaPoaId)
                         ?? Agregar(LineasPoaDisponibles, _gastoParaEditar.LineaPoa);
             }
+            else
+                RefrescarFuentes();
         }, MensajeSinPermisoFormulario);
         GuardarCommand.NotifyCanExecuteChanged();
     }
@@ -391,11 +455,11 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
                 : null,
         };
 
-        // Caja y literal del pago de contado: solo a contado (un crédito elige la suya en cada pago). Hasta que el
-        // formulario tenga selector de caja, un alta es de la caja Local y una edición conserva la de su pago.
+        // Caja y literal del pago de contado, los dos elegidos explícitamente: solo a contado (un crédito elige los
+        // suyos en cada pago).
         var pagoContado = EsCredito
             ? null
-            : new PagoContadoDto(_gastoParaEditar?.PagoAutomatico?.Caja ?? Caja.Local, FuenteSeleccionada!.Id);
+            : new PagoContadoDto(CajaSeleccionada!.Value, FuenteSeleccionada!.Id);
 
         try
         {

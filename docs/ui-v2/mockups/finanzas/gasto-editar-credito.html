@@ -63,16 +63,16 @@
   /* Pulgar de la barra vertical del ScrollViewer (Fluent en reposo, sin tema v2): 2 px #7A7A7A a 2 px del borde derecho
      de la vista. Largo y posición MEDIDOS en headless con este formulario. */
   .pulgar { position: absolute; right: 2px; width: 2px; background: #7A7A7A; }
-  .pulgar { top: 199px; height: 476px; }
-  @media (min-width: 1366px) { .pulgar { top: 196px; height: 488px; } }
+  .pulgar { top: 161px; height: 514px; }
+  @media (min-width: 1366px) { .pulgar { top: 157px; height: 527px; } }
   /* Contenido SCROLLEADO al final (offset máximo MEDIDO en headless: el borde inferior de la card queda 24 por
      encima del borde del scroll): se ve el final de la card y el pie pegado al borde. */
-  .pagina { transform: translateY(-266px); }
-  @media (min-width: 1366px) { .pagina { transform: translateY(-258px); } }
+  .pagina { transform: translateY(-195px); }
+  @media (min-width: 1366px) { .pagina { transform: translateY(-187px); } }
 </style>
 </head>
 <body>
-<!-- Datos: DatosGastos.EditarCredito(): el gasto 7 (a crédito, vence el 31/12/2030) para editar; el tilde tildado y deshabilitado, el vencimiento editable y el texto de la condición fija; el panel sin adjuntos con Agregar. SCROLLEADO al final (offset 266 a 1280 y 258 a 1366). El pie queda fijo fuera del scroll; a los dos tamaños el contenido scrollea (pulgar medido). El sidebar está para aprobar la pantalla entera; la comparación lo oculta. -->
+<!-- Datos: DatosGastos.EditarCredito(): el gasto 7 (a crédito, vence el 31/12/2030) para editar; el tilde tildado y deshabilitado, el vencimiento editable y el texto de la condición fija; el panel sin adjuntos con Agregar. SCROLLEADO al final (offset 195 a 1280 y 187 a 1366; a crédito no hay fila de caja y fuente ni de línea POA). El pie queda fijo fuera del scroll; a los dos tamaños el contenido scrollea (pulgar medido). El sidebar está para aprobar la pantalla entera; la comparación lo oculta. -->
 <div class="v2-ventana">
   <aside class="v2-sidebar">
     <div class="v2-marca">Gestión Municipal</div>
@@ -134,9 +134,7 @@
           <div class="v2-subtitulo-formulario subtitulo">Importe e imputación</div>
           <div class="campos">
             <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Monto total</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input monto"><span>420.000,00</span></div></div></div>
-            <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Fuente de financiamiento</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input"><span class="v2-input-placeholder">Elegí la fuente</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
             <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Rubro</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input"><span>Obras viales</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
-            <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Línea POA</span></div><div><div class="v2-input"><span>Bacheo y caminería rural</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
           </div>
           <div class="separador"></div>
           <div class="v2-subtitulo-formulario subtitulo">Condición de pago</div>

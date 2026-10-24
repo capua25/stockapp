@@ -1,3 +1,4 @@
+using StockApp.Domain.Enums;
 using StockApp.Domain.Formato;
 using StockApp.Presentation.Converters;
 using StockApp.Presentation.ViewModels.Finanzas;
@@ -140,7 +141,9 @@ public class DatosGastosTests
         Assert.Equal(new DateTime(2030, 12, 31), vm.FechaVencimientoSeleccionada?.Date);
         Assert.Equal("Constructora Oriental S.A.", vm.ProveedorSeleccionado?.Nombre);
         Assert.Equal("420.000,00", vm.MontoTexto);
-        Assert.Null(vm.FuenteSeleccionada);   // un crédito no tiene fuente: se elige en cada pago
+        Assert.Null(vm.CajaSeleccionada);     // un crédito no tiene caja ni fuente: se eligen en cada pago
+        Assert.Null(vm.FuenteSeleccionada);
+        Assert.False(vm.MostrarCajaYFuente);
         Assert.False(vm.PuedeCambiarCondicionPago);
         Assert.Empty(vm.AdjuntosPanel.Items);
     }
@@ -156,6 +159,7 @@ public class DatosGastosTests
         Assert.Equal("Ancap Distribuidora", vm.ProveedorSeleccionado?.Nombre);
         Assert.Equal("B-0012950", vm.NumeroFactura);
         Assert.Equal("0,00", vm.MontoTexto);
+        Assert.Equal(Caja.Local, vm.CajaSeleccionada);
         Assert.Equal("Rentas generales", vm.FuenteSeleccionada?.Nombre);
         Assert.Equal("Combustibles", vm.RubroSeleccionado?.Nombre);
     }
@@ -174,7 +178,9 @@ public class DatosGastosTests
         Assert.Equal("A-0002301", vm.NumeroFactura);
         Assert.Equal("245.000,00", vm.MontoTexto);
         Assert.Equal("Constructora Oriental S.A.", vm.ProveedorSeleccionado?.Nombre);
-        Assert.Equal("Préstamo BROU", vm.FuenteSeleccionada?.Nombre);
+        Assert.Null(vm.CajaSeleccionada);     // un crédito no pide caja ni literal: se eligen en cada pago
+        Assert.Null(vm.FuenteSeleccionada);
+        Assert.False(vm.MostrarCajaYFuente);
         Assert.Equal("Obras viales", vm.RubroSeleccionado?.Nombre);
     }
 

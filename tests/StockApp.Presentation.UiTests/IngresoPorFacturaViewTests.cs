@@ -171,6 +171,7 @@ public class IngresoPorFacturaViewTests
             productos: new[] { producto });
 
         Assert.Contains(proveedor, vm.ProveedoresDisponibles);
+        vm.CajaSeleccionada = Caja.Local;   // el combo de literales se llena con los de la caja elegida
         Assert.Contains(fuente, vm.FuentesDisponibles);
         Assert.Contains(rubro, vm.RubrosDisponibles);
         Assert.Contains(producto, vm.ProductosDisponibles);
@@ -303,6 +304,7 @@ public class IngresoPorFacturaViewTests
             productos: new[] { producto });
 
         vm.ProveedorSeleccionado = proveedor;
+        vm.CajaSeleccionada = Caja.Local;
         vm.FuenteSeleccionada = fuente;
         vm.RubroSeleccionado = rubro;
         vm.Detalle = "Compra de materiales";
@@ -554,6 +556,7 @@ public class IngresoPorFacturaViewTests
             proveedores: new[] { proveedor }, fuentes: new[] { fuente }, rubros: new[] { rubro });
 
         vm.ProveedorSeleccionado = proveedor;
+        vm.CajaSeleccionada = Caja.Local;
         vm.FuenteSeleccionada = fuente;
         vm.RubroSeleccionado = rubro;
         vm.Detalle = "Compra de materiales";
@@ -586,6 +589,7 @@ public class IngresoPorFacturaViewTests
             productos: new[] { producto });
 
         vm.ProveedorSeleccionado = proveedor;
+        vm.CajaSeleccionada = Caja.Local;
         vm.FuenteSeleccionada = fuente;
         vm.RubroSeleccionado = rubro;
         vm.Detalle = "Compra de materiales";
@@ -630,6 +634,7 @@ public class IngresoPorFacturaViewTests
             productos: new[] { producto }, precios: precios);
 
         vm.ProveedorSeleccionado = proveedor;
+        vm.CajaSeleccionada = Caja.Local;
         vm.FuenteSeleccionada = fuente;
         vm.RubroSeleccionado = rubro;
         vm.Detalle = "Compra de materiales";
@@ -801,6 +806,7 @@ public class IngresoPorFacturaViewTests
             productos: new[] { producto });
 
         vm.ProveedorSeleccionado = proveedor;
+        vm.CajaSeleccionada = Caja.Local;
         vm.FuenteSeleccionada = fuente;
         vm.RubroSeleccionado = rubro;
         vm.Detalle = "PRUEBA GUARDAR";

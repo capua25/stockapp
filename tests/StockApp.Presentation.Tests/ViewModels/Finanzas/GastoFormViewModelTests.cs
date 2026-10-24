@@ -12,6 +12,7 @@ using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
+using StockApp.Presentation.Helpers;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Finanzas;
@@ -27,7 +28,8 @@ public class GastoFormViewModelTests
                     Mock<INavigationService> navMock,
                     Mock<IConfirmacionService> confirmMock)
         Crear(RolUsuario rol = RolUsuario.Admin, IEnumerable<string>? permisos = null,
-               Func<Task<IReadOnlyList<Proveedor>>>? proveedoresActivos = null)
+               Func<Task<IReadOnlyList<Proveedor>>>? proveedoresActivos = null,
+               List<FuenteFinanciamiento>? fuentesActivas = null)
     {
         var svc = new Mock<IGastoService>();
         svc.Setup(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<PagoContadoDto?>(), It.IsAny<IReadOnlyList<int>?>()))
@@ -49,9 +51,10 @@ public class GastoFormViewModelTests
                 new() { Id = 1, Nombre = "Barraca X", Activo = true },
             })));
         var fuentes = new Mock<IFuenteFinanciamientoService>();
-        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(new List<FuenteFinanciamiento>
+        fuentes.Setup(f => f.ListarActivasAsync()).ReturnsAsync(fuentesActivas ?? new List<FuenteFinanciamiento>
         {
-            new() { Id = 2, Nombre = "Literal B", Activo = true },
+            new() { Id = 2, Nombre = "Literal B", Caja = Caja.Local, Activo = true },
+            new() { Id = 4, Nombre = "Literal POA", Caja = Caja.Poa, Activo = true },
         });
         var rubros = new Mock<IRubroGastoService>();
         rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(new List<RubroGasto>
@@ -90,6 +93,7 @@ public class GastoFormViewModelTests
     {
         await vm.InicializarAsync();
         vm.ProveedorSeleccionado = vm.ProveedoresDisponibles[0];
+        vm.CajaSeleccionada = Caja.Local;
         vm.FuenteSeleccionada = vm.FuentesDisponibles[0];
         vm.RubroSeleccionado = vm.RubrosDisponibles[0];
         vm.Detalle = "Materiales de obra";
@@ -292,14 +296,14 @@ public class GastoFormViewModelTests
     public async Task Editar_Contado_PrecargaLaFuenteDelPagoAutomatico_YConservaSuCaja()
     {
         var (vm, svc, _, _) = Crear();
-        vm.CargarParaEditar(GastoExistente(caja: Caja.Poa));
+        vm.CargarParaEditar(GastoExistente(caja: Caja.Poa, fuenteId: 4));
         await vm.InicializarAsync();
 
-        Assert.Equal(2, vm.FuenteSeleccionada?.Id);
+        Assert.Equal(4, vm.FuenteSeleccionada?.Id);
 
         await vm.GuardarCommand.ExecuteAsync(null);
 
-        svc.Verify(s => s.ModificarAsync(It.Is<Gasto>(g => g.Id == 9), new PagoContadoDto(Caja.Poa, 2)), Times.Once);
+        svc.Verify(s => s.ModificarAsync(It.Is<Gasto>(g => g.Id == 9), new PagoContadoDto(Caja.Poa, 4)), Times.Once);
     }
 
     [Fact]
@@ -411,6 +415,7 @@ public class GastoFormViewModelTests
         vm.CargarDesdeEntrada(movimientoId: 40, montoSugerido: 2500m);
         await vm.InicializarAsync();
         vm.ProveedorSeleccionado = vm.ProveedoresDisponibles[0];
+        vm.CajaSeleccionada = Caja.Local;
         vm.FuenteSeleccionada = vm.FuentesDisponibles[0];
         vm.RubroSeleccionado = vm.RubrosDisponibles[0];
         vm.Detalle = "Factura de la entrada";
@@ -434,6 +439,7 @@ public class GastoFormViewModelTests
         vm.CargarDesdeEntrada(movimientoId: 40, montoSugerido: 100m);
         await vm.InicializarAsync();
         vm.ProveedorSeleccionado = vm.ProveedoresDisponibles[0];
+        vm.CajaSeleccionada = Caja.Local;
         vm.FuenteSeleccionada = vm.FuentesDisponibles[0];
         vm.RubroSeleccionado = vm.RubrosDisponibles[0];
         vm.Detalle = "Factura repetida";
@@ -586,6 +592,7 @@ public class GastoFormViewModelTests
 
         Assert.False(vm.SinConexion);
         Assert.Single(vm.ProveedoresDisponibles);
+        vm.CajaSeleccionada = Caja.Local;   // el combo de literales se llena con los de la caja elegida
         Assert.Single(vm.FuentesDisponibles);
         Assert.Single(vm.RubrosDisponibles);
     }
@@ -630,14 +637,235 @@ public class GastoFormViewModelTests
         Assert.False(vm.Cargando);
     }
 
+    // ── Caja y literal explícitos del pago de contado (Caja POA) ────────────────
+
+    private static FuenteFinanciamiento Fuente(int id, string nombre, Caja caja, bool activo = true) =>
+        new() { Id = id, Nombre = nombre, Caja = caja, Activo = activo };
+
+    [Fact]
+    public async Task Alta_ArrancaSinCajaNiLiteral_YGuardarDeshabilitado()
+    {
+        var (vm, _, _, _) = Crear();
+        await vm.InicializarAsync();
+
+        Assert.Null(vm.CajaSeleccionada);
+        Assert.Null(vm.FuenteSeleccionada);
+        Assert.Empty(vm.FuentesDisponibles);
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task Contado_SinCaja_AunConLiteralYTodoLoDemasValido_NoSePuedeGuardar()
+    {
+        var (vm, svc, _, _) = Crear();
+        await CompletarFormularioValidoAsync(vm);
+        var literal = vm.FuentesDisponibles[0];
+        vm.CajaSeleccionada = null;        // limpia el literal de la caja anterior...
+        vm.FuenteSeleccionada = literal;   // ...y se lo devolvemos: falta SOLO la caja
+
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+        Assert.Equal(GastoFormViewModel.MensajeCajaObligatoria, vm.ErrorDe(nameof(GastoFormViewModel.CajaSeleccionada)));
+        Assert.Null(vm.ErrorDe(nameof(GastoFormViewModel.FuenteSeleccionada)));
+        svc.Verify(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<PagoContadoDto?>(), It.IsAny<IReadOnlyList<int>?>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Contado_ConCajaSinLiteral_AunConTodoLoDemasValido_NoSePuedeGuardar()
+    {
+        var (vm, _, _, _) = Crear();
+        await CompletarFormularioValidoAsync(vm);
+        vm.FuenteSeleccionada = null;      // la caja queda elegida: falta SOLO el literal
+
+        Assert.False(vm.GuardarCommand.CanExecute(null));
+        Assert.Null(vm.ErrorDe(nameof(GastoFormViewModel.CajaSeleccionada)));
+        Assert.Equal(GastoFormViewModel.MensajeFuenteObligatoria, vm.ErrorDe(nameof(GastoFormViewModel.FuenteSeleccionada)));
+    }
+
+    [Fact]
+    public async Task Credito_OcultaCajaFuenteYLinea_YNoExigeNiAvisa()
+    {
+        var (vm, _, _, _) = Crear(fuentesActivas: new List<FuenteFinanciamiento> { Fuente(2, "Literal B", Caja.Local) });
+        await vm.InicializarAsync();
+        vm.CajaSeleccionada = Caja.Poa;     // POA sin literales: avisa en contado
+        Assert.NotNull(vm.AvisoSinLiterales);
+        Assert.True(vm.MostrarCajaYFuente);
+        Assert.True(vm.MostrarLineaPoa);
+
+        vm.EsCredito = true;
+
+        Assert.False(vm.MostrarCajaYFuente);
+        Assert.False(vm.MostrarLineaPoa);
+        Assert.Null(vm.AvisoSinLiterales);
+        vm.MarcarTocado(nameof(GastoFormViewModel.CajaSeleccionada));
+        vm.MarcarTocado(nameof(GastoFormViewModel.FuenteSeleccionada));
+        Assert.Null(vm.ErrorDe(nameof(GastoFormViewModel.FuenteSeleccionada)));
+    }
+
+    [Fact]
+    public async Task Credito_SinCajaNiLiteral_SePuedeGuardar_YNoLosManda()
+    {
+        var (vm, svc, _, _) = Crear();
+        await vm.InicializarAsync();
+        vm.ProveedorSeleccionado = vm.ProveedoresDisponibles[0];
+        vm.RubroSeleccionado = vm.RubrosDisponibles[0];
+        vm.Detalle = "A crédito";
+        vm.MontoTexto = "100";
+        vm.EsCredito = true;
+        vm.FechaVencimientoSeleccionada = DateTime.UtcNow.AddDays(30);
+
+        Assert.Null(vm.CajaSeleccionada);
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.AltaAsync(It.IsAny<Gasto>(), null, null), Times.Once);
+    }
+
+    [Fact]
+    public async Task ContadoPoa_MuestraLaLineaPoa_YLocalNo()
+    {
+        var (vm, _, _, _) = Crear();
+        await vm.InicializarAsync();
+        Assert.False(vm.MostrarLineaPoa);   // sin caja
+
+        vm.CajaSeleccionada = Caja.Local;
+        Assert.False(vm.MostrarLineaPoa);
+
+        vm.CajaSeleccionada = Caja.Poa;
+        Assert.True(vm.MostrarLineaPoa);
+    }
+
+    [Fact]
+    public async Task ElegirUnaLineaPoa_NoDeduceLaCaja()
+    {
+        var (vm, _, _, _) = Crear();
+        await vm.InicializarAsync();
+
+        vm.LineaPoaSeleccionada = vm.LineasPoaDisponibles[0];
+
+        Assert.Null(vm.CajaSeleccionada);
+    }
+
+    [Fact]
+    public async Task PasarDePoaALocal_LimpiaLaLineaPoaElegida()
+    {
+        var (vm, _, _, _) = Crear();
+        await vm.InicializarAsync();
+        vm.CajaSeleccionada = Caja.Poa;
+        vm.LineaPoaSeleccionada = vm.LineasPoaDisponibles[0];
+
+        vm.CajaSeleccionada = Caja.Local;
+
+        Assert.Null(vm.LineaPoaSeleccionada);
+    }
+
+    [Fact]
+    public async Task PasarACredito_LimpiaLaLineaPoaElegida()
+    {
+        var (vm, _, _, _) = Crear();
+        await vm.InicializarAsync();
+        vm.CajaSeleccionada = Caja.Poa;
+        vm.LineaPoaSeleccionada = vm.LineasPoaDisponibles[0];
+
+        vm.EsCredito = true;
+
+        Assert.Null(vm.LineaPoaSeleccionada);
+    }
+
+    [Fact]
+    public async Task CambiarCaja_FiltraYLimpiaLaFuenteIncompatible()
+    {
+        var (vm, _, _, _) = Crear();
+        await vm.InicializarAsync();
+        vm.CajaSeleccionada = Caja.Local;
+        Assert.Equal(new[] { 2 }, vm.FuentesDisponibles.Select(f => f.Id));
+        vm.FuenteSeleccionada = vm.FuentesDisponibles[0];
+
+        vm.CajaSeleccionada = Caja.Poa;
+
+        Assert.Equal(new[] { 4 }, vm.FuentesDisponibles.Select(f => f.Id));
+        Assert.Null(vm.FuenteSeleccionada);
+    }
+
+    [Fact]
+    public async Task CajaSinLiterales_Avisa()
+    {
+        var (vm, _, _, _) = Crear(fuentesActivas: new List<FuenteFinanciamiento> { Fuente(2, "Literal B", Caja.Local) });
+        await vm.InicializarAsync();
+
+        vm.CajaSeleccionada = Caja.Poa;
+
+        Assert.Equal(LiteralesPorCaja.Aviso(Caja.Poa, 0), vm.AvisoSinLiterales);
+        Assert.Empty(vm.FuentesDisponibles);
+    }
+
+    [Fact]
+    public async Task Guardar_ContadoPoa_EnviaPagoContadoPoaConLaFuente()
+    {
+        var (vm, svc, _, _) = Crear();
+        await CompletarFormularioValidoAsync(vm);
+        vm.CajaSeleccionada = Caja.Poa;
+        vm.FuenteSeleccionada = vm.FuentesDisponibles[0];
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.AltaAsync(It.IsAny<Gasto>(), new PagoContadoDto(Caja.Poa, 4), null), Times.Once);
+    }
+
+    [Fact]
+    public async Task Editar_ContadoPoa_PrecargaCajaFuenteYLinea()
+    {
+        var (vm, svc, _, _) = Crear();
+        var gasto = GastoExistente(caja: Caja.Poa, fuenteId: 4);
+        gasto.LineaPoaId = 5;
+        vm.CargarParaEditar(gasto);
+        await vm.InicializarAsync();
+
+        Assert.Equal(Caja.Poa, vm.CajaSeleccionada);
+        Assert.Equal(4, vm.FuenteSeleccionada?.Id);
+        Assert.Equal(5, vm.LineaPoaSeleccionada?.Id);
+        Assert.True(vm.MostrarLineaPoa);
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.ModificarAsync(It.Is<Gasto>(g => g.Id == 9 && g.LineaPoaId == 5), new PagoContadoDto(Caja.Poa, 4)), Times.Once);
+    }
+
+    [Fact]
+    public async Task Editar_ContadoConLiteralDadoDeBaja_SigueElegidoEnElComboDeSuCaja()
+    {
+        var (vm, _, _, _) = Crear();
+        var gasto = GastoExistente(caja: Caja.Poa, fuenteId: 9);
+        gasto.PagoAutomatico!.FuenteFinanciamiento = Fuente(9, "Literal viejo", Caja.Poa, activo: false);
+        vm.CargarParaEditar(gasto);
+
+        await vm.InicializarAsync();
+
+        Assert.Equal(9, vm.FuenteSeleccionada?.Id);
+        Assert.Contains(vm.FuentesDisponibles, f => f.Id == 9);
+        vm.CajaSeleccionada = Caja.Local;
+        Assert.DoesNotContain(vm.FuentesDisponibles, f => f.Id == 9);
+    }
+
+    [Fact]
+    public async Task Editar_Credito_NoPideCajaNiLiteral()
+    {
+        var (vm, _, _, _) = Crear();
+        vm.CargarParaEditar(GastoExistente(condicion: CondicionPago.Credito));
+        await vm.InicializarAsync();
+
+        Assert.Null(vm.CajaSeleccionada);
+        Assert.False(vm.MostrarCajaYFuente);
+        Assert.True(vm.GuardarCommand.CanExecute(null));
+    }
+
     // ── Errores por campo ───────────────────────────────────────────────────────
 
     private static readonly string[] Campos =
     [
         nameof(GastoFormViewModel.ProveedorSeleccionado), nameof(GastoFormViewModel.FechaSeleccionada),
         nameof(GastoFormViewModel.Detalle), nameof(GastoFormViewModel.MontoTexto),
-        nameof(GastoFormViewModel.FuenteSeleccionada), nameof(GastoFormViewModel.RubroSeleccionado),
-        nameof(GastoFormViewModel.FechaVencimientoSeleccionada),
+        nameof(GastoFormViewModel.CajaSeleccionada), nameof(GastoFormViewModel.FuenteSeleccionada),
+        nameof(GastoFormViewModel.RubroSeleccionado), nameof(GastoFormViewModel.FechaVencimientoSeleccionada),
     ];
 
     [Fact]
@@ -683,7 +911,8 @@ public class GastoFormViewModelTests
     {
         nameof(GastoFormViewModel.ProveedorSeleccionado), nameof(GastoFormViewModel.FechaSeleccionada),
         nameof(GastoFormViewModel.Detalle), nameof(GastoFormViewModel.MontoTexto),
-        nameof(GastoFormViewModel.FuenteSeleccionada), nameof(GastoFormViewModel.RubroSeleccionado),
+        nameof(GastoFormViewModel.CajaSeleccionada), nameof(GastoFormViewModel.FuenteSeleccionada),
+        nameof(GastoFormViewModel.RubroSeleccionado),
     };
 
     private static void Vaciar(GastoFormViewModel vm, string campo)
@@ -694,6 +923,7 @@ public class GastoFormViewModelTests
             case nameof(GastoFormViewModel.FechaSeleccionada): vm.FechaSeleccionada = null; break;
             case nameof(GastoFormViewModel.Detalle): vm.Detalle = "  "; break;
             case nameof(GastoFormViewModel.MontoTexto): vm.MontoTexto = ""; break;
+            case nameof(GastoFormViewModel.CajaSeleccionada): vm.CajaSeleccionada = null; break;
             case nameof(GastoFormViewModel.FuenteSeleccionada): vm.FuenteSeleccionada = null; break;
             case nameof(GastoFormViewModel.RubroSeleccionado): vm.RubroSeleccionado = null; break;
         }
@@ -888,7 +1118,7 @@ public class GastoFormViewModelTests
 
     /// <summary>Contado: lleva su pago automático (Local, literal 2), que es donde vive la fuente del gasto.</summary>
     private static Gasto GastoExistente(
-        bool activo = true, CondicionPago condicion = CondicionPago.Contado, Caja caja = Caja.Local)
+        bool activo = true, CondicionPago condicion = CondicionPago.Contado, Caja caja = Caja.Local, int fuenteId = 2)
     {
         var gasto = new Gasto
         {
@@ -897,7 +1127,7 @@ public class GastoFormViewModelTests
             FechaVencimiento = condicion == CondicionPago.Credito ? DateTime.UtcNow.AddDays(10) : null, Activo = activo,
         };
         if (condicion == CondicionPago.Contado)
-            gasto.Pagos.Add(PagoGasto.Automatico(gasto.Fecha, gasto.MontoTotal, "Pago contado (automático)", caja, 2));
+            gasto.Pagos.Add(PagoGasto.Automatico(gasto.Fecha, gasto.MontoTotal, "Pago contado (automático)", caja, fuenteId));
         return gasto;
     }
 

@@ -123,9 +123,9 @@ public static class DatosIngresoFactura
             vm.NumeroOrden = "OC-2026-118";
             vm.Detalle = "Materiales para la reparación de la rambla";
             vm.Destino = "Corralón municipal";
+            vm.CajaSeleccionada = Caja.Local;
             vm.FuenteSeleccionada = vm.FuentesDisponibles[0];
             vm.RubroSeleccionado = vm.RubrosDisponibles[0];
-            vm.LineaPoaSeleccionada = vm.LineasPoaDisponibles[0];
         }
         vm.EsCredito = estado.Credito;
         vm.FechaVencimientoSeleccionada = estado.Credito ? Vencimiento : null;

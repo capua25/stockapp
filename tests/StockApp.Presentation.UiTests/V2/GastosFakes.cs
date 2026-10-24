@@ -19,6 +19,8 @@ internal sealed class GastosFake : IGastoService
     public List<int> Anulados { get; } = new();
     public List<Gasto> Altas { get; } = new();
     public List<Gasto> Modificaciones { get; } = new();
+    /// <summary>El pago de contado que llegó con cada alta o modificación, en orden (null a crédito).</summary>
+    public List<PagoContadoDto?> PagosContado { get; } = new();
     public Exception? FallaAlGuardar { get; set; }
 
     public Task<IReadOnlyList<Gasto>> ListarAsync(GastoFiltro filtro)
@@ -40,6 +42,7 @@ internal sealed class GastosFake : IGastoService
         if (FallaAlGuardar is not null)
             return Task.FromException<ResultadoGastoDto>(FallaAlGuardar);
         Altas.Add(gasto);
+        PagosContado.Add(pagoContado);
         return Task.FromResult(new ResultadoGastoDto(99, null));
     }
 
@@ -48,6 +51,7 @@ internal sealed class GastosFake : IGastoService
         if (FallaAlGuardar is not null)
             return Task.FromException<ResultadoGastoDto>(FallaAlGuardar);
         Modificaciones.Add(gasto);
+        PagosContado.Add(pagoContado);
         return Task.FromResult(new ResultadoGastoDto(gasto.Id, null));
     }
 

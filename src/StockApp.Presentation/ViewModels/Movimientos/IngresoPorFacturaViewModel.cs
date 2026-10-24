@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
@@ -72,9 +73,20 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
     private string _montoTotalTexto = string.Empty;
 
+    /// <summary>Sin default: la caja del pago de contado se elige explícitamente (el crédito no la pide).</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
+    private Caja? _cajaSeleccionada;
+
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
     private FuenteFinanciamiento? _fuenteSeleccionada;
+
+    /// <summary>Aviso cuando la caja elegida no tiene literales activos asignados; null si los tiene, no hay caja o es crédito.</summary>
+    [ObservableProperty] private string? _avisoSinLiterales;
+
+    private List<FuenteFinanciamiento> _fuentesActivas = new();
+    private bool _fuentesCargadas;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
@@ -82,8 +94,51 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
 
     [ObservableProperty] private LineaPoa? _lineaPoaSeleccionada;
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MostrarCajaYFuente))]
+    [NotifyPropertyChangedFor(nameof(MostrarLineaPoa))]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
     private bool _esCredito;
+
+    /// <summary>Caja y literal son del pago de contado: a crédito no se piden (cada pago elige los suyos).</summary>
+    public bool MostrarCajaYFuente => !EsCredito;
+
+    /// <summary>La línea POA solo se ofrece en un contado de la caja POA (el servidor rechaza una línea POA en crédito o
+    /// en caja Local). No se deduce la caja desde la línea: se elige primero la caja.</summary>
+    public bool MostrarLineaPoa => !EsCredito && CajaSeleccionada == Caja.Poa;
+
+    partial void OnCajaSeleccionadaChanged(Caja? value)
+    {
+        OnPropertyChanged(nameof(MostrarLineaPoa));
+        RefrescarFuentes();
+        if (FuenteSeleccionada is not null && FuenteSeleccionada.Caja != value)
+            FuenteSeleccionada = null;
+        if (value != Caja.Poa)
+            LineaPoaSeleccionada = null;
+    }
+
+    /// <summary>Una línea POA no sobrevive a un crédito; el aviso de caja sin literales tampoco aplica.</summary>
+    partial void OnEsCreditoChanged(bool value)
+    {
+        ActualizarAvisoSinLiterales();
+        if (value)
+            LineaPoaSeleccionada = null;
+    }
+
+    /// <summary>Rellena el combo de fuentes con los literales de la caja elegida (sin caja, vacío).</summary>
+    private void RefrescarFuentes()
+    {
+        if (CajaSeleccionada is not { } caja)
+            FuentesDisponibles.Clear();
+        else
+            LiteralesPorCaja.Refrescar(FuentesDisponibles, _fuentesActivas, caja);
+        ActualizarAvisoSinLiterales();
+    }
+
+    /// <summary>Antes de que lleguen las fuentes no avisa: la lista vacía todavía no quiere decir "sin literales".</summary>
+    private void ActualizarAvisoSinLiterales() =>
+        AvisoSinLiterales = _fuentesCargadas && !EsCredito && CajaSeleccionada is { } caja
+            ? LiteralesPorCaja.Aviso(caja, _fuentesActivas.Count(f => f.Caja == caja))
+            : null;
     [ObservableProperty] private DateTime? _fechaVencimientoSeleccionada;
     [ObservableProperty] private string? _mensajeError;
 
@@ -97,6 +152,7 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
 
     public ObservableCollection<Proveedor> ProveedoresDisponibles { get; } = new();
     public ObservableCollection<FuenteFinanciamiento> FuentesDisponibles { get; } = new();
+    public IReadOnlyList<Caja> Cajas => CajaExtensions.Todas;
     public ObservableCollection<RubroGasto> RubrosDisponibles { get; } = new();
     public ObservableCollection<LineaPoa> LineasPoaDisponibles { get; } = new();
     public ObservableCollection<ProductoDto> ProductosDisponibles { get; } = new();
@@ -174,9 +230,9 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
             ProveedoresDisponibles.Clear();
             foreach (var p in proveedores) ProveedoresDisponibles.Add(p);
 
-            var fuentes = await _fuenteService.ListarActivasAsync();
-            FuentesDisponibles.Clear();
-            foreach (var f in fuentes) FuentesDisponibles.Add(f);
+            _fuentesActivas = (await _fuenteService.ListarActivasAsync()).ToList();
+            _fuentesCargadas = true;
+            RefrescarFuentes();
 
             var rubros = await _rubroService.ListarActivosAsync();
             RubrosDisponibles.Clear();
@@ -356,7 +412,7 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
         => !GuardadoExitoso
            && Renglones.Count > 0
            && ProveedorSeleccionado is not null
-           && (EsCredito || FuenteSeleccionada is not null)
+           && (EsCredito || (CajaSeleccionada is not null && FuenteSeleccionada is not null))
            && RubroSeleccionado is not null
            && !string.IsNullOrWhiteSpace(Detalle)
            && !string.IsNullOrWhiteSpace(MontoTotalTexto);
@@ -408,9 +464,8 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
             ProveedorSeleccionado!.Id, NumeroFactura, NumeroOrden,
             FechaSeleccionada is null ? DateTime.UtcNow : DateTime.SpecifyKind(FechaSeleccionada.Value.Date, DateTimeKind.Utc),
             Detalle, Destino, monto,
-            // Caja y literal del pago de contado; un crédito no los lleva. Hasta que el formulario tenga
-            // selector de caja, el contado es de la caja Local.
-            EsCredito ? null : new PagoContadoDto(Caja.Local, FuenteSeleccionada!.Id),
+            // Caja y literal del pago de contado, los dos elegidos explícitamente; un crédito no los lleva.
+            EsCredito ? null : new PagoContadoDto(CajaSeleccionada!.Value, FuenteSeleccionada!.Id),
             RubroSeleccionado!.Id, LineaPoaSeleccionada?.Id,
             EsCredito ? CondicionPago.Credito : CondicionPago.Contado,
             EsCredito && FechaVencimientoSeleccionada is not null
