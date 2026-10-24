@@ -1357,10 +1357,10 @@ public class EnsayoLocalTests : IDisposable
             INSERT INTO "Productos" ("Codigo", "Nombre", "UnidadMedidaId", "ProveedorId", "PrecioCosto", "StockActual", "StockMinimo", "FechaAlta")
                 SELECT 'P-{{s}}', 'Producto {{s}}', u."Id", p."Id", 3.75, 87.5, 10, '2026-10-01T12:00:00Z'
                 FROM "UnidadesMedida" u, "Proveedores" p WHERE u."Nombre" = 'Unidad {{s}}' AND p."Nombre" = 'Proveedor {{s}}';
-            INSERT INTO "Gastos" ("ProveedorId", "NumeroFactura", "Detalle", "Fecha", "MontoTotal", "FuenteFinanciamientoId", "RubroGastoId", "CondicionPago")
-                SELECT p."Id", 'F-{{s}}', 'Gasto {{s}}', '2026-10-02T12:00:00Z', 1234.56, f."Id", r."Id", 0
-                FROM "Proveedores" p, "FuentesFinanciamiento" f, "RubrosGasto" r
-                WHERE p."Nombre" = 'Proveedor {{s}}' AND f."Nombre" = 'Fuente {{s}}' AND r."Nombre" = 'Rubro {{s}}';
+            INSERT INTO "Gastos" ("ProveedorId", "NumeroFactura", "Detalle", "Fecha", "MontoTotal", "RubroGastoId", "CondicionPago")
+                SELECT p."Id", 'F-{{s}}', 'Gasto {{s}}', '2026-10-02T12:00:00Z', 1234.56, r."Id", 0
+                FROM "Proveedores" p, "RubrosGasto" r
+                WHERE p."Nombre" = 'Proveedor {{s}}' AND r."Nombre" = 'Rubro {{s}}';
             INSERT INTO "MovimientosStock" ("ProductoId", "UsuarioId", "Tipo", "Cantidad", "PrecioUnitario", "Fecha", "Motivo", "Comentario", "GastoId")
                 SELECT pr."Id", u."Id", v.t, v.c, 3.75, '2026-10-02T13:00:00Z', 0, 'movimiento {{s}}', g."Id"
                 FROM "Productos" pr, "Usuarios" u, "Gastos" g, (VALUES (0, 100.0), (1, 12.5)) v(t, c)
