@@ -80,11 +80,11 @@ public class GastosViewColumnasAnchoTests
             => Array.Empty<byte>();
     }
 
-    private const string Xaml = """
+    private static string Xaml(int ancho) => $"""
         <Window xmlns="https://github.com/avaloniaui"
                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                 xmlns:vistas="clr-namespace:StockApp.Presentation.Views.Finanzas;assembly=GestionMunicipal"
-                Width="1300" Height="700">
+                Width="{ancho}" Height="700">
             <vistas:GastosView />
         </Window>
         """;
@@ -110,7 +110,7 @@ public class GastosViewColumnasAnchoTests
         Activo = true,
     };
 
-    private static async Task<(Window Window, DataGrid Grid)> MontarAsync(Gasto gasto)
+    private static async Task<(Window Window, DataGrid Grid)> MontarAsync(Gasto gasto, int anchoVentana = 1300)
     {
         var vm = new GastosViewModel(
             new GastoServiceFake(new[] { gasto }),
@@ -125,7 +125,7 @@ public class GastosViewColumnasAnchoTests
             new PdfExporterNoOpFake(),
             new ServicioAperturaArchivoFake());
 
-        var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
+        var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml(anchoVentana), typeof(TestApp).Assembly);
         window.DataContext = vm;
         window.Show();
         Dispatcher.UIThread.RunJobs();
@@ -154,6 +154,36 @@ public class GastosViewColumnasAnchoTests
 
         Assert.True(angostas.Count == 0,
             $"Columnas por debajo del mínimo legible ({UmbralLegiblePx}px): {string.Join(", ", angostas)}");
+
+        window.Close();
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    /// <summary>
+    /// Orden de columnas decidido por el usuario: con la ventana a 1366px la grilla mide ~1036px
+    /// (ventana menos 240 de sidebar), las 12 columnas no entran y el DataGridColumnasAutoBehavior
+    /// pasa a desborde con scroll horizontal. CAJA y FUENTE tienen que ir antes de DETALLE para
+    /// leerse completas sin scrollear (FACTURA, RUBRO y LÍNEA POA quedan detrás del scroll).
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Montar_Ventana1366_CajaYFuenteSeLeenCompletasSinScroll()
+    {
+        var (window, grid) = await MontarAsync(CrearGastoConDatosReales(), anchoVentana: 1366 - 240);
+
+        var encabezados = grid.Columns.Select(c => c.Header?.ToString()).ToList();
+        Assert.Equal(
+            new[] { "FECHA", "PROVEEDOR", "CAJA", "FUENTE", "DETALLE", "MONTO", "PAGADO", "SALDO", "ESTADO", "FACTURA", "RUBRO", "LÍNEA POA" },
+            encabezados);
+
+        var viewport = grid.Bounds.Width;
+        double x = 0;
+        foreach (var col in grid.Columns)
+        {
+            x += col.ActualWidth;
+            if (col.Header?.ToString() is "CAJA" or "FUENTE")
+                Assert.True(x <= viewport + 0.5,
+                    $"{col.Header} termina en x={x:0.#} y el viewport mide {viewport:0.#}px: queda fuera de la vista sin scrollear.");
+        }
 
         window.Close();
         Dispatcher.UIThread.RunJobs();

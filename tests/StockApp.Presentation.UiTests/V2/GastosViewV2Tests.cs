@@ -168,7 +168,7 @@ public class GastosViewV2Tests
     {
         var grilla = Control<DataGrid>(Montar(Pendiente()), "Grilla");
 
-        Assert.Equal(new object?[] { "FECHA", "PROVEEDOR", "DETALLE", "MONTO", "PAGADO", "SALDO", "ESTADO", "FACTURA", "CAJA", "FUENTE", "RUBRO", "LÍNEA POA" },
+        Assert.Equal(new object?[] { "FECHA", "PROVEEDOR", "CAJA", "FUENTE", "DETALLE", "MONTO", "PAGADO", "SALDO", "ESTADO", "FACTURA", "RUBRO", "LÍNEA POA" },
             grilla.Columns.Select(c => c.Header).ToArray());
         Assert.True(grilla.CanUserSortColumns);
     }

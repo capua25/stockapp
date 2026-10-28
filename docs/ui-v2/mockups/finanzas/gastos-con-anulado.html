@@ -29,10 +29,10 @@
   /* Anchos medidos en headless (MedicionTemporal4d) con el tema v2, estos datos (las siete filas, la anulada incluida) y
      los headers en mayúsculas, iguales a 1280 y a 1366: FECHA, PROVEEDOR, MONTO, PAGADO, SALDO, FACTURA, CAJA, FUENTE, RUBRO y
      LÍNEA POA miden su contenido (ColumnaAuto); DETALLE (*) queda en su piso de 200; ESTADO fija 90 (insignia "Pendiente" 74
-     + 16 de padding de celda). Orden D3: FECHA · PROVEEDOR · DETALLE · MONTO · PAGADO · SALDO · ESTADO · FACTURA · CAJA · FUENTE ·
-     RUBRO · LÍNEA POA. Suma 1501 contra 948 y 1034 internos: scroll horizontal a los dos tamaños. Hasta ESTADO suman 866:
-     entran en la vista inicial a 1280 y a 1366. A 1280 se corta FACTURA (arranca en 866, se ven 82 de 92); a 1366 entran
-     FACTURA y CAJA enteras (hasta 1027) y se corta FUENTE (se ven 7 de 123); RUBRO y LÍNEA POA quedan fuera en los dos. */
+     + 16 de padding de celda). Orden D3: FECHA · PROVEEDOR · CAJA · FUENTE · DETALLE · MONTO · PAGADO · SALDO · ESTADO · FACTURA ·
+     RUBRO · LÍNEA POA. Suma 1501 contra 948 y 1034 internos: scroll horizontal a los dos tamaños. Hasta FUENTE suman 459:
+     CAJA y FUENTE se leen enteras sin scrollear a 1280 y a 1366. A 1280 se corta SALDO (arranca en 865, se ven 83 de 103);
+     a 1366 entra SALDO entero (hasta 968) y se corta ESTADO (se ven 66 de 90); FACTURA, RUBRO y LÍNEA POA quedan fuera en los dos. */
   .col-fecha { flex: 0 0 90px; }
   .col-proveedor { flex: 0 0 177px; }
   .col-factura { flex: 0 0 92px; }
@@ -147,14 +147,14 @@
           <div class="v2-grilla-header">
             <div class="v2-grilla-celda col-fecha">FECHA</div>
             <div class="v2-grilla-celda col-proveedor">PROVEEDOR</div>
+            <div class="v2-grilla-celda col-caja">CAJA</div>
+            <div class="v2-grilla-celda col-fuente">FUENTE</div>
             <div class="v2-grilla-celda col-detalle">DETALLE</div>
             <div class="v2-grilla-celda col-monto">MONTO</div>
             <div class="v2-grilla-celda col-pagado">PAGADO</div>
             <div class="v2-grilla-celda col-saldo">SALDO</div>
             <div class="v2-grilla-celda col-estado">ESTADO</div>
             <div class="v2-grilla-celda col-factura">FACTURA</div>
-            <div class="v2-grilla-celda col-caja">CAJA</div>
-            <div class="v2-grilla-celda col-fuente">FUENTE</div>
             <div class="v2-grilla-celda col-rubro">RUBRO</div>
             <div class="v2-grilla-celda col-linea">LÍNEA POA</div>
           </div>
@@ -162,98 +162,98 @@
             <div class="v2-grilla-fila">
               <div class="v2-grilla-celda col-fecha">14/10/2026</div>
               <div class="v2-grilla-celda col-proveedor"><span class="v2-celda-cortada">Constructora Oriental S.A.</span></div>
+              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">—</span></div>
+              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">—</span></div>
               <div class="v2-grilla-celda col-detalle"><span class="v2-celda-cortada">Reparación de cordón cuneta en calle Zorrilla</span></div>
               <div class="v2-grilla-celda col-monto v2-num"><span>$ 420.000,00</span></div>
               <div class="v2-grilla-celda col-pagado v2-num"><span>$ 0,00</span></div>
               <div class="v2-grilla-celda col-saldo v2-num"><span>$ 420.000,00</span></div>
               <div class="v2-grilla-celda col-estado"><span class="v2-insignia">Pendiente</span></div>
               <div class="v2-grilla-celda col-factura"><span class="v2-celda-cortada">A-0002210</span></div>
-              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">—</span></div>
-              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">—</span></div>
               <div class="v2-grilla-celda col-rubro"><span class="v2-celda-cortada">Obras viales</span></div>
               <div class="v2-grilla-celda col-linea"><span class="v2-celda-cortada">Bacheo y caminería rural</span></div>
             </div>
             <div class="v2-grilla-fila">
               <div class="v2-grilla-celda col-fecha">12/10/2026</div>
               <div class="v2-grilla-celda col-proveedor"><span class="v2-celda-cortada">Electro Sur S.R.L.</span></div>
+              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">—</span></div>
+              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">—</span></div>
               <div class="v2-grilla-celda col-detalle"><span class="v2-celda-cortada">Luminarias LED plaza Artigas</span></div>
               <div class="v2-grilla-celda col-monto v2-num"><span>$ 310.000,00</span></div>
               <div class="v2-grilla-celda col-pagado v2-num"><span>$ 150.000,00</span></div>
               <div class="v2-grilla-celda col-saldo v2-num"><span>$ 160.000,00</span></div>
               <div class="v2-grilla-celda col-estado"><span class="v2-insignia v2-insignia--advertencia">Parcial</span></div>
               <div class="v2-grilla-celda col-factura"><span class="v2-celda-cortada">A-0001190</span></div>
-              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">—</span></div>
-              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">—</span></div>
               <div class="v2-grilla-celda col-rubro"><span class="v2-celda-cortada">Alumbrado público</span></div>
               <div class="v2-grilla-celda col-linea"><span class="v2-celda-cortada">Alumbrado de plazas</span></div>
             </div>
             <div class="v2-grilla-fila v2-grilla-fila--inactiva fila-seleccionada">
               <div class="v2-grilla-celda col-fecha">10/10/2026</div>
               <div class="v2-grilla-celda col-proveedor"><span class="v2-celda-cortada">Ancap Distribuidora</span></div>
+              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">Local</span></div>
+              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">Rentas generales</span></div>
               <div class="v2-grilla-celda col-detalle"><span class="v2-celda-cortada">Combustible de la flota municipal (duplicado)</span></div>
               <div class="v2-grilla-celda col-monto v2-num"><span>$ 92.300,00</span></div>
               <div class="v2-grilla-celda col-pagado v2-num"><span>$ 0,00</span></div>
               <div class="v2-grilla-celda col-saldo v2-num"><span>$ 92.300,00</span></div>
               <div class="v2-grilla-celda col-estado"><span class="v2-insignia">Anulada</span></div>
               <div class="v2-grilla-celda col-factura"><span class="v2-celda-cortada">B-0012901</span></div>
-              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">Local</span></div>
-              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">Rentas generales</span></div>
               <div class="v2-grilla-celda col-rubro"><span class="v2-celda-cortada">Combustibles</span></div>
               <div class="v2-grilla-celda col-linea"></div>
             </div>
             <div class="v2-grilla-fila">
               <div class="v2-grilla-celda col-fecha">08/10/2026</div>
               <div class="v2-grilla-celda col-proveedor"><span class="v2-celda-cortada">Ancap Distribuidora</span></div>
+              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">Local</span></div>
+              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">Rentas generales</span></div>
               <div class="v2-grilla-celda col-detalle"><span class="v2-celda-cortada">Combustible de la flota municipal</span></div>
               <div class="v2-grilla-celda col-monto v2-num"><span>$ 92.300,00</span></div>
               <div class="v2-grilla-celda col-pagado v2-num"><span>$ 92.300,00</span></div>
               <div class="v2-grilla-celda col-saldo v2-num"><span>$ 0,00</span></div>
               <div class="v2-grilla-celda col-estado"><span class="v2-insignia v2-insignia--exito">Pagada</span></div>
               <div class="v2-grilla-celda col-factura"><span class="v2-celda-cortada">B-0012877</span></div>
-              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">Local</span></div>
-              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">Rentas generales</span></div>
               <div class="v2-grilla-celda col-rubro"><span class="v2-celda-cortada">Combustibles</span></div>
               <div class="v2-grilla-celda col-linea"></div>
             </div>
             <div class="v2-grilla-fila">
               <div class="v2-grilla-celda col-fecha">03/10/2026</div>
               <div class="v2-grilla-celda col-proveedor"><span class="v2-celda-cortada">Barraca Carmelo S.A.</span></div>
+              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">Local</span></div>
+              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">FIGM Literal B</span></div>
               <div class="v2-grilla-celda col-detalle"><span class="v2-celda-cortada">Materiales para bacheo de calle Zorrilla</span></div>
               <div class="v2-grilla-celda col-monto v2-num"><span>$ 186.540,00</span></div>
               <div class="v2-grilla-celda col-pagado v2-num"><span>$ 186.540,00</span></div>
               <div class="v2-grilla-celda col-saldo v2-num"><span>$ 0,00</span></div>
               <div class="v2-grilla-celda col-estado"><span class="v2-insignia v2-insignia--exito">Pagada</span></div>
               <div class="v2-grilla-celda col-factura"><span class="v2-celda-cortada">A-0004521</span></div>
-              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">Local</span></div>
-              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">FIGM Literal B</span></div>
               <div class="v2-grilla-celda col-rubro"><span class="v2-celda-cortada">Materiales de construcción</span></div>
               <div class="v2-grilla-celda col-linea"><span class="v2-celda-cortada">Bacheo y caminería rural</span></div>
             </div>
             <div class="v2-grilla-fila">
               <div class="v2-grilla-celda col-fecha">15/09/2026</div>
               <div class="v2-grilla-celda col-proveedor"><span class="v2-celda-cortada">Barraca Carmelo S.A.</span></div>
+              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">—</span></div>
+              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">—</span></div>
               <div class="v2-grilla-celda col-detalle"><span class="v2-celda-cortada">Arena y pedregullo para caminería rural</span></div>
               <div class="v2-grilla-celda col-monto v2-num"><span>$ 64.800,00</span></div>
               <div class="v2-grilla-celda col-pagado v2-num"><span>$ 0,00</span></div>
               <div class="v2-grilla-celda col-saldo v2-num"><span>$ 64.800,00</span></div>
               <div class="v2-grilla-celda col-estado"><span class="v2-insignia v2-insignia--peligro">Vencida</span></div>
               <div class="v2-grilla-celda col-factura"><span class="v2-celda-cortada">A-0004377</span></div>
-              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">—</span></div>
-              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">—</span></div>
               <div class="v2-grilla-celda col-rubro"><span class="v2-celda-cortada">Materiales de construcción</span></div>
               <div class="v2-grilla-celda col-linea"><span class="v2-celda-cortada">Bacheo y caminería rural</span></div>
             </div>
             <div class="v2-grilla-fila">
               <div class="v2-grilla-celda col-fecha">02/09/2026</div>
               <div class="v2-grilla-celda col-proveedor"><span class="v2-celda-cortada">Electro Sur S.R.L.</span></div>
+              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">Local</span></div>
+              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">Rentas generales</span></div>
               <div class="v2-grilla-celda col-detalle"><span class="v2-celda-cortada">Cableado del alumbrado de la rambla</span></div>
               <div class="v2-grilla-celda col-monto v2-num"><span>$ 48.950,00</span></div>
               <div class="v2-grilla-celda col-pagado v2-num"><span>$ 48.950,00</span></div>
               <div class="v2-grilla-celda col-saldo v2-num"><span>$ 0,00</span></div>
               <div class="v2-grilla-celda col-estado"><span class="v2-insignia v2-insignia--exito">Pagada</span></div>
               <div class="v2-grilla-celda col-factura"><span class="v2-celda-cortada">A-0001102</span></div>
-              <div class="v2-grilla-celda col-caja"><span class="v2-celda-cortada">Local</span></div>
-              <div class="v2-grilla-celda col-fuente"><span class="v2-celda-cortada">Rentas generales</span></div>
               <div class="v2-grilla-celda col-rubro"><span class="v2-celda-cortada">Alumbrado público</span></div>
               <div class="v2-grilla-celda col-linea"></div>
             </div>

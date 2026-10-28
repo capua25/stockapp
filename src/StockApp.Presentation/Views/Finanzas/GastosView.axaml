@@ -197,6 +197,23 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="CAJA" Width="Auto" SortMemberPath="CajaTexto" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:GastoFila">
+                                    <TextBlock Text="{Binding CajaTexto}" Classes.inactivo="{Binding !Gasto.Activo}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="FUENTE" Width="Auto" SortMemberPath="FuenteNombre" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:GastoFila">
+                                    <TextBlock Text="{Binding FuenteNombre}" Classes.inactivo="{Binding !Gasto.Activo}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding FuenteNombre}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTemplateColumn Header="DETALLE" Width="*" MinWidth="200" SortMemberPath="Detalle">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="vm:GastoFila">
@@ -246,23 +263,6 @@
                                 <DataTemplate x:DataType="vm:GastoFila">
                                     <TextBlock Text="{Binding NumeroFactura}" Classes.inactivo="{Binding !Gasto.Activo}"
                                                TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding NumeroFactura}"
-                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="CAJA" Width="Auto" SortMemberPath="CajaTexto" b:ColumnaAuto.Medir="True">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="vm:GastoFila">
-                                    <TextBlock Text="{Binding CajaTexto}" Classes.inactivo="{Binding !Gasto.Activo}"
-                                               VerticalAlignment="Center" />
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="FUENTE" Width="Auto" SortMemberPath="FuenteNombre" b:ColumnaAuto.Medir="True">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="vm:GastoFila">
-                                    <TextBlock Text="{Binding FuenteNombre}" Classes.inactivo="{Binding !Gasto.Activo}"
-                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding FuenteNombre}"
                                                b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
