@@ -129,4 +129,27 @@ public class GastosViewTests
         Assert.True(BuscarBotonPorTexto(window, "Nuevo gasto").IsVisible);
         Assert.True(BuscarBotonPorTexto(window, "Editar").IsVisible);
     }
+
+    /// <summary>
+    /// Guardián de orden: el PDF de gastos debe salir con las columnas en el MISMO orden que la grilla en
+    /// pantalla (pedido del usuario 2026-10-27). Compara contra la View montada, no contra un literal:
+    /// si alguien reordena la grilla sin tocar <see cref="GastosViewModel.ColumnasPdf"/> (o al revés), rompe.
+    /// Cada columna de la grilla declara SortMemberPath = nombre de la propiedad de GastoFila, que es
+    /// exactamente la clave que usa ColumnaPdf.Propiedad.
+    /// </summary>
+    [AvaloniaFact]
+    public void ColumnasPdf_TienenElMismoOrdenQueLasColumnasDeLaGrilla()
+    {
+        var (window, _) = Montar(RolUsuario.Admin, new HashSet<string>());
+
+        var grilla = window.GetVisualDescendants().OfType<DataGrid>().Single();
+        var deLaGrilla = grilla.Columns
+            .Select(c => (Propiedad: c.SortMemberPath, Rotulo: Convert.ToString(c.Header)!))
+            .ToList();
+        var delPdf = GastosViewModel.ColumnasPdf
+            .Select(c => (Propiedad: c.Propiedad, Rotulo: c.Rotulo.ToUpperInvariant()))
+            .ToList();
+
+        Assert.Equal(deLaGrilla, delPdf);
+    }
 }

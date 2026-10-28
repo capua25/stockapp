@@ -590,7 +590,8 @@ public partial class GastosViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Columnas del PDF (spec 2026-09-18): las 12 de la grilla.
+    /// Columnas del PDF (spec 2026-09-18): las 12 de la grilla, EN EL MISMO ORDEN que GastosView.axaml
+    /// (lo custodia GastosViewTests.ColumnasPdf_TienenElMismoOrdenQueLasColumnasDeLaGrilla).
     /// Peor caso de la spec: apaisado automático (Tarea 4, >6 columnas) con 4 columnas de texto
     /// libre potencialmente largo (Detalle, Proveedor, Fuente, Línea POA) que se envuelven sin
     /// truncar (Tarea 5).
@@ -599,16 +600,16 @@ public partial class GastosViewModel : ViewModelBase
     {
         new ColumnaPdf(nameof(GastoFila.Fecha), "Fecha"),
         new ColumnaPdf(nameof(GastoFila.ProveedorNombre), "Proveedor"),
-        new ColumnaPdf(nameof(GastoFila.NumeroFactura), "Factura"),
-        new ColumnaPdf(nameof(GastoFila.Detalle), "Detalle"),
         new ColumnaPdf(nameof(GastoFila.CajaTexto), "Caja"),
         new ColumnaPdf(nameof(GastoFila.FuenteNombre), "Fuente"),
-        new ColumnaPdf(nameof(GastoFila.RubroNombre), "Rubro"),
-        new ColumnaPdf(nameof(GastoFila.LineaPoaNombre), "Línea POA"),
+        new ColumnaPdf(nameof(GastoFila.Detalle), "Detalle"),
         new ColumnaPdf(nameof(GastoFila.MontoTotal), "Monto"),
         new ColumnaPdf(nameof(GastoFila.TotalPagado), "Pagado"),
         new ColumnaPdf(nameof(GastoFila.Saldo), "Saldo"),
         new ColumnaPdf(nameof(GastoFila.Estado), "Estado"),
+        new ColumnaPdf(nameof(GastoFila.NumeroFactura), "Factura"),
+        new ColumnaPdf(nameof(GastoFila.RubroNombre), "Rubro"),
+        new ColumnaPdf(nameof(GastoFila.LineaPoaNombre), "Línea POA"),
     };
 
     /// <summary>

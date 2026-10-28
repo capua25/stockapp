@@ -729,16 +729,16 @@ public class GastosViewModelTests
         {
             new ColumnaPdf("Fecha", "Fecha"),
             new ColumnaPdf("ProveedorNombre", "Proveedor"),
-            new ColumnaPdf("NumeroFactura", "Factura"),
-            new ColumnaPdf("Detalle", "Detalle"),
             new ColumnaPdf("CajaTexto", "Caja"),
             new ColumnaPdf("FuenteNombre", "Fuente"),
-            new ColumnaPdf("RubroNombre", "Rubro"),
-            new ColumnaPdf("LineaPoaNombre", "Línea POA"),
+            new ColumnaPdf("Detalle", "Detalle"),
             new ColumnaPdf("MontoTotal", "Monto"),
             new ColumnaPdf("TotalPagado", "Pagado"),
             new ColumnaPdf("Saldo", "Saldo"),
             new ColumnaPdf("Estado", "Estado"),
+            new ColumnaPdf("NumeroFactura", "Factura"),
+            new ColumnaPdf("RubroNombre", "Rubro"),
+            new ColumnaPdf("LineaPoaNombre", "Línea POA"),
         };
         pdfExporterMock.Verify(e => e.Exportar(
             It.IsAny<IEnumerable<GastoFila>>(),
