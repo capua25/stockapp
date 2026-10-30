@@ -17,16 +17,16 @@ public class DatosGestionTests
     private static string Vence(Tarea t) => FechaCortaConverter.Formatear(DateOnly.FromDateTime(t.FechaLimite!.Value));
 
     [Fact]
-    public void Tareas_FijanEstadoPrioridadVenceYClasificacion()
+    public void Tareas_FijanEstadoPrioridadVenceYProyecto()
     {
-        var esperado = new (int Id, EstadoTarea Estado, string Prioridad, string Vence, string Clasificacion)[]
+        var esperado = new (int Id, EstadoTarea Estado, string Prioridad, string Vence, string Proyecto)[]
         {
-            (6, EstadoTarea.Pendiente, "Alta", "15/03/2030", "Costa · Infraestructura"),
-            (5, EstadoTarea.Pendiente, "Media", "30/09/2026", "Centro · Infraestructura · Dirección de Obras · FIGM Literal B · Exp. 45/2026"),
-            (4, EstadoTarea.EnCurso, "Alta", "01/02/2030", "Centro · Ambiente · Higiene y Ambiente"),
-            (3, EstadoTarea.EnCurso, "Media", "20/05/2030", "Barrio Norte · Ambiente · Higiene y Ambiente · Rentas generales"),
-            (2, EstadoTarea.Terminada, "Baja", "10/01/2030", "Centro"),
-            (1, EstadoTarea.Cancelada, "Media", "04/04/2030", "Centro · Infraestructura"),
+            (6, EstadoTarea.Pendiente, "Alta", "15/03/2030", "Alumbrado de la rambla"),
+            (5, EstadoTarea.Pendiente, "Media", "30/09/2026", "Plan de mantenimiento vial del centro 2026"),
+            (4, EstadoTarea.EnCurso, "Alta", "01/02/2030", "Arbolado urbano"),
+            (3, EstadoTarea.EnCurso, "Media", "20/05/2030", "—"),
+            (2, EstadoTarea.Terminada, "Baja", "10/01/2030", "Plan de mantenimiento vial del centro 2026"),
+            (1, EstadoTarea.Cancelada, "Media", "04/04/2030", "—"),
         };
 
         Assert.Equal(esperado.Length, DatosTareas.Tareas.Count);
@@ -37,7 +37,7 @@ public class DatosGestionTests
             Assert.Equal(esperado[i].Estado, fila.Tarea.Estado);
             Assert.Equal(esperado[i].Prioridad, fila.PrioridadTexto);
             Assert.Equal(esperado[i].Vence, Vence(DatosTareas.Tareas[i]));
-            Assert.Equal(esperado[i].Clasificacion, fila.EtiquetasClasificacion);
+            Assert.Equal(esperado[i].Proyecto, fila.ProyectoTitulo);
         }
         Assert.Equal(["mperez", "jsosa"], DatosTareas.Tareas.Where(t => t.Estado == EstadoTarea.EnCurso).Select(t => t.TomadaPor!.NombreUsuario).OrderDescending());
     }
@@ -158,7 +158,7 @@ public class DatosGestionTests
         Assert.True(nueva.EsNuevaTarea);
         Assert.False(nueva.HasErrors);
         Assert.False(nueva.GuardarCommand.CanExecute(null));
-        Assert.Equal("(ninguna)", nueva.ClasificacionPanel.ZonasDisponibles[0].Nombre);
+        Assert.Equal("(ninguno)", nueva.ClasificacionPanel.ProyectosDisponibles[0].Nombre);
 
         var conError = Contenido<TareaFormViewModel>(DatosTareas.NuevaConErrorDeCampo());
         Assert.Equal(TareaFormViewModel.MensajeTituloObligatorio, conError.ErrorDe(nameof(TareaFormViewModel.Titulo)));
@@ -174,8 +174,7 @@ public class DatosGestionTests
         Assert.False(operador.MuestraCambioPrioridad);
 
         var dialogo = DatosTareas.Reclasificar();
-        Assert.Equal("Centro", dialogo.Panel.ZonaSeleccionada?.Nombre);
-        Assert.Equal("Dirección de Obras", dialogo.Panel.OrganismoSeleccionado?.Nombre);
+        Assert.Equal("Plan de mantenimiento vial del centro 2026", dialogo.Panel.ProyectoSeleccionado?.Nombre);
         Assert.Equal("45", dialogo.Panel.DocumentoSeleccionado?.Numero);
     }
 

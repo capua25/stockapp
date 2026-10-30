@@ -40,7 +40,7 @@ public interface ITareaService
     /// reclasificada sin traer la lista completa.</summary>
     Task<Tarea?> ObtenerPorIdAsync(int id);
 
-    /// <summary>Reemplaza los cinco clasificadores (spec 2026-09-08, D21: total, no parcial —
+    /// <summary>Reemplaza proyecto y expediente (spec 2026-09-08 D21 y 2026-10-30: total, no parcial —
     /// null desasigna). Solo Admin (AdministrarTareas). Alcanza también tareas terminales
     /// (D9): reclasificar NO cambia el estado ni reabre la tarea. Misma validación que
     /// CrearAsync (D12). Si nada cambia, no genera nota ni auditoría (mismo guard que

@@ -218,43 +218,31 @@ public class TareaRepositoryTests : PostgresRepositoryTestBase
     }
 
     [Fact]
-    public async Task ObtenerPorIdAsync_ConClasificacionCompleta_TraeLasCincoNavsCargadas()
+    public async Task ObtenerPorIdAsync_ConClasificacionCompleta_TraeExpedienteYProyectoCargados()
     {
         Context.Usuarios.Add(NuevoUsuario());
         await Context.SaveChangesAsync();
 
-        var zona = new Zona { Nombre = "Centro" };
-        var dimension = new DimensionTematica { Nombre = "Tránsito" };
-        var organismo = new OrganismoResponsable { Nombre = "Intendencia" };
-        var origen = new OrigenFinanciamiento { Nombre = "Presupuesto propio" };
         var documento = new DocumentoAdministrativo
         {
             Numero = "0099", Anio = 2026, Tipo = TipoDocumento.Expediente,
             FechaEmision = DateTime.UtcNow.Date, Descripcion = "Expediente de prueba",
             RegistradoPorUsuarioId = 1, FechaRegistro = DateTime.UtcNow,
         };
-        Context.Zonas.Add(zona);
-        Context.DimensionesTematicas.Add(dimension);
-        Context.OrganismosResponsables.Add(organismo);
-        Context.OrigenesFinanciamiento.Add(origen);
+        var proyecto = new Proyecto { Titulo = "Plaza nueva", CreadoPorUsuarioId = 1, FechaCreacion = DateTime.UtcNow };
         Context.DocumentosAdministrativos.Add(documento);
+        Context.Proyectos.Add(proyecto);
         await Context.SaveChangesAsync();
 
         var tarea = NuevaTarea();
-        tarea.ZonaId = zona.Id;
-        tarea.DimensionTematicaId = dimension.Id;
-        tarea.OrganismoResponsableId = organismo.Id;
-        tarea.OrigenFinanciamientoId = origen.Id;
         tarea.DocumentoAdministrativoId = documento.Id;
+        tarea.ProyectoId = proyecto.Id;
         var id = await _repo.AgregarAsync(tarea);
 
         var recuperada = await _repo.ObtenerPorIdAsync(id);
 
-        Assert.Equal("Centro", recuperada!.Zona?.Nombre);
-        Assert.Equal("Tránsito", recuperada.DimensionTematica?.Nombre);
-        Assert.Equal("Intendencia", recuperada.OrganismoResponsable?.Nombre);
-        Assert.Equal("Presupuesto propio", recuperada.OrigenFinanciamiento?.Nombre);
-        Assert.Equal("0099", recuperada.DocumentoAdministrativo?.Numero);
+        Assert.Equal("0099", recuperada!.DocumentoAdministrativo?.Numero);
+        Assert.Equal("Plaza nueva", recuperada.Proyecto?.Titulo);
     }
 
     [Fact]

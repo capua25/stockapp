@@ -4,8 +4,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Moq;
-using StockApp.Application.Catalogo;
 using StockApp.Application.Documentos;
+using StockApp.Application.Proyectos;
 using StockApp.Application.Tareas;
 using StockApp.ApiClient;
 using StockApp.Domain.Entities;
@@ -18,60 +18,27 @@ namespace StockApp.Presentation.Tests.ViewModels.Tareas;
 
 public class ClasificacionTareaPanelViewModelTests
 {
-    private static (ClasificacionTareaPanelViewModel Vm, Mock<IZonaService> Zonas,
-                     Mock<IDimensionTematicaService> Dimensiones, Mock<IOrganismoResponsableService> Organismos,
-                     Mock<IOrigenFinanciamientoService> Origenes, Mock<IDocumentoAdministrativoService> Documentos,
-                     Mock<IConfirmacionService> Confirm)
+    private static (ClasificacionTareaPanelViewModel Vm, Mock<IProyectoService> Proyectos,
+                     Mock<IDocumentoAdministrativoService> Documentos, Mock<IConfirmacionService> Confirm)
         Crear()
     {
-        var zonas = new Mock<IZonaService>();
-        var dimensiones = new Mock<IDimensionTematicaService>();
-        var organismos = new Mock<IOrganismoResponsableService>();
-        var origenes = new Mock<IOrigenFinanciamientoService>();
+        var proyectos = new Mock<IProyectoService>();
         var documentos = new Mock<IDocumentoAdministrativoService>();
         var confirm = new Mock<IConfirmacionService>();
         confirm.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
 
-        zonas.Setup(z => z.ListarActivasAsync()).ReturnsAsync(new List<Zona>
+        proyectos.Setup(p => p.ListarOpcionesAsync()).ReturnsAsync(new List<OpcionProyectoDto>
         {
-            new() { Id = 1, Nombre = "Centro" }, new() { Id = 2, Nombre = "Norte" },
-        });
-        dimensiones.Setup(d => d.ListarActivasAsync()).ReturnsAsync(new List<DimensionTematica>
-        {
-            new() { Id = 3, Nombre = "Tránsito" },
-        });
-        organismos.Setup(o => o.ListarActivasAsync()).ReturnsAsync(new List<OrganismoResponsable>
-        {
-            new() { Id = 4, Nombre = "Intendencia" },
-        });
-        origenes.Setup(o => o.ListarActivasAsync()).ReturnsAsync(new List<OrigenFinanciamiento>
-        {
-            new() { Id = 5, Nombre = "Presupuesto propio" },
+            new(1, "Bacheo calle Uruguay", EstadoProyecto.EnCurso),
+            new(2, "Plaza de deportes", EstadoProyecto.Pendiente),
         });
 
-        var vm = new ClasificacionTareaPanelViewModel(
-            zonas.Object, dimensiones.Object, organismos.Object, origenes.Object, documentos.Object, confirm.Object);
-        return (vm, zonas, dimensiones, organismos, origenes, documentos, confirm);
+        var vm = new ClasificacionTareaPanelViewModel(proyectos.Object, documentos.Object, confirm.Object);
+        return (vm, proyectos, documentos, confirm);
     }
 
     [Fact]
-    public async Task InicializarAsync_SinValoresActuales_PopulaLosCuatroCatalogosMasElCentinelaSinSeleccion()
-    {
-        var ctx = Crear();
-
-        await ctx.Vm.InicializarAsync();
-
-        // +1 en cada combo: el centinela "(ninguna)" que Important 2 agrega siempre primero.
-        Assert.Equal(3, ctx.Vm.ZonasDisponibles.Count);
-        Assert.Equal(2, ctx.Vm.DimensionesDisponibles.Count);
-        Assert.Equal(2, ctx.Vm.OrganismosDisponibles.Count);
-        Assert.Equal(2, ctx.Vm.OrigenesDisponibles.Count);
-        Assert.Null(ctx.Vm.ZonaSeleccionada?.Id);
-        Assert.Null(ctx.Vm.DocumentoSeleccionado);
-    }
-
-    [Fact]
-    public async Task InicializarAsync_ConValoresActuales_PrecargaLaSeleccion()
+    public async Task InicializarAsync_ExponeProyectosYExpediente_SinClasificadores()
     {
         var ctx = Crear();
         ctx.Documentos.Setup(d => d.ObtenerPorIdAsync(9)).ReturnsAsync(new DocumentoAdministrativo
@@ -79,108 +46,66 @@ public class ClasificacionTareaPanelViewModelTests
             Id = 9, Numero = "0001", Anio = 2026, Tipo = TipoDocumento.Expediente, Descripcion = "x",
         });
 
-        await ctx.Vm.InicializarAsync(new DatosClasificacionTarea(1, 3, null, null, 9));
+        await ctx.Vm.InicializarAsync(new DatosClasificacionTarea(2, 9));
 
-        Assert.Equal(1, ctx.Vm.ZonaSeleccionada?.Id);
-        Assert.Equal(3, ctx.Vm.DimensionSeleccionada?.Id);
-        // Campo no asignado en la tarea: no es C# null, es el centinela "(ninguna)" (Important 2)
-        // -- así queda seleccionable/visible en el combo real, no "sin selección" a secas.
-        Assert.Null(ctx.Vm.OrganismoSeleccionado?.Id);
+        // El centinela "(ninguno)" primero y después los proyectos abiertos, con su título.
+        Assert.Equal(new[] { "(ninguno)", "Bacheo calle Uruguay", "Plaza de deportes" },
+            ctx.Vm.ProyectosDisponibles.Select(o => o.Nombre));
+        Assert.Null(ctx.Vm.ProyectosDisponibles[0].Id);
+        Assert.Equal(2, ctx.Vm.ProyectoSeleccionado?.Id);
         Assert.Equal(9, ctx.Vm.DocumentoSeleccionado?.Id);
-    }
-
-    // ── Important 1 (revisión de integración 2026-09-09): reclasificar no puede perder en
-    // silencio un clasificador que fue dado de baja después de asignarse a la tarea. ──────────
-
-    [Fact]
-    public async Task InicializarAsync_ZonaDeLaTareaFueDadaDeBaja_LaPreservaEnVezDePerderla()
-    {
-        var ctx = Crear();
-        // La zona 7 de la tarea ya NO está entre las activas (dada de baja) -- solo queda la 8.
-        ctx.Zonas.Setup(z => z.ListarActivasAsync()).ReturnsAsync(new List<Zona>
-        {
-            new() { Id = 8, Nombre = "Norte" },
-        });
-
-        await ctx.Vm.InicializarAsync(new DatosClasificacionTarea(7, null, null, null, null));
-
-        // Verificado por mutación: sacando el fallback de PoblarOpciones que preserva el id
-        // ausente, ZonaSeleccionada?.Id vuelve a dar null acá y este assert se pone rojo.
-        Assert.Equal(7, ctx.Vm.ZonaSeleccionada?.Id);
+        // Sin clasificadores: el panel ya no expone zona, dimensión, organismo ni origen.
+        var propiedades = typeof(ClasificacionTareaPanelViewModel).GetProperties().Select(p => p.Name).ToList();
+        Assert.DoesNotContain(propiedades, n => n.StartsWith("Zona") || n.StartsWith("Dimension")
+            || n.StartsWith("Organismo") || n.StartsWith("Origen"));
+        Assert.Equal(new DatosClasificacionTarea(2, 9), ctx.Vm.ObtenerDatos());
     }
 
     [Fact]
-    public async Task ObtenerDatos_ZonaDeLaTareaFueDadaDeBaja_NoLaBorraSiElAdminNoLaToca()
-    {
-        var ctx = Crear();
-        ctx.Zonas.Setup(z => z.ListarActivasAsync()).ReturnsAsync(new List<Zona>
-        {
-            new() { Id = 8, Nombre = "Norte" },
-        });
-
-        await ctx.Vm.InicializarAsync(new DatosClasificacionTarea(7, null, null, null, null));
-        var datos = ctx.Vm.ObtenerDatos();
-
-        Assert.Equal(7, datos.ZonaId);
-    }
-
-    // ── Important 2 (revisión de integración 2026-09-09): los cuatro combos tienen que poder
-    // volver a "sin asignar" desde la UI -- antes bindeaban directo a la entidad y no había
-    // forma de llegar a null salvo asignando la propiedad del VM a mano, inalcanzable desde
-    // un ComboBox real (molde de DocumentoListViewModel.OpcionTipoDocumento). ────────────────
-
-    [Fact]
-    public async Task InicializarAsync_AntepioneSiempreLaOpcionNinguna_EnLosCuatroCombos()
+    public async Task InicializarAsync_ProyectoActualCerrado_ApareceComoOpcion()
     {
         var ctx = Crear();
 
-        await ctx.Vm.InicializarAsync(new DatosClasificacionTarea(1, 3, 4, 5, null));
+        // El proyecto 7 de la tarea ya está Terminado: ListarOpcionesAsync no lo trae.
+        await ctx.Vm.InicializarAsync(new DatosClasificacionTarea(7, null), "Puente arroyo Las Vacas");
 
-        Assert.Null(ctx.Vm.ZonasDisponibles[0].Id);
-        Assert.Null(ctx.Vm.DimensionesDisponibles[0].Id);
-        Assert.Null(ctx.Vm.OrganismosDisponibles[0].Id);
-        Assert.Null(ctx.Vm.OrigenesDisponibles[0].Id);
+        var opcion = Assert.Single(ctx.Vm.ProyectosDisponibles, o => o.Id == 7);
+        Assert.Equal("Puente arroyo Las Vacas", opcion.Nombre);
+        Assert.Same(opcion, ctx.Vm.ProyectoSeleccionado);
+        // Guardar sin tocar el combo conserva el vínculo.
+        Assert.Equal(7, ctx.Vm.ObtenerDatos().ProyectoId);
     }
 
     [Fact]
-    public async Task ObtenerDatos_EligiendoLaOpcionNingunaDelComboReal_DesasignaAunHabiendoValorPrevio()
-    {
-        var ctx = Crear();
-        await ctx.Vm.InicializarAsync(new DatosClasificacionTarea(1, null, null, null, null));
-        Assert.Equal(1, ctx.Vm.ZonaSeleccionada?.Id); // precondición: la zona llegó precargada
-
-        // El Admin elige la opción "(ninguna)" tal como aparece en el ComboBox real (no asigna
-        // null a mano -- toma el ítem del propio ItemsSource, molde de
-        // DocumentoListViewTests.ClickReal_EligiendoTipoEnElComboDeActivosYBuscando_LlegaAlServicio).
-        ctx.Vm.ZonaSeleccionada = ctx.Vm.ZonasDisponibles.First(o => o.Id is null);
-
-        // Verificado por mutación: si ObtenerDatos() ignorara la selección "(ninguna)" (por
-        // ejemplo, si alguien la "arreglara" para no reemplazar un id previo), este assert
-        // fallaría con datos.ZonaId == 1 en vez de null.
-        Assert.Null(ctx.Vm.ObtenerDatos().ZonaId);
-    }
-
-    [Fact]
-    public void ObtenerDatos_SinSeleccion_DevuelveLosCincoCamposEnNull()
+    public async Task InicializarAsync_SinValoresActuales_SeleccionaElCentinela()
     {
         var ctx = Crear();
 
-        var datos = ctx.Vm.ObtenerDatos();
-
-        Assert.Equal(new DatosClasificacionTarea(null, null, null, null, null), datos);
-    }
-
-    [Fact]
-    public async Task ObtenerDatos_ConSeleccion_ReflejaLosIdsSeleccionados()
-    {
-        var ctx = Crear();
         await ctx.Vm.InicializarAsync();
-        ctx.Vm.ZonaSeleccionada = ctx.Vm.ZonasDisponibles.First(z => z.Id == 2);
 
-        var datos = ctx.Vm.ObtenerDatos();
+        Assert.Equal(3, ctx.Vm.ProyectosDisponibles.Count);
+        Assert.Null(ctx.Vm.ProyectoSeleccionado?.Id);
+        Assert.Null(ctx.Vm.DocumentoSeleccionado);
+    }
 
-        Assert.Equal(2, datos.ZonaId);
-        Assert.Null(datos.DimensionTematicaId);
+    [Fact]
+    public async Task ObtenerDatos_EligiendoElCentinelaDelComboReal_DesvinculaElProyecto()
+    {
+        var ctx = Crear();
+        await ctx.Vm.InicializarAsync(new DatosClasificacionTarea(1, null));
+        Assert.Equal(1, ctx.Vm.ProyectoSeleccionado?.Id); // precondición: llegó precargado
+
+        ctx.Vm.ProyectoSeleccionado = ctx.Vm.ProyectosDisponibles.First(o => o.Id is null);
+
+        Assert.Null(ctx.Vm.ObtenerDatos().ProyectoId);
+    }
+
+    [Fact]
+    public void ObtenerDatos_SinSeleccion_DevuelveAmbosCamposEnNull()
+    {
+        var ctx = Crear();
+
+        Assert.Equal(new DatosClasificacionTarea(null, null), ctx.Vm.ObtenerDatos());
     }
 
     [Fact]
@@ -231,7 +156,7 @@ public class ClasificacionTareaPanelViewModelTests
     {
         var ctx = Crear();
         await ctx.Vm.InicializarAsync();
-        ctx.Vm.ZonaSeleccionada = ctx.Vm.ZonasDisponibles.First(z => z.Id == 2);
+        ctx.Vm.ProyectoSeleccionado = ctx.Vm.ProyectosDisponibles.First(o => o.Id == 2);
         ctx.Documentos.Setup(d => d.ListarActivosAsync(It.IsAny<FiltroDocumentos>()))
             .ThrowsAsync(new UnauthorizedAccessException());
 
@@ -241,7 +166,7 @@ public class ClasificacionTareaPanelViewModelTests
         Assert.NotNull(ctx.Vm.MensajeBuscadorExpediente);
 
         var datos = ctx.Vm.ObtenerDatos();
-        Assert.Equal(2, datos.ZonaId);
+        Assert.Equal(2, datos.ProyectoId);
         Assert.Null(datos.DocumentoAdministrativoId);
     }
 
@@ -255,7 +180,7 @@ public class ClasificacionTareaPanelViewModelTests
     public async Task InicializarAsync_FallaElServicio_NoPropagaYInformaConElMensajeReal()
     {
         var ctx = Crear();
-        ctx.Zonas.Setup(z => z.ListarActivasAsync())
+        ctx.Proyectos.Setup(p => p.ListarOpcionesAsync())
             .ThrowsAsync(new ServidorNoDisponibleException());
 
         // No debe lanzar -- verificado por mutación: sacando el try/catch de InicializarAsync
@@ -272,7 +197,7 @@ public class ClasificacionTareaPanelViewModelTests
         // aparte (AuthTokenHandler/App.axaml.cs) -- este catch NO debe agregar un "sin permiso"
         // propio, mismo criterio que AdjuntosDocumentoPanelViewModel.ManejarErrorAsync.
         var ctx = Crear();
-        ctx.Zonas.Setup(z => z.ListarActivasAsync()).ThrowsAsync(new UnauthorizedAccessException());
+        ctx.Proyectos.Setup(p => p.ListarOpcionesAsync()).ThrowsAsync(new UnauthorizedAccessException());
 
         await ctx.Vm.InicializarAsync();
 

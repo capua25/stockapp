@@ -163,26 +163,20 @@ public class TareaApiClientTests
     }
 
     [Fact]
-    public async Task CrearAsync_ConClasificacion_SerializaLosCincoIds()
+    public async Task CrearAsync_ConClasificacion_SerializaProyectoYExpediente()
     {
         var fake = new FakeHttpHandler(_ => TestHttp.Json(new { id = 1 }, HttpStatusCode.Created));
         var client = new TareaApiClient(TestHttp.CrearCliente(fake));
 
-        await client.CrearAsync(new Tarea
-        {
-            Titulo = "x", ZonaId = 3, DimensionTematicaId = 4,
-            OrganismoResponsableId = 5, OrigenFinanciamientoId = 6, DocumentoAdministrativoId = 7,
-        });
+        await client.CrearAsync(new Tarea { Titulo = "x", ProyectoId = 3, DocumentoAdministrativoId = 7 });
 
-        Assert.Contains("\"zonaId\":3", fake.UltimoBody);
-        Assert.Contains("\"dimensionTematicaId\":4", fake.UltimoBody);
-        Assert.Contains("\"organismoResponsableId\":5", fake.UltimoBody);
-        Assert.Contains("\"origenFinanciamientoId\":6", fake.UltimoBody);
+        Assert.Contains("\"proyectoId\":3", fake.UltimoBody);
         Assert.Contains("\"documentoAdministrativoId\":7", fake.UltimoBody);
+        Assert.DoesNotContain("zonaId", fake.UltimoBody);
     }
 
     [Fact]
-    public async Task ListarAsync_ConClasificacion_DeserializaLosNombres()
+    public async Task ListarAsync_ConExpediente_DeserializaNumeroAnioYTipo()
     {
         var fake = new FakeHttpHandler(_ => TestHttp.Json(new[]
         {
@@ -193,10 +187,6 @@ public class TareaApiClientTests
                 creadaPorUsuarioId = 1, fechaCreacion = new DateTime(2026, 9, 1),
                 tomadaPorUsuarioId = (int?)null, tomadaPorNombre = (string?)null, fechaInicio = (DateTime?)null,
                 cerradaPorUsuarioId = (int?)null, fechaFin = (DateTime?)null,
-                zonaId = 3, zonaNombre = "Centro",
-                dimensionTematicaId = 4, dimensionTematicaNombre = "Obras",
-                organismoResponsableId = 5, organismoResponsableNombre = "Intendencia",
-                origenFinanciamientoId = 6, origenFinanciamientoNombre = "Rentas Generales",
                 documentoAdministrativoId = 7, documentoAdministrativoNumero = "123",
                 documentoAdministrativoAnio = 2026, documentoAdministrativoTipo = TipoDocumento.Expediente,
                 notas = Array.Empty<object>(),
@@ -207,14 +197,6 @@ public class TareaApiClientTests
         var tareas = await client.ListarAsync();
 
         var tarea = Assert.Single(tareas);
-        Assert.Equal(3, tarea.ZonaId);
-        Assert.Equal("Centro", tarea.Zona!.Nombre);
-        Assert.Equal(4, tarea.DimensionTematicaId);
-        Assert.Equal("Obras", tarea.DimensionTematica!.Nombre);
-        Assert.Equal(5, tarea.OrganismoResponsableId);
-        Assert.Equal("Intendencia", tarea.OrganismoResponsable!.Nombre);
-        Assert.Equal(6, tarea.OrigenFinanciamientoId);
-        Assert.Equal("Rentas Generales", tarea.OrigenFinanciamiento!.Nombre);
         Assert.Equal(7, tarea.DocumentoAdministrativoId);
         Assert.Equal("123", tarea.DocumentoAdministrativo!.Numero);
         // Fix (revisión final, Important 1): antes AEntidad solo rehidrataba Id/Numero -- Anio
@@ -231,12 +213,12 @@ public class TareaApiClientTests
         var fake = new FakeHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
         var client = new TareaApiClient(TestHttp.CrearCliente(fake));
 
-        await client.ReclasificarAsync(5, new DatosClasificacionTarea(1, null, null, null, null));
+        await client.ReclasificarAsync(5, new DatosClasificacionTarea(1, null));
 
         Assert.Equal(HttpMethod.Put, fake.UltimaRequest!.Method);
         Assert.Equal("/tareas/5/clasificacion", fake.UltimaRequest.RequestUri!.AbsolutePath);
-        Assert.Contains("\"zonaId\":1", fake.UltimoBody);
-        Assert.Contains("\"dimensionTematicaId\":null", fake.UltimoBody);
+        Assert.Contains("\"proyectoId\":1", fake.UltimoBody);
+        Assert.Contains("\"documentoAdministrativoId\":null", fake.UltimoBody);
     }
 
     [Fact]
@@ -246,7 +228,7 @@ public class TareaApiClientTests
         var client = new TareaApiClient(TestHttp.CrearCliente(fake));
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
-            () => client.ReclasificarAsync(5, new DatosClasificacionTarea(null, null, null, null, null)));
+            () => client.ReclasificarAsync(5, new DatosClasificacionTarea(null, null)));
     }
 
     [Fact]

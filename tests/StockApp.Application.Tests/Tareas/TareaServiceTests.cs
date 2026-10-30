@@ -14,8 +14,6 @@ public class TareaServiceTests
 {
     private static (TareaService Svc, Mock<ITareaRepository> Repo, Mock<IUsuarioRepository> Usuarios,
                      Mock<ICurrentSession> Session, Mock<IAuthorizationService> Auth, Mock<IAuditLogger> Audit,
-                     Mock<IZonaRepository> Zonas, Mock<IDimensionTematicaRepository> Dimensiones,
-                     Mock<IOrganismoResponsableRepository> Organismos, Mock<IOrigenFinanciamientoRepository> Origenes,
                      Mock<IDocumentoAdministrativoRepository> Documentos,
                      Mock<IProyectoRepository> Proyectos)
         Crear(RolUsuario rol = RolUsuario.Admin, int idSesion = 1, string nombreUsuario = "admin.test")
@@ -25,10 +23,6 @@ public class TareaServiceTests
         var session     = new Mock<ICurrentSession>();
         var auth        = new Mock<IAuthorizationService>();
         var audit       = new Mock<IAuditLogger>();
-        var zonas       = new Mock<IZonaRepository>();
-        var dimensiones = new Mock<IDimensionTematicaRepository>();
-        var organismos  = new Mock<IOrganismoResponsableRepository>();
-        var origenes    = new Mock<IOrigenFinanciamientoRepository>();
         var documentos  = new Mock<IDocumentoAdministrativoRepository>();
         var proyectos   = new Mock<IProyectoRepository>();
 
@@ -46,8 +40,8 @@ public class TareaServiceTests
 
         var svc = new TareaService(
             repo.Object, usuarios.Object, session.Object, auth.Object, audit.Object,
-            zonas.Object, dimensiones.Object, organismos.Object, origenes.Object, documentos.Object, proyectos.Object);
-        return (svc, repo, usuarios, session, auth, audit, zonas, dimensiones, organismos, origenes, documentos, proyectos);
+            documentos.Object, proyectos.Object);
+        return (svc, repo, usuarios, session, auth, audit, documentos, proyectos);
     }
 
     // ── CrearAsync ────────────────────────────────────────────────────────────
@@ -531,29 +525,14 @@ public class TareaServiceTests
         ctx.Audit.Verify(a => a.RegistrarAsync(1, AccionAuditada.CambioPrioridadTarea, "Tarea", 5, It.IsAny<string>()), Times.Once);
     }
 
-    // ── CrearAsync: validación de clasificadores (D12 del spec) ────────────────
+    // ── CrearAsync: validación del expediente (D12 del spec) ──────────────────
 
-    [Fact]
-    public async Task CrearAsync_ZonaInexistente_LanzaReglaDeNegocioSinTocarElRepo()
+    private static DocumentoAdministrativo UnExpediente(int id, string numero = "0001") => new()
     {
-        var ctx = Crear();
-        ctx.Zonas.Setup(z => z.ObtenerPorIdAsync(99)).ReturnsAsync((Zona?)null);
-
-        await Assert.ThrowsAsync<ReglaDeNegocioException>(
-            () => ctx.Svc.CrearAsync(new Tarea { Titulo = "x", ZonaId = 99 }));
-
-        ctx.Repo.Verify(r => r.AgregarAsync(It.IsAny<Tarea>()), Times.Never);
-    }
-
-    [Fact]
-    public async Task CrearAsync_ZonaInactiva_LanzaReglaDeNegocio()
-    {
-        var ctx = Crear();
-        ctx.Zonas.Setup(z => z.ObtenerPorIdAsync(5)).ReturnsAsync(new Zona { Id = 5, Nombre = "Centro", Activo = false });
-
-        await Assert.ThrowsAsync<ReglaDeNegocioException>(
-            () => ctx.Svc.CrearAsync(new Tarea { Titulo = "x", ZonaId = 5 }));
-    }
+        Id = id, Numero = numero, Anio = 2026, Tipo = TipoDocumento.Expediente,
+        Descripcion = "x", FechaEmision = DateTime.UtcNow, FechaRegistro = DateTime.UtcNow,
+        Estado = EstadoDocumento.EnProceso,
+    };
 
     [Fact]
     public async Task CrearAsync_DocumentoNoEsExpediente_LanzaReglaDeNegocio()
@@ -587,47 +566,31 @@ public class TareaServiceTests
     }
 
     [Fact]
-    public async Task CrearAsync_ClasificacionCompletaYValida_DelegaAlRepoConLosCincoIds()
+    public async Task CrearAsync_ClasificacionCompletaYValida_DelegaAlRepoConProyectoYExpediente()
     {
         var ctx = Crear();
-        ctx.Zonas.Setup(z => z.ObtenerPorIdAsync(1)).ReturnsAsync(new Zona { Id = 1, Nombre = "Centro", Activo = true });
-        ctx.Dimensiones.Setup(d => d.ObtenerPorIdAsync(2)).ReturnsAsync(new DimensionTematica { Id = 2, Nombre = "Tránsito", Activo = true });
-        ctx.Organismos.Setup(o => o.ObtenerPorIdAsync(3)).ReturnsAsync(new OrganismoResponsable { Id = 3, Nombre = "Intendencia", Activo = true });
-        ctx.Origenes.Setup(o => o.ObtenerPorIdAsync(4)).ReturnsAsync(new OrigenFinanciamiento { Id = 4, Nombre = "Presupuesto propio", Activo = true });
-        ctx.Documentos.Setup(d => d.ObtenerPorIdAsync(5)).ReturnsAsync(new DocumentoAdministrativo
-        {
-            Id = 5, Numero = "0001", Anio = 2026, Tipo = TipoDocumento.Expediente,
-            Descripcion = "x", FechaEmision = DateTime.UtcNow, FechaRegistro = DateTime.UtcNow,
-            Estado = EstadoDocumento.EnProceso,
-        });
+        ctx.Documentos.Setup(d => d.ObtenerPorIdAsync(5)).ReturnsAsync(UnExpediente(5));
+        ctx.Proyectos.Setup(p => p.ObtenerPorIdAsync(2)).ReturnsAsync(UnProyecto(2, EstadoProyecto.Pendiente));
         ctx.Repo.Setup(r => r.AgregarAsync(It.IsAny<Tarea>())).ReturnsAsync(10);
 
-        await ctx.Svc.CrearAsync(new Tarea
-        {
-            Titulo = "x", ZonaId = 1, DimensionTematicaId = 2, OrganismoResponsableId = 3,
-            OrigenFinanciamientoId = 4, DocumentoAdministrativoId = 5,
-        });
+        await ctx.Svc.CrearAsync(new Tarea { Titulo = "x", ProyectoId = 2, DocumentoAdministrativoId = 5 });
 
         ctx.Repo.Verify(r => r.AgregarAsync(It.Is<Tarea>(t =>
-            t.ZonaId == 1 && t.DimensionTematicaId == 2 && t.OrganismoResponsableId == 3
-            && t.OrigenFinanciamientoId == 4 && t.DocumentoAdministrativoId == 5)), Times.Once);
+            t.ProyectoId == 2 && t.DocumentoAdministrativoId == 5)), Times.Once);
     }
 
     [Fact]
-    public async Task CrearAsync_SinNingunClasificador_NoConsultaLosRepositoriosDeCatalogo()
+    public async Task CrearAsync_SinClasificacion_NoConsultaLosRepositorios()
     {
-        // Caso mayoritario (D7: los cinco son opcionales) — no debería pagar el costo de 5
-        // consultas de validación cuando el operador no clasificó nada.
+        // Caso mayoritario (D7: ambos son opcionales) — no debería pagar consultas de
+        // validación cuando el operador no clasificó nada.
         var ctx = Crear();
         ctx.Repo.Setup(r => r.AgregarAsync(It.IsAny<Tarea>())).ReturnsAsync(1);
 
         await ctx.Svc.CrearAsync(new Tarea { Titulo = "x" });
 
-        ctx.Zonas.Verify(z => z.ObtenerPorIdAsync(It.IsAny<int>()), Times.Never);
-        ctx.Dimensiones.Verify(d => d.ObtenerPorIdAsync(It.IsAny<int>()), Times.Never);
-        ctx.Organismos.Verify(o => o.ObtenerPorIdAsync(It.IsAny<int>()), Times.Never);
-        ctx.Origenes.Verify(o => o.ObtenerPorIdAsync(It.IsAny<int>()), Times.Never);
         ctx.Documentos.Verify(d => d.ObtenerPorIdAsync(It.IsAny<int>()), Times.Never);
+        ctx.Proyectos.Verify(p => p.ObtenerPorIdAsync(It.IsAny<int>()), Times.Never);
     }
 
     // ── ObtenerPorIdAsync (spec 2026-09-08 — corrección de contrato) ────────────
@@ -675,7 +638,7 @@ public class TareaServiceTests
             .Throws<UnauthorizedAccessException>();
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(
-            () => ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(null, null, null, null, null)));
+            () => ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(null, null)));
 
         ctx.Repo.Verify(r => r.ObtenerPorIdAsync(It.IsAny<int>()), Times.Never);
     }
@@ -687,23 +650,7 @@ public class TareaServiceTests
         ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync((Tarea?)null);
 
         await Assert.ThrowsAsync<EntidadNoEncontradaException>(
-            () => ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(null, null, null, null, null)));
-    }
-
-    [Fact]
-    public async Task ReclasificarAsync_ZonaInactiva_LanzaReglaDeNegocioSinTocarElRepo()
-    {
-        // D12: misma validación que CrearAsync — un Admin no puede colar un catálogo
-        // inactivo por la vía de la reclasificación.
-        var ctx = Crear(rol: RolUsuario.Admin);
-        var tarea = new Tarea { Id = 1, Titulo = "x", Estado = EstadoTarea.Pendiente };
-        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(tarea);
-        ctx.Zonas.Setup(z => z.ObtenerPorIdAsync(9)).ReturnsAsync(new Zona { Id = 9, Nombre = "Centro", Activo = false });
-
-        await Assert.ThrowsAsync<ReglaDeNegocioException>(
-            () => ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(9, null, null, null, null)));
-
-        ctx.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Tarea>()), Times.Never);
+            () => ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(null, null)));
     }
 
     [Fact]
@@ -720,7 +667,9 @@ public class TareaServiceTests
         });
 
         await Assert.ThrowsAsync<ReglaDeNegocioException>(
-            () => ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(null, null, null, null, 4)));
+            () => ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(null, 4)));
+
+        ctx.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Tarea>()), Times.Never);
     }
 
     [Fact]
@@ -730,13 +679,12 @@ public class TareaServiceTests
         var tarea = new Tarea
         {
             Id = 1, Titulo = "x", Estado = EstadoTarea.Pendiente,
-            ZonaId = 3, DimensionTematicaId = null, OrganismoResponsableId = null,
-            OrigenFinanciamientoId = null, DocumentoAdministrativoId = null,
+            DocumentoAdministrativoId = 3, DocumentoAdministrativo = UnExpediente(3),
         };
         ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(tarea);
-        ctx.Zonas.Setup(z => z.ObtenerPorIdAsync(3)).ReturnsAsync(new Zona { Id = 3, Nombre = "Centro", Activo = true });
+        ctx.Documentos.Setup(d => d.ObtenerPorIdAsync(3)).ReturnsAsync(UnExpediente(3));
 
-        await ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(3, null, null, null, null));
+        await ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(null, 3));
 
         Assert.Empty(tarea.Notas);
         ctx.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Tarea>()), Times.Never);
@@ -752,55 +700,54 @@ public class TareaServiceTests
         var ctx = Crear(rol: RolUsuario.Admin, idSesion: 1);
         var tarea = new Tarea { Id = 1, Titulo = "x", Estado = EstadoTarea.Terminada };
         ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(tarea);
-        ctx.Zonas.Setup(z => z.ObtenerPorIdAsync(3)).ReturnsAsync(new Zona { Id = 3, Nombre = "Centro", Activo = true });
+        ctx.Documentos.Setup(d => d.ObtenerPorIdAsync(3)).ReturnsAsync(UnExpediente(3));
 
-        await ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(3, null, null, null, null));
+        await ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(null, 3));
 
         Assert.Equal(EstadoTarea.Terminada, tarea.Estado);
-        Assert.Equal(3, tarea.ZonaId);
+        Assert.Equal(3, tarea.DocumentoAdministrativoId);
     }
 
     [Fact]
-    public async Task ReclasificarAsync_CambiaZonaYDimension_GeneraNotaAutomaticaConElDiffLegible()
+    public async Task ReclasificarAsync_CambiaExpedienteYProyecto_GeneraNotaAutomaticaConElDiffLegible()
     {
         var ctx = Crear(rol: RolUsuario.Admin, idSesion: 1);
         var tarea = new Tarea
         {
             Id = 1, Titulo = "x", Estado = EstadoTarea.Pendiente,
-            ZonaId = null, DimensionTematicaId = 8,
-            DimensionTematica = new DimensionTematica { Id = 8, Nombre = "Tránsito", Activo = true },
+            ProyectoId = 8, Proyecto = new Proyecto { Id = 8, Titulo = "Bacheo" },
         };
         ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(tarea);
-        ctx.Zonas.Setup(z => z.ObtenerPorIdAsync(3)).ReturnsAsync(new Zona { Id = 3, Nombre = "Centro", Activo = true });
-        ctx.Dimensiones.Setup(d => d.ObtenerPorIdAsync(6)).ReturnsAsync(new DimensionTematica { Id = 6, Nombre = "Infraestructura", Activo = true });
+        ctx.Documentos.Setup(d => d.ObtenerPorIdAsync(3)).ReturnsAsync(UnExpediente(3, "0099"));
+        ctx.Proyectos.Setup(p => p.ObtenerPorIdAsync(6)).ReturnsAsync(UnProyecto(6, EstadoProyecto.EnCurso));
 
-        await ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(3, 6, null, null, null));
+        await ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(6, 3));
 
         var nota = Assert.Single(tarea.Notas);
         Assert.True(nota.EsAutomatica);
         Assert.Equal(
-            "admin reclasificó — Zona: (sin asignar) → Centro; Dimensión: Tránsito → Infraestructura",
+            "admin reclasificó — Expediente: (sin asignar) → 0099/2026; Proyecto: Bacheo → Plaza",
             nota.Texto);
         ctx.Repo.Verify(r => r.ActualizarAsync(tarea), Times.Once);
     }
 
     [Fact]
-    public async Task ReclasificarAsync_DesasignaUnClasificadorExistente_QuedaEnNullYSeRegistra()
+    public async Task ReclasificarAsync_DesasignaElExpediente_QuedaEnNullYSeRegistra()
     {
         // D21: null es una desasignación explícita, no "no tocar".
         var ctx = Crear(rol: RolUsuario.Admin, idSesion: 1);
         var tarea = new Tarea
         {
             Id = 1, Titulo = "x", Estado = EstadoTarea.Pendiente,
-            ZonaId = 3, Zona = new Zona { Id = 3, Nombre = "Centro", Activo = true },
+            DocumentoAdministrativoId = 3, DocumentoAdministrativo = UnExpediente(3, "0099"),
         };
         ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(tarea);
 
-        await ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(null, null, null, null, null));
+        await ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(null, null));
 
-        Assert.Null(tarea.ZonaId);
+        Assert.Null(tarea.DocumentoAdministrativoId);
         var nota = Assert.Single(tarea.Notas);
-        Assert.Equal("admin reclasificó — Zona: Centro → (sin asignar)", nota.Texto);
+        Assert.Equal("admin reclasificó — Expediente: 0099/2026 → (sin asignar)", nota.Texto);
     }
 
     [Fact]
@@ -809,13 +756,13 @@ public class TareaServiceTests
         var ctx = Crear(rol: RolUsuario.Admin, idSesion: 1);
         var tarea = new Tarea { Id = 5, Titulo = "x", Estado = EstadoTarea.Pendiente };
         ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(tarea);
-        ctx.Zonas.Setup(z => z.ObtenerPorIdAsync(1)).ReturnsAsync(new Zona { Id = 1, Nombre = "Centro", Activo = true });
+        ctx.Documentos.Setup(d => d.ObtenerPorIdAsync(1)).ReturnsAsync(UnExpediente(1, "0099"));
 
-        await ctx.Svc.ReclasificarAsync(5, new DatosClasificacionTarea(1, null, null, null, null));
+        await ctx.Svc.ReclasificarAsync(5, new DatosClasificacionTarea(null, 1));
 
         ctx.Audit.Verify(a => a.RegistrarAsync(
             1, AccionAuditada.ReclasificacionTarea, "Tarea", 5,
-            "Zona: (sin asignar) → Centro"),
+            "Expediente: (sin asignar) → 0099/2026"),
             Times.Once);
     }
 
@@ -889,15 +836,15 @@ public class TareaServiceTests
     public async Task ReclasificarAsync_MismoProyectoCerrado_Permitido()
     {
         var ctx = Crear(rol: RolUsuario.Admin);
-        var tarea = new Tarea { Id = 1, Titulo = "x", Estado = EstadoTarea.Pendiente, ProyectoId = 5, ZonaId = null };
+        var tarea = new Tarea { Id = 1, Titulo = "x", Estado = EstadoTarea.Pendiente, ProyectoId = 5 };
         ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(tarea);
         ctx.Proyectos.Setup(p => p.ObtenerPorIdAsync(5)).ReturnsAsync(UnProyecto(5, EstadoProyecto.Cancelado));
-        ctx.Zonas.Setup(z => z.ObtenerPorIdAsync(3)).ReturnsAsync(new Zona { Id = 3, Nombre = "Centro", Activo = true });
+        ctx.Documentos.Setup(d => d.ObtenerPorIdAsync(3)).ReturnsAsync(UnExpediente(3));
 
-        await ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(3, null, null, null, null, 5));
+        await ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(5, 3));
 
         Assert.Equal(5, tarea.ProyectoId);
-        Assert.Equal(3, tarea.ZonaId);
+        Assert.Equal(3, tarea.DocumentoAdministrativoId);
         ctx.Repo.Verify(r => r.ActualizarAsync(tarea), Times.Once);
     }
 
@@ -909,7 +856,7 @@ public class TareaServiceTests
                             Proyecto = UnProyecto(5, EstadoProyecto.EnCurso) };
         ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(tarea);
 
-        await ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(null, null, null, null, null, null));
+        await ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(null, null));
 
         Assert.Null(tarea.ProyectoId);
         ctx.Audit.Verify(a => a.RegistrarAsync(
@@ -940,7 +887,7 @@ public class TareaServiceTests
         ctx.Proyectos.Setup(p => p.ObtenerPorIdAsync(5)).ReturnsAsync(UnProyecto(5, EstadoProyecto.Terminado));
 
         var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
-            () => ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(null, null, null, null, null, 5)));
+            () => ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(5, null)));
 
         Assert.Equal("Solo se pueden vincular proyectos pendientes o en curso.", ex.Message);
         ctx.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Tarea>()), Times.Never);
@@ -955,7 +902,7 @@ public class TareaServiceTests
         ctx.Proyectos.Setup(p => p.ObtenerPorIdAsync(9)).ReturnsAsync((Proyecto?)null);
 
         var ex = await Assert.ThrowsAsync<EntidadNoEncontradaException>(
-            () => ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(null, null, null, null, null, 9)));
+            () => ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(9, null)));
 
         Assert.Equal("Proyecto 9 no encontrado.", ex.Message);
         ctx.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Tarea>()), Times.Never);

@@ -332,12 +332,12 @@ public class TareasEndpointTests : ApiTestBase
     }
 
     [Fact]
-    public async Task PostTareas_ConZonaInexistente_Devuelve409()
+    public async Task PostTareas_ConExpedienteInexistente_Devuelve409()
     {
         await SeedUsuariosAsync();
         var client = ClienteAutenticado(TokenOperador());
 
-        var json = """{"titulo":"x","zonaId":9999}""";
+        var json = """{"titulo":"x","documentoAdministrativoId":9999}""";
         var response = await client.PostAsync("/tareas",
             new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
 
@@ -354,7 +354,7 @@ public class TareasEndpointTests : ApiTestBase
 
         var response = await clienteOperador.PutAsJsonAsync(
             $"/tareas/{id}/clasificacion",
-            new ClasificarTareaRequest(null, null, null, null, null));
+            new ClasificarTareaRequest(null, null));
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
@@ -368,7 +368,7 @@ public class TareasEndpointTests : ApiTestBase
 
         var response = await client.PutAsJsonAsync(
             $"/tareas/{id}/clasificacion",
-            new ClasificarTareaRequest(null, null, null, null, null));
+            new ClasificarTareaRequest(null, null));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
@@ -378,10 +378,9 @@ public class TareasEndpointTests : ApiTestBase
     {
         // D9 del spec: la reclasificación alcanza también a tareas terminales — a
         // diferencia de PostPrioridad_TareaTerminada_Devuelve409 (Task existente), acá NO
-        // debe dar 409. Este test manda los 5 campos en null: solo verifica que el 200 no
-        // mueva el Estado de la tarea. El round-trip real de los valores de clasificación
-        // (que los nombres viajen completos por HTTP) está en
-        // GetTarea_ConClasificacionCompleta_DevuelveLosCincoNombres.
+        // debe dar 409. Este test manda los campos en null: solo verifica que el 200 no
+        // mueva el Estado de la tarea. El round-trip real del expediente está en
+        // GetTarea_ConExpediente_DevuelveNumeroAnioYTipo.
         await SeedUsuariosAsync();
         var client = ClienteAutenticado(TokenAdmin());
         var id = await CrearTareaAsync(client);
@@ -390,7 +389,7 @@ public class TareasEndpointTests : ApiTestBase
 
         var response = await client.PutAsJsonAsync(
             $"/tareas/{id}/clasificacion",
-            new ClasificarTareaRequest(null, null, null, null, null));
+            new ClasificarTareaRequest(null, null));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -413,24 +412,11 @@ public class TareasEndpointTests : ApiTestBase
         Assert.Empty(tareas!);
     }
 
-    /// <summary>Siembra los 5 catálogos de clasificación (mismo criterio que
-    /// DocumentosEndpointTests.SembrarDocumentoAsync para DocumentoAdministrativo: seed
-    /// directo por EF, sin pasar por sus propios endpoints de alta, que son ortogonales a
-    /// esta tarea) y devuelve sus ids.</summary>
-    private async Task<(int ZonaId, int DimensionTematicaId, int OrganismoResponsableId,
-        int OrigenFinanciamientoId, int DocumentoAdministrativoId)> SembrarClasificadoresAsync()
+    /// <summary>Siembra un expediente (mismo criterio que DocumentosEndpointTests.SembrarDocumentoAsync:
+    /// seed directo por EF, sin pasar por sus propios endpoints de alta) y devuelve su id.</summary>
+    private async Task<int> SembrarExpedienteAsync()
     {
         await using var ctx = Factory.CrearContexto();
-
-        var zona = new Zona { Nombre = "Centro", Activo = true };
-        var dimension = new DimensionTematica { Nombre = "Obras", Activo = true };
-        var organismo = new OrganismoResponsable { Nombre = "Intendencia", Activo = true };
-        var origen = new OrigenFinanciamiento { Nombre = "Rentas Generales", Activo = true };
-        ctx.Zonas.Add(zona);
-        ctx.DimensionesTematicas.Add(dimension);
-        ctx.OrganismosResponsables.Add(organismo);
-        ctx.OrigenesFinanciamiento.Add(origen);
-        await ctx.SaveChangesAsync();
 
         var registrante = await DatosDePrueba.SeedUsuarioAsync(
             ctx, $"registrante.{Guid.NewGuid():N}", "Secreta123!", RolUsuario.Admin);
@@ -448,40 +434,29 @@ public class TareasEndpointTests : ApiTestBase
         ctx.DocumentosAdministrativos.Add(documento);
         await ctx.SaveChangesAsync();
 
-        return (zona.Id, dimension.Id, organismo.Id, origen.Id, documento.Id);
+        return documento.Id;
     }
 
     [Fact]
-    public async Task GetTarea_ConClasificacionCompleta_DevuelveLosCincoNombres()
+    public async Task GetTarea_ConExpediente_DevuelveNumeroAnioYTipo()
     {
-        // Hallazgo de review (Task 6): ADto llenaba los 5 pares id/nombre pero ningún test
-        // hacía el camino completo por HTTP (crear con clasificación real, leer, verificar
-        // los nombres) — solo se había confirmado por lectura de código. Este test cierra
-        // ese gap: si el mapper se olvida un campo, alguno de los 5 Asserts de abajo queda
-        // en null y el test se pone rojo.
+        // Camino completo por HTTP (reclasificar con un expediente real, leer, verificar):
+        // si el mapper se olvida un campo, alguno de los Asserts de abajo queda en null.
         await SeedUsuariosAsync();
         var client = ClienteAutenticado(TokenAdmin());
-        var (zonaId, dimensionId, organismoId, origenId, documentoId) = await SembrarClasificadoresAsync();
+        var documentoId = await SembrarExpedienteAsync();
         var id = await CrearTareaAsync(client);
 
         var put = await client.PutAsJsonAsync(
             $"/tareas/{id}/clasificacion",
-            new ClasificarTareaRequest(zonaId, dimensionId, organismoId, origenId, documentoId));
+            new ClasificarTareaRequest(null, documentoId));
         Assert.Equal(HttpStatusCode.OK, put.StatusCode);
 
         var response = await client.GetAsync($"/tareas/{id}");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var tarea = await response.Content.ReadFromJsonAsync<TareaDto>();
-        Assert.Equal(zonaId, tarea!.ZonaId);
-        Assert.Equal("Centro", tarea.ZonaNombre);
-        Assert.Equal(dimensionId, tarea.DimensionTematicaId);
-        Assert.Equal("Obras", tarea.DimensionTematicaNombre);
-        Assert.Equal(organismoId, tarea.OrganismoResponsableId);
-        Assert.Equal("Intendencia", tarea.OrganismoResponsableNombre);
-        Assert.Equal(origenId, tarea.OrigenFinanciamientoId);
-        Assert.Equal("Rentas Generales", tarea.OrigenFinanciamientoNombre);
-        Assert.Equal(documentoId, tarea.DocumentoAdministrativoId);
+        Assert.Equal(documentoId, tarea!.DocumentoAdministrativoId);
         Assert.Equal("0099", tarea.DocumentoAdministrativoNumero);
         // Fix (revisión final, Important 1): (Tipo, Anio, Numero) es el índice único real de
         // DocumentoAdministrativo, pero ADto solo mandaba Numero -- Anio se perdía en el camino
@@ -490,6 +465,22 @@ public class TareasEndpointTests : ApiTestBase
         // TareasEndpoints.ADto, estos dos Asserts se ponen rojo (Anio=null, Tipo=null).
         Assert.Equal(2026, tarea.DocumentoAdministrativoAnio);
         Assert.Equal(TipoDocumento.Expediente, tarea.DocumentoAdministrativoTipo);
+    }
+
+    [Fact]
+    public async Task GetTarea_NoExponeLosClasificadoresQuitados()
+    {
+        // Spec 2026-10-30: zona, dimensión, organismo y origen pasaron al Proyecto.
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+        var id = await CrearTareaAsync(client);
+
+        var json = await client.GetStringAsync($"/tareas/{id}");
+
+        Assert.DoesNotContain("zona", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("dimension", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("organismo", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("origen", json, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

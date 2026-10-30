@@ -1,6 +1,6 @@
 using Moq;
-using StockApp.Application.Catalogo;
 using StockApp.Application.Documentos;
+using StockApp.Application.Proyectos;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Tareas;
 using Xunit;
@@ -13,9 +13,7 @@ public class ReclasificarTareaDialogViewModelTests
     public void Constructor_ExponeElPanelRecibido()
     {
         var panel = new ClasificacionTareaPanelViewModel(
-            Mock.Of<IZonaService>(), Mock.Of<IDimensionTematicaService>(),
-            Mock.Of<IOrganismoResponsableService>(), Mock.Of<IOrigenFinanciamientoService>(),
-            Mock.Of<IDocumentoAdministrativoService>(), Mock.Of<IConfirmacionService>());
+            Mock.Of<IProyectoService>(), Mock.Of<IDocumentoAdministrativoService>(), Mock.Of<IConfirmacionService>());
 
         var vm = new ReclasificarTareaDialogViewModel(panel);
 

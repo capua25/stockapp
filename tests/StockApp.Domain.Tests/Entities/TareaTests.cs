@@ -187,23 +187,16 @@ public class TareaTests
         Assert.Equal(origen, tarea.Estado);
     }
 
-    // ── Clasificadores (spec 2026-09-08): puramente aditivo, sin efecto en la máquina de
-    // estados ni en CambiarPrioridad — estos tests solo custodian que la migración de datos
-    // sea coherente con el dominio (los cinco campos nacen null, D7).
+    // ── Clasificación (spec 2026-09-08 y 2026-10-30): proyecto y expediente, sin efecto en la
+    // máquina de estados ni en CambiarPrioridad (los dos campos nacen null, D7).
 
     [Fact]
-    public void NuevaTarea_LosCincoClasificadoresNacenNulos()
+    public void NuevaTarea_ProyectoYExpedienteNacenNulos()
     {
         var tarea = NuevaTarea();
 
-        Assert.Null(tarea.ZonaId);
-        Assert.Null(tarea.Zona);
-        Assert.Null(tarea.DimensionTematicaId);
-        Assert.Null(tarea.DimensionTematica);
-        Assert.Null(tarea.OrganismoResponsableId);
-        Assert.Null(tarea.OrganismoResponsable);
-        Assert.Null(tarea.OrigenFinanciamientoId);
-        Assert.Null(tarea.OrigenFinanciamiento);
+        Assert.Null(tarea.ProyectoId);
+        Assert.Null(tarea.Proyecto);
         Assert.Null(tarea.DocumentoAdministrativoId);
         Assert.Null(tarea.DocumentoAdministrativo);
     }
@@ -215,12 +208,12 @@ public class TareaTests
         // este test prueba la mitad "estado no toca clasificación" (la otra mitad,
         // "reclasificar no toca estado", vive en TareaServiceTests, Task 5).
         var tarea = NuevaTarea(EstadoTarea.Pendiente);
-        tarea.ZonaId = 3;
-        tarea.OrigenFinanciamientoId = 7;
+        tarea.ProyectoId = 3;
+        tarea.DocumentoAdministrativoId = 7;
 
         tarea.CambiarEstado(EstadoTarea.EnCurso);
 
-        Assert.Equal(3, tarea.ZonaId);
-        Assert.Equal(7, tarea.OrigenFinanciamientoId);
+        Assert.Equal(3, tarea.ProyectoId);
+        Assert.Equal(7, tarea.DocumentoAdministrativoId);
     }
 }

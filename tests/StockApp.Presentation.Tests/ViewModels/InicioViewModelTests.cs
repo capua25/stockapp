@@ -4,6 +4,7 @@ using StockApp.Application.Authorization;
 using StockApp.Application.Backups;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Documentos;
+using StockApp.Application.Proyectos;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Tareas;
@@ -601,9 +602,7 @@ public class InicioViewModelTests
         var tareaServiceMock = new Mock<ITareaService>();
         var confirmMock = new Mock<IConfirmacionService>();
         var panelClasificacion = new ClasificacionTareaPanelViewModel(
-            Mock.Of<IZonaService>(), Mock.Of<IDimensionTematicaService>(),
-            Mock.Of<IOrganismoResponsableService>(), Mock.Of<IOrigenFinanciamientoService>(),
-            Mock.Of<IDocumentoAdministrativoService>(), confirmMock.Object);
+            Mock.Of<IProyectoService>(), Mock.Of<IDocumentoAdministrativoService>(), confirmMock.Object);
         var formVm = new TareaFormViewModel(
             tareaServiceMock.Object, sessionMock.Object, navMock.Object, confirmMock.Object,
             panelClasificacion, Mock.Of<IClasificacionTareaDialogService>());

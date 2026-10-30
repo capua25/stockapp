@@ -176,11 +176,11 @@
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="CLASIFICACIÓN" Width="Auto" SortMemberPath="EtiquetasClasificacion" b:ColumnaAuto.Medir="True">
+                        <DataGridTemplateColumn Header="PROYECTO" Width="Auto" SortMemberPath="ProyectoTitulo" b:ColumnaAuto.Medir="True">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate x:DataType="vm:TareaFila">
-                                    <TextBlock Text="{Binding EtiquetasClasificacion}" Classes.inactivo="{Binding Tarea.Estado, Converter={x:Static conv:EstadoTareaConverter.Inactivo}}"
-                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding EtiquetasClasificacion}"
+                                    <TextBlock Text="{Binding ProyectoTitulo}" Classes.inactivo="{Binding Tarea.Estado, Converter={x:Static conv:EstadoTareaConverter.Inactivo}}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ProyectoTitulo}"
                                                b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>

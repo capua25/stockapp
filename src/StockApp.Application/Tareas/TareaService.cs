@@ -21,21 +21,15 @@ public class TareaService : ITareaService
     private readonly IAuthorizationService _auth;
     private readonly IAuditLogger          _audit;
 
-    // Clasificadores (spec 2026-09-08, D12): repositorios, NO servicios — validar
-    // existencia/actividad acá no debe exigir catalogo.maestras (el permiso de ABM de
-    // catálogos), que es completamente ajeno a tareas.gestionar/tareas.administrar.
-    private readonly IZonaRepository                 _zonas;
-    private readonly IDimensionTematicaRepository    _dimensiones;
-    private readonly IOrganismoResponsableRepository _organismos;
-    private readonly IOrigenFinanciamientoRepository _origenes;
+    // Clasificación (spec 2026-09-08, D12): repositorios, NO servicios — validar el expediente
+    // y el proyecto acá no debe exigir documentos.gestionar ni proyectos.ver, ajenos a
+    // tareas.gestionar/tareas.administrar.
     private readonly IDocumentoAdministrativoRepository _documentos;
     private readonly IProyectoRepository             _proyectos;
 
     public TareaService(
         ITareaRepository repo, IUsuarioRepository usuarios, ICurrentSession session,
         IAuthorizationService auth, IAuditLogger audit,
-        IZonaRepository zonas, IDimensionTematicaRepository dimensiones,
-        IOrganismoResponsableRepository organismos, IOrigenFinanciamientoRepository origenes,
         IDocumentoAdministrativoRepository documentos, IProyectoRepository proyectos)
     {
         _repo        = repo;
@@ -43,10 +37,6 @@ public class TareaService : ITareaService
         _session     = session;
         _auth        = auth;
         _audit       = audit;
-        _zonas       = zonas;
-        _dimensiones = dimensiones;
-        _organismos  = organismos;
-        _origenes    = origenes;
         _documentos  = documentos;
         _proyectos   = proyectos;
     }
@@ -58,11 +48,8 @@ public class TareaService : ITareaService
         if (string.IsNullOrWhiteSpace(tarea.Titulo))
             throw new ArgumentException("El título de la tarea es obligatorio.", nameof(tarea.Titulo));
 
-        // D12 del spec: misma validación de clasificadores que ReclasificarAsync (Task 5) —
-        // no hay atajo por la vía del alta.
-        await ValidarClasificacionAsync(
-            tarea.ZonaId, tarea.DimensionTematicaId, tarea.OrganismoResponsableId,
-            tarea.OrigenFinanciamientoId, tarea.DocumentoAdministrativoId);
+        // D12 del spec: misma validación que ReclasificarAsync — no hay atajo por la vía del alta.
+        await ValidarExpedienteAsync(tarea.DocumentoAdministrativoId);
         await ValidarProyectoAsync(tarea.ProyectoId);
 
         // Decisión 8 del spec: la prioridad nace SIEMPRE en Media, incluso si el llamador
@@ -87,68 +74,25 @@ public class TareaService : ITareaService
     }
 
     /// <summary>
-    /// Validación compartida de los cinco clasificadores (spec 2026-09-08, D12): cada
-    /// catálogo asignado debe existir y estar activo, y el documento debe ser de tipo
-    /// Expediente y estar activo (EsActivo). La reutilizan CrearAsync y ReclasificarAsync
-    /// (Task 5) SIN atajos — un Admin no puede colar un Oficio ni un catálogo inactivo por
-    /// la vía de la reclasificación. Los cinco ids nulos (caso mayoritario, D7) no disparan
-    /// ninguna consulta.
+    /// Validación compartida del expediente (spec 2026-09-08, D12): debe existir, ser de tipo
+    /// Expediente y estar activo (EsActivo). La reutilizan CrearAsync y ReclasificarAsync SIN
+    /// atajos — un Admin no puede colar un Oficio por la vía de la reclasificación. Un id nulo
+    /// no dispara ninguna consulta.
     /// </summary>
-    private async Task<(Zona? Zona, DimensionTematica? Dimension, OrganismoResponsable? Organismo,
-                         OrigenFinanciamiento? Origen, DocumentoAdministrativo? Documento)>
-        ValidarClasificacionAsync(
-            int? zonaId, int? dimensionId, int? organismoId, int? origenId, int? documentoId)
+    private async Task<DocumentoAdministrativo?> ValidarExpedienteAsync(int? documentoId)
     {
-        Zona? zona = null;
-        if (zonaId is int zid)
-        {
-            zona = await _zonas.ObtenerPorIdAsync(zid)
-                ?? throw new ReglaDeNegocioException($"La zona {zid} no existe.");
-            if (!zona.Activo)
-                throw new ReglaDeNegocioException($"La zona '{zona.Nombre}' está inactiva.");
-        }
+        if (documentoId is not int docid)
+            return null;
 
-        DimensionTematica? dimension = null;
-        if (dimensionId is int did)
-        {
-            dimension = await _dimensiones.ObtenerPorIdAsync(did)
-                ?? throw new ReglaDeNegocioException($"La dimensión temática {did} no existe.");
-            if (!dimension.Activo)
-                throw new ReglaDeNegocioException($"La dimensión temática '{dimension.Nombre}' está inactiva.");
-        }
-
-        OrganismoResponsable? organismo = null;
-        if (organismoId is int oid)
-        {
-            organismo = await _organismos.ObtenerPorIdAsync(oid)
-                ?? throw new ReglaDeNegocioException($"El organismo responsable {oid} no existe.");
-            if (!organismo.Activo)
-                throw new ReglaDeNegocioException($"El organismo responsable '{organismo.Nombre}' está inactivo.");
-        }
-
-        OrigenFinanciamiento? origen = null;
-        if (origenId is int fid)
-        {
-            origen = await _origenes.ObtenerPorIdAsync(fid)
-                ?? throw new ReglaDeNegocioException($"El origen de financiamiento {fid} no existe.");
-            if (!origen.Activo)
-                throw new ReglaDeNegocioException($"El origen de financiamiento '{origen.Nombre}' está inactivo.");
-        }
-
-        DocumentoAdministrativo? documento = null;
-        if (documentoId is int docid)
-        {
-            documento = await _documentos.ObtenerPorIdAsync(docid)
-                ?? throw new ReglaDeNegocioException($"El documento {docid} no existe.");
-            if (documento.Tipo != TipoDocumento.Expediente)
-                throw new ReglaDeNegocioException(
-                    $"El documento {docid} no es un expediente (es {documento.Tipo}).");
-            if (!documento.EsActivo)
-                throw new ReglaDeNegocioException(
-                    $"El expediente {documento.Numero}/{documento.Anio} no está activo.");
-        }
-
-        return (zona, dimension, organismo, origen, documento);
+        var documento = await _documentos.ObtenerPorIdAsync(docid)
+            ?? throw new ReglaDeNegocioException($"El documento {docid} no existe.");
+        if (documento.Tipo != TipoDocumento.Expediente)
+            throw new ReglaDeNegocioException(
+                $"El documento {docid} no es un expediente (es {documento.Tipo}).");
+        if (!documento.EsActivo)
+            throw new ReglaDeNegocioException(
+                $"El expediente {documento.Numero}/{documento.Anio} no está activo.");
+        return documento;
     }
 
     /// <summary>
@@ -361,17 +305,11 @@ public class TareaService : ITareaService
             ?? throw new EntidadNoEncontradaException($"Tarea {tareaId} no encontrada.");
 
         // D12: misma validación que CrearAsync, sin atajos.
-        var (zona, dimension, organismo, origen, documento) = await ValidarClasificacionAsync(
-            datos.ZonaId, datos.DimensionTematicaId, datos.OrganismoResponsableId,
-            datos.OrigenFinanciamientoId, datos.DocumentoAdministrativoId);
+        var documento = await ValidarExpedienteAsync(datos.DocumentoAdministrativoId);
         var proyectoCambia = datos.ProyectoId != tarea.ProyectoId;
         var proyecto = proyectoCambia ? await ValidarProyectoAsync(datos.ProyectoId) : tarea.Proyecto;
 
         var huboCambios =
-            tarea.ZonaId != datos.ZonaId ||
-            tarea.DimensionTematicaId != datos.DimensionTematicaId ||
-            tarea.OrganismoResponsableId != datos.OrganismoResponsableId ||
-            tarea.OrigenFinanciamientoId != datos.OrigenFinanciamientoId ||
             tarea.DocumentoAdministrativoId != datos.DocumentoAdministrativoId ||
             tarea.ProyectoId != datos.ProyectoId;
 
@@ -381,13 +319,9 @@ public class TareaService : ITareaService
         if (!huboCambios)
             return;
 
-        var diff = ConstruirDiffClasificacion(tarea, zona, dimension, organismo, origen, documento, proyecto);
+        var diff = ConstruirDiffClasificacion(tarea, documento, proyecto);
 
         // D9: reclasificar NO toca Estado — alcanza también tareas Terminada/Cancelada.
-        tarea.ZonaId = datos.ZonaId;
-        tarea.DimensionTematicaId = datos.DimensionTematicaId;
-        tarea.OrganismoResponsableId = datos.OrganismoResponsableId;
-        tarea.OrigenFinanciamientoId = datos.OrigenFinanciamientoId;
         tarea.DocumentoAdministrativoId = datos.DocumentoAdministrativoId;
         tarea.ProyectoId = datos.ProyectoId;
         if (proyectoCambia)
@@ -410,16 +344,13 @@ public class TareaService : ITareaService
     }
 
     /// <summary>
-    /// Diff legible de la reclasificación (D10 del spec), ej.: "Zona: (sin asignar) →
-    /// Centro; Dimensión: Tránsito → Infraestructura". Solo incluye los campos que
-    /// efectivamente cambiaron — <see cref="ReclasificarAsync"/> ya filtró el caso "sin
-    /// cambios" antes de llamar acá, pero un cambio parcial (ej. solo Zona) no debe listar
-    /// los otros cuatro campos sin cambiar.
+    /// Diff legible de la reclasificación (D10 del spec), ej.: "Expediente: (sin asignar) →
+    /// 0099/2026; Proyecto: Bacheo → Plaza". Solo incluye los campos que efectivamente
+    /// cambiaron — <see cref="ReclasificarAsync"/> ya filtró el caso "sin cambios" antes de
+    /// llamar acá, pero un cambio parcial (ej. solo el proyecto) no debe listar el otro campo.
     /// </summary>
     private static string ConstruirDiffClasificacion(
-        Tarea tarea, Zona? nuevaZona, DimensionTematica? nuevaDimension,
-        OrganismoResponsable? nuevoOrganismo, OrigenFinanciamiento? nuevoOrigen,
-        DocumentoAdministrativo? nuevoDocumento, Proyecto? nuevoProyecto)
+        Tarea tarea, DocumentoAdministrativo? nuevoDocumento, Proyecto? nuevoProyecto)
     {
         var partes = new List<string>();
 
@@ -431,10 +362,6 @@ public class TareaService : ITareaService
                 partes.Add($"{etiqueta}: {anteriorTexto} → {nuevoTexto}");
         }
 
-        AgregarSiCambio("Zona", tarea.Zona?.Nombre, nuevaZona?.Nombre);
-        AgregarSiCambio("Dimensión", tarea.DimensionTematica?.Nombre, nuevaDimension?.Nombre);
-        AgregarSiCambio("Organismo", tarea.OrganismoResponsable?.Nombre, nuevoOrganismo?.Nombre);
-        AgregarSiCambio("Origen de financiamiento", tarea.OrigenFinanciamiento?.Nombre, nuevoOrigen?.Nombre);
         AgregarSiCambio(
             "Expediente",
             tarea.DocumentoAdministrativo is null ? null : $"{tarea.DocumentoAdministrativo.Numero}/{tarea.DocumentoAdministrativo.Anio}",

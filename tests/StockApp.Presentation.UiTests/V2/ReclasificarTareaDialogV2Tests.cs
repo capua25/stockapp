@@ -8,8 +8,9 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using StockApp.Application.Proyectos;
 using StockApp.Application.Tareas;
-using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Presentation.ViewModels.Tareas;
 using StockApp.Presentation.Views.Tareas;
 using Xunit;
@@ -21,15 +22,15 @@ namespace StockApp.Presentation.UiTests.V2;
 /// largo elegido.</summary>
 public class ReclasificarTareaDialogV2Tests
 {
-    private static readonly Zona Centro = new() { Id = 1, Nombre = "Centro", Activo = true };
-    private static readonly Zona Costa = new() { Id = 2, Nombre = "Costa", Activo = true };
+    private static readonly OpcionProyectoDto Plaza = new(1, "Plaza de deportes", EstadoProyecto.EnCurso);
+    private static readonly OpcionProyectoDto Rambla = new(2, "Rambla", EstadoProyecto.Pendiente);
 
     private static async Task<(ReclasificarTareaDialog Dialogo, ReclasificarTareaDialogViewModel Vm, Task<DatosClasificacionTarea?> Resultado)> Abrir(
-        DatosClasificacionTarea? actual = null)
+        DatosClasificacionTarea? actual = null, string? tituloProyectoActual = null)
     {
-        var panel = new ClasificacionTareaPanelViewModel(new ZonaServiceFake([Centro, Costa]), new DimensionTematicaServiceFake(),
-            new OrganismoResponsableServiceFake(), new OrigenFinanciamientoServiceFake(), new DocumentosFake(), new ConfirmacionServiceFake());
-        await panel.InicializarAsync(actual ?? new DatosClasificacionTarea(1, null, null, null, null));
+        var panel = new ClasificacionTareaPanelViewModel(new ProyectoOpcionesFake([Plaza, Rambla]), new DocumentosFake(),
+            new ConfirmacionServiceFake());
+        await panel.InicializarAsync(actual ?? new DatosClasificacionTarea(1, null), tituloProyectoActual);
         var vm = new ReclasificarTareaDialogViewModel(panel);
         var dueno = new Window();
         dueno.Show();
@@ -60,7 +61,7 @@ public class ReclasificarTareaDialogV2Tests
     public async Task Escape_CierraYDevuelveNull()
     {
         var (dialogo, vm, resultado) = await Abrir();
-        vm.Panel.ZonaSeleccionada = vm.Panel.ZonasDisponibles.Last();
+        vm.Panel.ProyectoSeleccionado = vm.Panel.ProyectosDisponibles.Last();
 
         dialogo.KeyPress(Key.Escape, RawInputModifiers.None, PhysicalKey.Escape, null);
         Dispatcher.UIThread.RunJobs();
@@ -72,8 +73,8 @@ public class ReclasificarTareaDialogV2Tests
     [AvaloniaFact]
     public async Task Enter_EnElDialogo_ConfirmaConLosDatosDelPanel()
     {
-        var (dialogo, vm, resultado) = await Abrir(new DatosClasificacionTarea(1, null, null, null, null));
-        vm.Panel.ZonaSeleccionada = vm.Panel.ZonasDisponibles.Single(z => z.Id == 2);
+        var (dialogo, vm, resultado) = await Abrir(new DatosClasificacionTarea(1, null));
+        vm.Panel.ProyectoSeleccionado = vm.Panel.ProyectosDisponibles.Single(z => z.Id == 2);
         Parte<AutoCompleteBox>(dialogo, "BuscadorExpediente").Focus();
         Dispatcher.UIThread.RunJobs();
 
@@ -83,16 +84,17 @@ public class ReclasificarTareaDialogV2Tests
         Assert.True(resultado.IsCompleted, "Enter no confirmó el diálogo.");
         var datos = await resultado;
         Assert.NotNull(datos);
-        Assert.Equal(2, datos!.ZonaId);
+        Assert.Equal(2, datos!.ProyectoId);
     }
 
     [AvaloniaFact]
     public async Task PanelEnElDialogo_EtiquetasYValoresSinRecorte()
     {
-        var (dialogo, vm, _) = await Abrir(new DatosClasificacionTarea(12, null, null, null, null));
-        Assert.Equal("(dado de baja — id 12)", vm.Panel.ZonaSeleccionada!.Nombre);
+        const string largo = "Repavimentación de la rambla costanera";
+        var (dialogo, vm, _) = await Abrir(new DatosClasificacionTarea(12, null), largo);
+        Assert.Equal(largo, vm.Panel.ProyectoSeleccionado!.Nombre);
 
-        foreach (var nombre in new[] { "CampoZona", "CampoDimension", "CampoOrganismo", "CampoOrigen" })
+        foreach (var nombre in new[] { "CampoProyecto", "CampoExpediente" })
         {
             var campo = Parte<Control>(dialogo, nombre);
             var etiqueta = campo.GetVisualDescendants().OfType<TextBlock>().First(t => !string.IsNullOrEmpty(t.Text));
@@ -101,8 +103,8 @@ public class ReclasificarTareaDialogV2Tests
             Assert.True(etiqueta.Bounds.Width >= natural.DesiredSize.Width - 0.5 && campo.Bounds.Width >= natural.DesiredSize.Width - 0.5,
                 $"'{etiqueta.Text}' no entra: {campo.Bounds.Width:0.#} de {natural.DesiredSize.Width:0.#}.");
         }
-        var combo = Parte<ComboBox>(dialogo, "ComboZona");
-        var texto = combo.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == "(dado de baja — id 12)");
+        var combo = Parte<ComboBox>(dialogo, "ComboProyecto");
+        var texto = combo.GetVisualDescendants().OfType<TextBlock>().First(t => t.Text == largo);
         var medido = new TextBlock { Text = texto.Text, FontSize = texto.FontSize, FontFamily = texto.FontFamily, FontWeight = texto.FontWeight };
         medido.Measure(Size.Infinity);
         Assert.True(texto.Bounds.Width >= medido.DesiredSize.Width - 0.5, $"El valor elegido se recorta: {texto.Bounds.Width:0.#} de {medido.DesiredSize.Width:0.#}.");

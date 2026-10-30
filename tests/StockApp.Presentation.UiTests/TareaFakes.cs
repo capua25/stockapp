@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Proyectos;
 using StockApp.Application.Tareas;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
@@ -99,14 +100,8 @@ internal sealed class TareaServiceFake : ITareaService
     public Task ReclasificarAsync(int tareaId, DatosClasificacionTarea datos)
     {
         var tarea = _tareas.First(t => t.Id == tareaId);
-        tarea.ZonaId = datos.ZonaId;
-        tarea.Zona = null; // simula el round-trip al servidor: sin catálogo acá, el nav prop queda stale si no se limpia
-        tarea.DimensionTematicaId = datos.DimensionTematicaId;
-        tarea.DimensionTematica = null;
-        tarea.OrganismoResponsableId = datos.OrganismoResponsableId;
-        tarea.OrganismoResponsable = null;
-        tarea.OrigenFinanciamientoId = datos.OrigenFinanciamientoId;
-        tarea.OrigenFinanciamiento = null;
+        tarea.ProyectoId = datos.ProyectoId;
+        tarea.Proyecto = null; // simula el round-trip al servidor: sin catálogo acá, el nav prop queda stale si no se limpia
         tarea.DocumentoAdministrativoId = datos.DocumentoAdministrativoId;
         tarea.DocumentoAdministrativo = null;
         Reclasificaciones.Add((tareaId, datos));
@@ -212,12 +207,30 @@ internal sealed class ClasificacionDialogServiceFake : IClasificacionTareaDialog
 {
     public DatosClasificacionTarea? ResultadoADevolver { get; set; }
     public DatosClasificacionTarea? UltimoActualRecibido { get; private set; }
+    public string? UltimoTituloProyectoRecibido { get; private set; }
     public int Llamadas { get; private set; }
 
-    public Task<DatosClasificacionTarea?> PedirClasificacionAsync(DatosClasificacionTarea actual)
+    public Task<DatosClasificacionTarea?> PedirClasificacionAsync(
+        DatosClasificacionTarea actual, string? tituloProyectoActual = null)
     {
         Llamadas++;
         UltimoActualRecibido = actual;
+        UltimoTituloProyectoRecibido = tituloProyectoActual;
         return Task.FromResult(ResultadoADevolver);
     }
+}
+
+/// <summary>Solo ListarOpcionesAsync tiene comportamiento real (lo que consume
+/// ClasificacionTareaPanelViewModel): el resto de IProyectoService no lo ejercita este banco.</summary>
+internal sealed class ProyectoOpcionesFake : IProyectoService
+{
+    private readonly List<OpcionProyectoDto> _abiertos;
+    public ProyectoOpcionesFake(List<OpcionProyectoDto>? abiertos = null) => _abiertos = abiertos ?? new List<OpcionProyectoDto>();
+    public Task<IReadOnlyList<OpcionProyectoDto>> ListarOpcionesAsync() => Task.FromResult<IReadOnlyList<OpcionProyectoDto>>(_abiertos);
+    public Task<int> CrearAsync(DatosProyecto datos) => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task ModificarAsync(int id, DatosProyecto datos) => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task CambiarEstadoAsync(int id, EstadoProyecto destino) => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task AgregarNotaAsync(int id, string texto) => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task<IReadOnlyList<Proyecto>> ListarAsync() => throw new NotSupportedException("No usado en este banco de pruebas.");
+    public Task<FichaProyectoDto> ObtenerFichaAsync(int id) => throw new NotSupportedException("No usado en este banco de pruebas.");
 }

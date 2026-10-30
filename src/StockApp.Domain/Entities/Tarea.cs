@@ -9,11 +9,10 @@ namespace StockApp.Domain.Entities;
 /// vida, no un Activo=false (decisión 6). Guarda dos pares de trazabilidad independientes —
 /// TomadaPor+FechaInicio (quién trabajó) y CerradaPor+FechaFin (quién cerró) — porque
 /// cualquiera puede terminar o soltar una tarea ajena (decisión 11).
-/// Clasificadores (spec 2026-09-08, D7/D20): desde ese spec YA NO es un módulo sin FK a
-/// otras entidades del dominio — Zona/DimensionTematica/OrganismoResponsable/
-/// OrigenFinanciamiento/DocumentoAdministrativo son cinco FKs opcionales, todas nullable y
-/// sin backfill (migración puramente aditiva). Son puros datos de clasificación: no
-/// participan de TransicionesValidas ni de CambiarPrioridad, y ReclasificarAsync
+/// Clasificación (spec 2026-10-30): dos FKs opcionales, Proyecto y DocumentoAdministrativo
+/// (expediente). Zona/DimensionTematica/OrganismoResponsable/OrigenFinanciamiento, que el spec
+/// 2026-09-08 le había agregado, pasaron al Proyecto (migración QuitaClasificadoresDeTarea).
+/// No participan de TransicionesValidas ni de CambiarPrioridad, y ReclasificarAsync
 /// (TareaService) los reemplaza sin tocar Estado.
 /// </summary>
 public class Tarea
@@ -46,14 +45,6 @@ public class Tarea
     public Usuario? CerradaPor { get; set; }
     public DateTime? FechaFin { get; set; }
 
-    public int? ZonaId { get; set; }
-    public Zona? Zona { get; set; }
-    public int? DimensionTematicaId { get; set; }
-    public DimensionTematica? DimensionTematica { get; set; }
-    public int? OrganismoResponsableId { get; set; }
-    public OrganismoResponsable? OrganismoResponsable { get; set; }
-    public int? OrigenFinanciamientoId { get; set; }
-    public OrigenFinanciamiento? OrigenFinanciamiento { get; set; }
     public int? DocumentoAdministrativoId { get; set; }
     public DocumentoAdministrativo? DocumentoAdministrativo { get; set; }
 

@@ -14,33 +14,25 @@ public record TareaDto(
     int CreadaPorUsuarioId, DateTime FechaCreacion,
     int? TomadaPorUsuarioId, string? TomadaPorNombre, DateTime? FechaInicio,
     int? CerradaPorUsuarioId, DateTime? FechaFin,
-    int? ZonaId, string? ZonaNombre,
-    int? DimensionTematicaId, string? DimensionTematicaNombre,
-    int? OrganismoResponsableId, string? OrganismoResponsableNombre,
-    int? OrigenFinanciamientoId, string? OrigenFinanciamientoNombre,
     int? DocumentoAdministrativoId, string? DocumentoAdministrativoNumero,
     int? DocumentoAdministrativoAnio, TipoDocumento? DocumentoAdministrativoTipo,
     int? ProyectoId, string? ProyectoTitulo,
     List<NotaTareaDto> Notas);
 
-// Los 5 ids de clasificación con default null (bugfix de compatibilidad): los sitios de
+// Los ids de clasificación con default null (bugfix de compatibilidad): los sitios de
 // test/producción existentes que construyen CrearTareaRequest con 3 argumentos posicionales
 // (Titulo, Descripcion, FechaLimite) siguen compilando sin tocarlos.
 public record CrearTareaRequest(
     string Titulo, string? Descripcion, DateTime? FechaLimite,
-    int? ZonaId = null, int? DimensionTematicaId = null, int? OrganismoResponsableId = null,
-    int? OrigenFinanciamientoId = null, int? DocumentoAdministrativoId = null,
-    int? ProyectoId = null);
+    int? DocumentoAdministrativoId = null, int? ProyectoId = null);
 
 public record CambiarPrioridadRequest(PrioridadTarea Prioridad);
 public record AgregarNotaRequest(string Texto);
 public record TareaCreadaResponse(int Id);
 
 /// <summary>Espejo HTTP de DatosClasificacionTarea (Application) — reemplazo total, D21:
-/// null en un campo desasigna ese clasificador.</summary>
-public record ClasificarTareaRequest(
-    int? ZonaId, int? DimensionTematicaId, int? OrganismoResponsableId,
-    int? OrigenFinanciamientoId, int? DocumentoAdministrativoId, int? ProyectoId = null);
+/// null en un campo desvincula el proyecto o el expediente.</summary>
+public record ClasificarTareaRequest(int? ProyectoId, int? DocumentoAdministrativoId);
 
 public static class TareasEndpoints
 {
@@ -55,10 +47,6 @@ public static class TareasEndpoints
                 Titulo      = request.Titulo,
                 Descripcion = request.Descripcion,
                 FechaLimite = request.FechaLimite,
-                ZonaId                  = request.ZonaId,
-                DimensionTematicaId     = request.DimensionTematicaId,
-                OrganismoResponsableId  = request.OrganismoResponsableId,
-                OrigenFinanciamientoId  = request.OrigenFinanciamientoId,
                 DocumentoAdministrativoId = request.DocumentoAdministrativoId,
                 ProyectoId                = request.ProyectoId,
             };
@@ -96,8 +84,7 @@ public static class TareasEndpoints
         group.MapPut("/{id:int}/clasificacion", async (int id, ClasificarTareaRequest request, ITareaService service) =>
         {
             await service.ReclasificarAsync(id, new DatosClasificacionTarea(
-                request.ZonaId, request.DimensionTematicaId, request.OrganismoResponsableId,
-                request.OrigenFinanciamientoId, request.DocumentoAdministrativoId, request.ProyectoId));
+                request.ProyectoId, request.DocumentoAdministrativoId));
             return Results.Ok();
         })
         .RequireAuthorization(Permisos.AdministrarTareas);
@@ -153,10 +140,6 @@ public static class TareasEndpoints
         t.CreadaPorUsuarioId, t.FechaCreacion,
         t.TomadaPorUsuarioId, t.TomadaPor?.NombreUsuario, t.FechaInicio,
         t.CerradaPorUsuarioId, t.FechaFin,
-        t.ZonaId, t.Zona?.Nombre,
-        t.DimensionTematicaId, t.DimensionTematica?.Nombre,
-        t.OrganismoResponsableId, t.OrganismoResponsable?.Nombre,
-        t.OrigenFinanciamientoId, t.OrigenFinanciamiento?.Nombre,
         t.DocumentoAdministrativoId, t.DocumentoAdministrativo?.Numero,
         t.DocumentoAdministrativo?.Anio, t.DocumentoAdministrativo?.Tipo,
         t.ProyectoId, t.Proyecto?.Titulo,

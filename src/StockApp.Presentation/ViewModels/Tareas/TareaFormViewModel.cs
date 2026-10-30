@@ -56,7 +56,7 @@ public partial class TareaFormViewModel : ViewModelBase, INotifyDataErrorInfo
     /// <summary>Ids actuales de clasificación de la tarea cargada (spec 2026-09-08): precarga
     /// el modal de reclasificación (Task 10) — D21, el Admin ve exactamente lo que hay
     /// guardado. Se recalcula en CargarParaVer, no en el alta (ahí no hay "actual").</summary>
-    private DatosClasificacionTarea _clasificacionActual = new(null, null, null, null, null);
+    private DatosClasificacionTarea _clasificacionActual = new(null, null);
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(GuardarCommand))]
@@ -68,10 +68,7 @@ public partial class TareaFormViewModel : ViewModelBase, INotifyDataErrorInfo
     [ObservableProperty] private string? _tomadaPorNombre;
     [ObservableProperty] private string? _mensajeError;
 
-    [ObservableProperty] private string? _zonaTexto;
-    [ObservableProperty] private string? _dimensionTematicaTexto;
-    [ObservableProperty] private string? _organismoResponsableTexto;
-    [ObservableProperty] private string? _origenFinanciamientoTexto;
+    [ObservableProperty] private string? _proyectoTexto;
     [ObservableProperty] private string? _documentoAdministrativoTexto;
 
     [ObservableProperty]
@@ -90,7 +87,7 @@ public partial class TareaFormViewModel : ViewModelBase, INotifyDataErrorInfo
         new[] { PrioridadTarea.Baja, PrioridadTarea.Media, PrioridadTarea.Alta };
 
     /// <summary>Panel embebido de clasificación (Task 9): solo se usa en modo alta — en
-    /// modo detalle los cinco campos se muestran de solo lectura (ZonaTexto, etc.) y se
+    /// modo detalle proyecto y expediente se muestran de solo lectura (ProyectoTexto, etc.) y se
     /// reclasifican vía el modal (ReclasificarCommand), no editando este panel in-place.</summary>
     public ClasificacionTareaPanelViewModel ClasificacionPanel { get; }
 
@@ -189,19 +186,14 @@ public partial class TareaFormViewModel : ViewModelBase, INotifyDataErrorInfo
         PrioridadSeleccionada = tarea.Prioridad;
         MensajeError = null;
 
-        ZonaTexto = tarea.Zona?.Nombre;
-        DimensionTematicaTexto = tarea.DimensionTematica?.Nombre;
-        OrganismoResponsableTexto = tarea.OrganismoResponsable?.Nombre;
-        OrigenFinanciamientoTexto = tarea.OrigenFinanciamiento?.Nombre;
+        ProyectoTexto = tarea.Proyecto?.Titulo;
         // Fix (revisión final, Important 1): antes anteponía Tipo acá Y el XAML ya antepone la
         // etiqueta "Expediente:" -- se leía "Expediente: Expediente 0099/0" (palabra duplicada
         // + año en 0 porque el wire no lo traía). Con Anio viajando de verdad (TareaApiClient),
         // el texto queda "0099/2026" y la etiqueta del XAML aporta el "Expediente:" una sola vez.
         DocumentoAdministrativoTexto = tarea.DocumentoAdministrativo is null
             ? null : $"{tarea.DocumentoAdministrativo.Numero}/{tarea.DocumentoAdministrativo.Anio}";
-        _clasificacionActual = new DatosClasificacionTarea(
-            tarea.ZonaId, tarea.DimensionTematicaId, tarea.OrganismoResponsableId,
-            tarea.OrigenFinanciamientoId, tarea.DocumentoAdministrativoId);
+        _clasificacionActual = new DatosClasificacionTarea(tarea.ProyectoId, tarea.DocumentoAdministrativoId);
 
         Notas.Clear();
         foreach (var nota in tarea.Notas)
@@ -229,10 +221,7 @@ public partial class TareaFormViewModel : ViewModelBase, INotifyDataErrorInfo
                 FechaLimite = FechaLimiteSeleccionada.HasValue
                     ? DateTime.SpecifyKind(FechaLimiteSeleccionada.Value.Date, DateTimeKind.Utc)
                     : null,
-                ZonaId = clasificacion.ZonaId,
-                DimensionTematicaId = clasificacion.DimensionTematicaId,
-                OrganismoResponsableId = clasificacion.OrganismoResponsableId,
-                OrigenFinanciamientoId = clasificacion.OrigenFinanciamientoId,
+                ProyectoId = clasificacion.ProyectoId,
                 DocumentoAdministrativoId = clasificacion.DocumentoAdministrativoId,
             });
             _navigation.Navegar<TareaListViewModel>();
@@ -284,7 +273,7 @@ public partial class TareaFormViewModel : ViewModelBase, INotifyDataErrorInfo
         MensajeError = null;
         try
         {
-            var resultado = await _dialogoClasificacion.PedirClasificacionAsync(_clasificacionActual);
+            var resultado = await _dialogoClasificacion.PedirClasificacionAsync(_clasificacionActual, ProyectoTexto);
             if (resultado is null) return; // el Admin canceló el modal
 
             await _service.ReclasificarAsync(_idTarea, resultado);

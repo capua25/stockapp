@@ -4,8 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Moq;
 using StockApp.ApiClient;
-using StockApp.Application.Catalogo;
 using StockApp.Application.Documentos;
+using StockApp.Application.Proyectos;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Tareas;
 using StockApp.Domain.Entities;
@@ -32,9 +32,7 @@ public class TareaFormViewModelTests
         var dialogoClasificacion = new Mock<IClasificacionTareaDialogService>();
 
         var panel = new ClasificacionTareaPanelViewModel(
-            Mock.Of<IZonaService>(), Mock.Of<IDimensionTematicaService>(),
-            Mock.Of<IOrganismoResponsableService>(), Mock.Of<IOrigenFinanciamientoService>(),
-            Mock.Of<IDocumentoAdministrativoService>(), confirm.Object);
+            Mock.Of<IProyectoService>(), Mock.Of<IDocumentoAdministrativoService>(), confirm.Object);
 
         var vm = new TareaFormViewModel(svc.Object, session.Object, nav.Object, confirm.Object, panel, dialogoClasificacion.Object);
         return (vm, svc, confirm, dialogoClasificacion);
@@ -221,11 +219,11 @@ public class TareaFormViewModelTests
         var ctx = Crear();
         ctx.Vm.CargarParaCrear();
         ctx.Vm.Titulo = "Reparar bache";
-        ctx.Vm.ClasificacionPanel.ZonaSeleccionada = new OpcionClasificador("Centro", 3);
+        ctx.Vm.ClasificacionPanel.ProyectoSeleccionado = new OpcionProyectoTarea("Plaza", 3);
 
         await ctx.Vm.GuardarCommand.ExecuteAsync(null);
 
-        ctx.Svc.Verify(s => s.CrearAsync(It.Is<Tarea>(t => t.ZonaId == 3)), Times.Once);
+        ctx.Svc.Verify(s => s.CrearAsync(It.Is<Tarea>(t => t.ProyectoId == 3)), Times.Once);
     }
 
     // ── MuestraReclasificar (D9 del spec): NO copia MuestraCambioPrioridad ──────
@@ -266,7 +264,7 @@ public class TareaFormViewModelTests
     {
         var ctx = Crear(rol: RolUsuario.Admin);
         ctx.Vm.CargarParaVer(new Tarea { Id = 1, Titulo = "x", Estado = EstadoTarea.Pendiente });
-        ctx.DialogoClasificacion.Setup(d => d.PedirClasificacionAsync(It.IsAny<DatosClasificacionTarea>()))
+        ctx.DialogoClasificacion.Setup(d => d.PedirClasificacionAsync(It.IsAny<DatosClasificacionTarea>(), It.IsAny<string?>()))
             .ReturnsAsync((DatosClasificacionTarea?)null);
 
         await ctx.Vm.ReclasificarCommand.ExecuteAsync(null);
@@ -281,21 +279,41 @@ public class TareaFormViewModelTests
         var tarea = new Tarea { Id = 1, Titulo = "x", Estado = EstadoTarea.Pendiente };
         ctx.Vm.CargarParaVer(tarea);
 
-        var nuevaClasificacion = new DatosClasificacionTarea(3, null, null, null, null);
-        ctx.DialogoClasificacion.Setup(d => d.PedirClasificacionAsync(It.IsAny<DatosClasificacionTarea>()))
+        var nuevaClasificacion = new DatosClasificacionTarea(3, null);
+        ctx.DialogoClasificacion.Setup(d => d.PedirClasificacionAsync(It.IsAny<DatosClasificacionTarea>(), It.IsAny<string?>()))
             .ReturnsAsync(nuevaClasificacion);
         ctx.Svc.Setup(s => s.ReclasificarAsync(1, nuevaClasificacion)).Returns(Task.CompletedTask);
         var tareaActualizada = new Tarea
         {
             Id = 1, Titulo = "x", Estado = EstadoTarea.Pendiente,
-            ZonaId = 3, Zona = new Zona { Id = 3, Nombre = "Centro" },
+            ProyectoId = 3, Proyecto = new Proyecto { Id = 3, Titulo = "Plaza" },
         };
         ctx.Svc.Setup(s => s.ObtenerPorIdAsync(1)).ReturnsAsync(tareaActualizada);
 
         await ctx.Vm.ReclasificarCommand.ExecuteAsync(null);
 
         ctx.Svc.Verify(s => s.ReclasificarAsync(1, nuevaClasificacion), Times.Once);
-        Assert.Equal("Centro", ctx.Vm.ZonaTexto);
+        Assert.Equal("Plaza", ctx.Vm.ProyectoTexto);
+    }
+
+    [Fact]
+    public async Task ReclasificarCommand_PrecargaElModalConProyectoYExpedienteYElTituloDelProyecto()
+    {
+        // El título viaja para que el modal muestre el proyecto actual aunque ya esté cerrado
+        // (no viene entre las opciones de ListarOpcionesAsync).
+        var ctx = Crear(rol: RolUsuario.Admin);
+        ctx.Vm.CargarParaVer(new Tarea
+        {
+            Id = 1, Titulo = "x", Estado = EstadoTarea.Pendiente,
+            ProyectoId = 7, Proyecto = new Proyecto { Id = 7, Titulo = "Puente" },
+            DocumentoAdministrativoId = 9,
+        });
+        ctx.DialogoClasificacion.Setup(d => d.PedirClasificacionAsync(It.IsAny<DatosClasificacionTarea>(), It.IsAny<string?>()))
+            .ReturnsAsync((DatosClasificacionTarea?)null);
+
+        await ctx.Vm.ReclasificarCommand.ExecuteAsync(null);
+
+        ctx.DialogoClasificacion.Verify(d => d.PedirClasificacionAsync(new DatosClasificacionTarea(7, 9), "Puente"), Times.Once);
     }
 
     // ── Error por campo del título (alta) ────────────────────────────────────────

@@ -14,10 +14,6 @@ internal sealed record TareaWire(
     int CreadaPorUsuarioId, DateTime FechaCreacion,
     int? TomadaPorUsuarioId, string? TomadaPorNombre, DateTime? FechaInicio,
     int? CerradaPorUsuarioId, DateTime? FechaFin,
-    int? ZonaId, string? ZonaNombre,
-    int? DimensionTematicaId, string? DimensionTematicaNombre,
-    int? OrganismoResponsableId, string? OrganismoResponsableNombre,
-    int? OrigenFinanciamientoId, string? OrigenFinanciamientoNombre,
     int? DocumentoAdministrativoId, string? DocumentoAdministrativoNumero,
     int? DocumentoAdministrativoAnio, TipoDocumento? DocumentoAdministrativoTipo,
     int? ProyectoId, string? ProyectoTitulo,
@@ -25,14 +21,11 @@ internal sealed record TareaWire(
 
 internal sealed record CrearTareaBody(
     string Titulo, string? Descripcion, DateTime? FechaLimite,
-    int? ZonaId, int? DimensionTematicaId, int? OrganismoResponsableId,
-    int? OrigenFinanciamientoId, int? DocumentoAdministrativoId, int? ProyectoId);
+    int? DocumentoAdministrativoId, int? ProyectoId);
 
 internal sealed record CambiarPrioridadBody(PrioridadTarea Prioridad);
 internal sealed record AgregarNotaBody(string Texto);
-internal sealed record ClasificarTareaBody(
-    int? ZonaId, int? DimensionTematicaId, int? OrganismoResponsableId,
-    int? OrigenFinanciamientoId, int? DocumentoAdministrativoId, int? ProyectoId);
+internal sealed record ClasificarTareaBody(int? ProyectoId, int? DocumentoAdministrativoId);
 
 /// <summary>ITareaService contra /tareas.</summary>
 public sealed class TareaApiClient : ITareaService
@@ -61,8 +54,7 @@ public sealed class TareaApiClient : ITareaService
     {
         var body = new CrearTareaBody(
             tarea.Titulo, tarea.Descripcion, tarea.FechaLimite,
-            tarea.ZonaId, tarea.DimensionTematicaId, tarea.OrganismoResponsableId,
-            tarea.OrigenFinanciamientoId, tarea.DocumentoAdministrativoId, tarea.ProyectoId);
+            tarea.DocumentoAdministrativoId, tarea.ProyectoId);
         var response = await ApiErrores.EnviarAsync(() => _http.PostAsJsonAsync("tareas", body));
         await ApiErrores.AsegurarExitoAsync(response);
 
@@ -119,9 +111,7 @@ public sealed class TareaApiClient : ITareaService
 
     public async Task ReclasificarAsync(int id, DatosClasificacionTarea datos)
     {
-        var body = new ClasificarTareaBody(
-            datos.ZonaId, datos.DimensionTematicaId, datos.OrganismoResponsableId,
-            datos.OrigenFinanciamientoId, datos.DocumentoAdministrativoId, datos.ProyectoId);
+        var body = new ClasificarTareaBody(datos.ProyectoId, datos.DocumentoAdministrativoId);
         var response = await ApiErrores.EnviarAsync(() => _http.PutAsJsonAsync($"tareas/{id}/clasificacion", body));
         await ApiErrores.AsegurarExitoAsync(response);
     }
@@ -148,17 +138,6 @@ public sealed class TareaApiClient : ITareaService
         FechaInicio = dto.FechaInicio,
         CerradaPorUsuarioId = dto.CerradaPorUsuarioId,
         FechaFin = dto.FechaFin,
-        ZonaId = dto.ZonaId,
-        Zona = dto.ZonaNombre is null ? null : new Zona { Id = dto.ZonaId!.Value, Nombre = dto.ZonaNombre },
-        DimensionTematicaId = dto.DimensionTematicaId,
-        DimensionTematica = dto.DimensionTematicaNombre is null
-            ? null : new DimensionTematica { Id = dto.DimensionTematicaId!.Value, Nombre = dto.DimensionTematicaNombre },
-        OrganismoResponsableId = dto.OrganismoResponsableId,
-        OrganismoResponsable = dto.OrganismoResponsableNombre is null
-            ? null : new OrganismoResponsable { Id = dto.OrganismoResponsableId!.Value, Nombre = dto.OrganismoResponsableNombre },
-        OrigenFinanciamientoId = dto.OrigenFinanciamientoId,
-        OrigenFinanciamiento = dto.OrigenFinanciamientoNombre is null
-            ? null : new OrigenFinanciamiento { Id = dto.OrigenFinanciamientoId!.Value, Nombre = dto.OrigenFinanciamientoNombre },
         DocumentoAdministrativoId = dto.DocumentoAdministrativoId,
         // Fix (revisión final, Important 1): antes solo rehidrataba Id/Numero -- Anio quedaba
         // en 0 y Tipo en el default del enum, aunque (Tipo, Anio, Numero) es el índice único

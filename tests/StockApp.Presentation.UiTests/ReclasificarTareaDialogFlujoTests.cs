@@ -11,10 +11,10 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using StockApp.Application.Catalogo;
-using StockApp.Application.Documentos;
+using StockApp.Application.Proyectos;
 using StockApp.Application.Tareas;
 using StockApp.Domain.Entities;
+using StockApp.Domain.Enums;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Tareas;
 using StockApp.Presentation.Views.Tareas;
@@ -37,27 +37,19 @@ namespace StockApp.Presentation.UiTests;
 /// ApplicationLifetime por reflexión que ConfirmacionServiceDialogosConsecutivosTests) y
 /// clickean el botón "Aceptar" real, no llaman a Close ni a OnAceptarClick a mano.
 ///
-/// Important 2 (revisión de integración 2026-09-09): el primer test elegía "(ninguna)"
-/// asignando null a mano a la propiedad del VM porque el ComboBox real no tenía esa opción en
-/// su ItemsSource (Task 9). Ya corregido: ahora selecciona el ítem centinela desde el
-/// ItemsSource del ComboBox REAL montado en el árbol visual, probando que la opción existe de
-/// verdad y no solo en la firma del VM.
+/// Important 2 (revisión de integración 2026-09-09): el primer test selecciona el ítem
+/// centinela "(ninguno)" desde el ItemsSource del ComboBox REAL montado en el árbol visual,
+/// probando que la opción existe de verdad y no solo en la firma del VM.
 ///
-/// Important 1 (revisión de integración 2026-09-09): el segundo test cubre que reclasificar NO
-/// pierda en silencio un clasificador dado de baja después de asignarse a la tarea, con el
-/// Admin sin tocar ese campo.
-///
-/// Este proyecto no referencia Moq (mismo criterio que TareaServiceFake/DocumentoServiceFake):
-/// los cuatro fakes de catálogo de acá abajo son privados a este archivo, a propósito, para no
-/// pisar los fakes reusables de los 4 catálogos que le corresponde crear a la Task 11 del plan
-/// (fakes de UiTests para los 4 catálogos + el diálogo de clasificación).
+/// Spec 2026-10-30: el segundo test cubre que reclasificar NO pierda en silencio un proyecto
+/// que se cerró después de vincularse a la tarea, con el Admin sin tocar ese campo.
 /// </summary>
 public class ReclasificarTareaDialogFlujoTests
 {
     private static readonly TimeSpan TimeoutEsperaDialogo = TimeSpan.FromSeconds(5);
 
     [AvaloniaFact]
-    public async Task ClickReal_EnAceptar_EligiendoLaOpcionNingunaDelComboReal_DevuelveEseCampoEnNullYElRestoIntacto()
+    public async Task ClickReal_EnAceptar_EligiendoLaOpcionNingunoDelComboReal_DevuelveElProyectoEnNullYElExpedienteIntacto()
     {
         var owner = new Window();
         owner.Show();
@@ -65,45 +57,31 @@ public class ReclasificarTareaDialogFlujoTests
         var lifetime = new ClassicDesktopStyleApplicationLifetime { MainWindow = owner };
         InyectarApplicationLifetime(lifetime);
 
-        var zonas = new ZonaServiceStub(new Zona { Id = 1, Nombre = "Centro" });
-        var dimensiones = new DimensionTematicaServiceStub(new DimensionTematica { Id = 3, Nombre = "Tránsito" });
-        var organismos = new OrganismoResponsableServiceStub(new OrganismoResponsable { Id = 4, Nombre = "Intendencia" });
-        var origenes = new OrigenFinanciamientoServiceStub(new OrigenFinanciamiento { Id = 5, Nombre = "Presupuesto propio" });
-        var documentos = new DocumentoServiceFake();
+        var proyectos = new ProyectoOpcionesFake([new OpcionProyectoDto(1, "Plaza de deportes", EstadoProyecto.EnCurso)]);
+        var documentos = new DocumentoServiceFake(new List<DocumentoAdministrativo>
+        {
+            new() { Id = 9, Numero = "0099", Anio = 2026, Tipo = TipoDocumento.Expediente, Descripcion = "x" },
+        });
 
-        var svc = new ClasificacionTareaDialogService(
-            zonas, dimensiones, organismos, origenes, documentos, new ConfirmacionServiceFake());
+        var svc = new ClasificacionTareaDialogService(proyectos, documentos, new ConfirmacionServiceFake());
 
-        // Clasificación actual completa: los cinco campos precargados (D21 — lo que el Admin ve
-        // precargado, salvo que lo toque). DocumentoAdministrativoId queda null a propósito para
-        // no depender de ObtenerPorIdAsync acá; el expediente no es el campo bajo prueba.
-        var actual = new DatosClasificacionTarea(ZonaId: 1, DimensionTematicaId: 3,
-            OrganismoResponsableId: 4, OrigenFinanciamientoId: 5, DocumentoAdministrativoId: null);
-
-        var task = svc.PedirClasificacionAsync(actual);
+        var task = svc.PedirClasificacionAsync(new DatosClasificacionTarea(ProyectoId: 1, DocumentoAdministrativoId: 9));
 
         var dialog = (ReclasificarTareaDialog)await EsperarDialogoAsync(owner);
         Dispatcher.UIThread.RunJobs();
 
         var vm = (ReclasificarTareaDialogViewModel)dialog.DataContext!;
 
-        // Confirma que InicializarAsync(actual) precargó de verdad la selección — si esto
-        // fallara, el resto del test estaría verificando un desasignado que nunca estuvo asignado.
-        Assert.Equal(1, vm.Panel.ZonaSeleccionada?.Id);
-        Assert.Equal(3, vm.Panel.DimensionSeleccionada?.Id);
-        Assert.Equal(4, vm.Panel.OrganismoSeleccionado?.Id);
-        Assert.Equal(5, vm.Panel.OrigenSeleccionado?.Id);
+        // Confirma que InicializarAsync(actual) precargó de verdad la selección -- si esto
+        // fallara, el resto del test estaría verificando un desvinculado que nunca estuvo vinculado.
+        Assert.Equal(1, vm.Panel.ProyectoSeleccionado?.Id);
+        Assert.Equal(9, vm.Panel.DocumentoSeleccionado?.Id);
 
-        // El Admin "deja vacío" el campo Zona (D21: equivale a desasignar) eligiendo "(ninguna)"
-        // en el ComboBox REAL montado en el árbol visual -- ubicado por su selección actual
-        // (los cuatro combos comparten el mismo tipo OpcionClasificador, no alcanza con filtrar
-        // por tipo como en DocumentoListViewTests). El ítem "(ninguna)" sale del ItemsSource
-        // real del control, no de vm.Panel.ZonasDisponibles a secas, para probar que el combo
-        // mismo lo expone.
-        var comboZona = dialog.GetVisualDescendants().OfType<ComboBox>()
-            .First(c => Equals(c.SelectedItem, vm.Panel.ZonaSeleccionada));
-        var opcionNinguna = comboZona.ItemsSource!.Cast<OpcionClasificador>().Single(o => o.Id is null);
-        comboZona.SelectedItem = opcionNinguna;
+        // El Admin deja vacío el proyecto (D21: equivale a desvincular) eligiendo "(ninguno)" en
+        // el ComboBox REAL; el ítem sale del ItemsSource del control, no de la colección del VM.
+        var comboProyecto = dialog.GetVisualDescendants().OfType<ComboBox>().Single(c => c.Name == "ComboProyecto");
+        var opcionNinguno = comboProyecto.ItemsSource!.Cast<OpcionProyectoTarea>().Single(o => o.Id is null);
+        comboProyecto.SelectedItem = opcionNinguno;
         Dispatcher.UIThread.RunJobs();
 
         var botonAceptar = dialog.GetVisualDescendants().OfType<Button>()
@@ -112,16 +90,11 @@ public class ReclasificarTareaDialogFlujoTests
 
         var resultado = await EsperarResultadoAsync(task);
 
-        Assert.NotNull(resultado);
-        Assert.Null(resultado!.ZonaId);
-        Assert.Equal(3, resultado.DimensionTematicaId);
-        Assert.Equal(4, resultado.OrganismoResponsableId);
-        Assert.Equal(5, resultado.OrigenFinanciamientoId);
-        Assert.Null(resultado.DocumentoAdministrativoId);
+        Assert.Equal(new DatosClasificacionTarea(null, 9), resultado);
     }
 
     [AvaloniaFact]
-    public async Task ClickReal_EnAceptar_ConLaZonaActualDadaDeBaja_NoLaPierdeSiElAdminNoLaToca()
+    public async Task ClickReal_EnAceptar_ConElProyectoActualCerrado_NoLoPierdeSiElAdminNoLoToca()
     {
         var owner = new Window();
         owner.Show();
@@ -129,42 +102,26 @@ public class ReclasificarTareaDialogFlujoTests
         var lifetime = new ClassicDesktopStyleApplicationLifetime { MainWindow = owner };
         InyectarApplicationLifetime(lifetime);
 
-        // La zona 7 de la tarea ya NO está entre las activas (dada de baja) -- solo queda la 8.
-        var zonas = new ZonaServiceStub(new Zona { Id = 8, Nombre = "Norte" });
-        var dimensiones = new DimensionTematicaServiceStub(new DimensionTematica { Id = 3, Nombre = "Tránsito" });
-        var organismos = new OrganismoResponsableServiceStub(new OrganismoResponsable { Id = 4, Nombre = "Intendencia" });
-        var origenes = new OrigenFinanciamientoServiceStub(new OrigenFinanciamiento { Id = 5, Nombre = "Presupuesto propio" });
-        var documentos = new DocumentoServiceFake();
+        // El proyecto 7 de la tarea ya está Terminado: ListarOpcionesAsync solo trae el 8.
+        var proyectos = new ProyectoOpcionesFake([new OpcionProyectoDto(8, "Rambla", EstadoProyecto.Pendiente)]);
+        var svc = new ClasificacionTareaDialogService(proyectos, new DocumentoServiceFake(), new ConfirmacionServiceFake());
 
-        var svc = new ClasificacionTareaDialogService(
-            zonas, dimensiones, organismos, origenes, documentos, new ConfirmacionServiceFake());
-
-        var actual = new DatosClasificacionTarea(ZonaId: 7, DimensionTematicaId: 3,
-            OrganismoResponsableId: 4, OrigenFinanciamientoId: 5, DocumentoAdministrativoId: null);
-
-        var task = svc.PedirClasificacionAsync(actual);
+        var task = svc.PedirClasificacionAsync(new DatosClasificacionTarea(7, null), "Puente arroyo Las Vacas");
 
         var dialog = (ReclasificarTareaDialog)await EsperarDialogoAsync(owner);
         Dispatcher.UIThread.RunJobs();
 
         var vm = (ReclasificarTareaDialogViewModel)dialog.DataContext!;
+        Assert.Equal(7, vm.Panel.ProyectoSeleccionado?.Id);
+        Assert.Equal("Puente arroyo Las Vacas", vm.Panel.ProyectoSeleccionado?.Nombre);
 
-        // La zona 7 (dada de baja) sigue precargada pese a no estar entre las activas -- si
-        // esto fallara, el resto del test estaría verificando un desasignado que nunca estuvo
-        // asignado, igual que en el test hermano de arriba.
-        Assert.Equal(7, vm.Panel.ZonaSeleccionada?.Id);
-
-        // El Admin NO toca el combo de Zona -- solo confirma con "Aceptar". Antes de este fix,
-        // InicializarAsync perdía la precarga (ZonaSeleccionada quedaba null) y ObtenerDatos()
-        // devolvía ZonaId=null acá, borrando la zona sin que el Admin la tocara.
         var botonAceptar = dialog.GetVisualDescendants().OfType<Button>()
             .First(b => Equals(b.Content, "Aceptar"));
         Clickear(dialog, botonAceptar);
 
         var resultado = await EsperarResultadoAsync(task);
 
-        Assert.NotNull(resultado);
-        Assert.Equal(7, resultado!.ZonaId);
+        Assert.Equal(7, resultado?.ProyectoId);
     }
 
     private static void Clickear(Window window, Control control)
@@ -208,51 +165,5 @@ public class ReclasificarTareaDialogFlujoTests
             throw new TimeoutException($"Se colgó esperando el resultado de PedirClasificacionAsync (timeout {TimeoutEsperaDialogo}).");
 
         return await task;
-    }
-
-    // ── Fakes privados de este archivo (sin Moq, ver nota de clase) ────────────────────────
-
-    private sealed class ZonaServiceStub : IZonaService
-    {
-        private readonly List<Zona> _activas;
-        public ZonaServiceStub(params Zona[] activas) => _activas = activas.ToList();
-        public Task<IReadOnlyList<Zona>> ListarActivasAsync() => Task.FromResult<IReadOnlyList<Zona>>(_activas);
-        public Task<int> AltaAsync(Zona zona) => throw new NotSupportedException();
-        public Task ModificarAsync(Zona zona) => throw new NotSupportedException();
-        public Task BajaLogicaAsync(int id) => throw new NotSupportedException();
-        public Task<IReadOnlyList<Zona>> ListarTodasAsync() => throw new NotSupportedException();
-    }
-
-    private sealed class DimensionTematicaServiceStub : IDimensionTematicaService
-    {
-        private readonly List<DimensionTematica> _activas;
-        public DimensionTematicaServiceStub(params DimensionTematica[] activas) => _activas = activas.ToList();
-        public Task<IReadOnlyList<DimensionTematica>> ListarActivasAsync() => Task.FromResult<IReadOnlyList<DimensionTematica>>(_activas);
-        public Task<int> AltaAsync(DimensionTematica dimension) => throw new NotSupportedException();
-        public Task ModificarAsync(DimensionTematica dimension) => throw new NotSupportedException();
-        public Task BajaLogicaAsync(int id) => throw new NotSupportedException();
-        public Task<IReadOnlyList<DimensionTematica>> ListarTodasAsync() => throw new NotSupportedException();
-    }
-
-    private sealed class OrganismoResponsableServiceStub : IOrganismoResponsableService
-    {
-        private readonly List<OrganismoResponsable> _activas;
-        public OrganismoResponsableServiceStub(params OrganismoResponsable[] activas) => _activas = activas.ToList();
-        public Task<IReadOnlyList<OrganismoResponsable>> ListarActivasAsync() => Task.FromResult<IReadOnlyList<OrganismoResponsable>>(_activas);
-        public Task<int> AltaAsync(OrganismoResponsable organismo) => throw new NotSupportedException();
-        public Task ModificarAsync(OrganismoResponsable organismo) => throw new NotSupportedException();
-        public Task BajaLogicaAsync(int id) => throw new NotSupportedException();
-        public Task<IReadOnlyList<OrganismoResponsable>> ListarTodasAsync() => throw new NotSupportedException();
-    }
-
-    private sealed class OrigenFinanciamientoServiceStub : IOrigenFinanciamientoService
-    {
-        private readonly List<OrigenFinanciamiento> _activas;
-        public OrigenFinanciamientoServiceStub(params OrigenFinanciamiento[] activas) => _activas = activas.ToList();
-        public Task<IReadOnlyList<OrigenFinanciamiento>> ListarActivasAsync() => Task.FromResult<IReadOnlyList<OrigenFinanciamiento>>(_activas);
-        public Task<int> AltaAsync(OrigenFinanciamiento origen) => throw new NotSupportedException();
-        public Task ModificarAsync(OrigenFinanciamiento origen) => throw new NotSupportedException();
-        public Task BajaLogicaAsync(int id) => throw new NotSupportedException();
-        public Task<IReadOnlyList<OrigenFinanciamiento>> ListarTodasAsync() => throw new NotSupportedException();
     }
 }

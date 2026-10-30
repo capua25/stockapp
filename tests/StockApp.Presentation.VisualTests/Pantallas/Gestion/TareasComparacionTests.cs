@@ -18,12 +18,11 @@ namespace StockApp.Presentation.VisualTests.Pantallas.Gestion;
 [Trait("Categoria", "ComparacionVisual")]
 public class TareasComparacionTests
 {
-    // Títulos y clasificaciones que no entran en su columna: el mockup también los corta (v2-celda-cortada) y el píxel coincide.
+    // Títulos y proyectos que no entran en su columna: el mockup también los corta (v2-celda-cortada) y el píxel coincide.
     private static readonly string[] CortesDelMockup =
     [
         "Reparar el bache de la calle Zorrilla", "Poda de los plátanos de la avenida Artigas", "Limpieza de las cunetas del Barrio Norte",
-        "Centro · Infraestructura · Dirección de Obras · FIGM Literal B · Exp. 45/2026", "Centro · Ambiente · Higiene y Ambiente",
-        "Barrio Norte · Ambiente · Higiene y Ambiente · Rentas generales",
+        "Plan de mantenimiento vial del centro 2026",
     ];
 
     private static void Comparar(ShellMainViewModel vm, string mockup, TamanoLienzo? tamano = null, Action<Control>? preparar = null,

@@ -10,20 +10,14 @@
   .v2-ventana { display: flex; align-items: center; justify-content: center; }
   .dialogo { width: 500px; padding: 24px; background: var(--v2-color-superficie); display: flex; flex-direction: column; gap: 16px; }
   .botones { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
-  .campos { display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; row-gap: 16px; align-items: start; }
 </style>
 </head>
 <body>
-<!-- Datos: DatosTareas.Reclasificar(): ReclasificarTareaDialog recién abierto con la clasificación de la tarea 5 precargada (Centro, Infraestructura, Dirección de Obras, FIGM Literal B y el expediente 45/2026). Se compara el área cliente del Window, sin la barra de título del sistema. El sidebar está para aprobar la pantalla entera; la comparación lo oculta. -->
+<!-- Datos: DatosTareas.Reclasificar(): ReclasificarTareaDialog recién abierto con la clasificación de la tarea 5 precargada (el proyecto Plan de mantenimiento vial del centro 2026 y el expediente 45/2026). Se compara el área cliente del Window, sin la barra de título del sistema. El sidebar está para aprobar la pantalla entera; la comparación lo oculta. -->
 <div class="v2-ventana">
   <div class="dialogo">
-    <div class="v2-cuerpo">Elegí los clasificadores. Dejar un campo vacío lo desasigna.</div>
-    <div class="campos">
-      <div class="v2-campo "><div class="v2-campo-etiqueta"><span>Zona</span></div><div><div class="v2-input"><span>Centro</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
-      <div class="v2-campo "><div class="v2-campo-etiqueta"><span>Dimensión</span></div><div><div class="v2-input"><span>Infraestructura</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
-      <div class="v2-campo "><div class="v2-campo-etiqueta"><span>Organismo responsable</span></div><div><div class="v2-input"><span>Dirección de Obras</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
-      <div class="v2-campo "><div class="v2-campo-etiqueta"><span>Origen de financiamiento</span></div><div><div class="v2-input"><span>FIGM Literal B</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
-    </div>
+    <div class="v2-cuerpo">Elegí el proyecto y el expediente. Dejar un campo vacío lo desvincula.</div>
+    <div class="v2-campo "><div class="v2-campo-etiqueta"><span>Proyecto</span></div><div><div class="v2-input"><span>Plan de mantenimiento vial del centro 2026</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
     <div class="v2-campo "><div class="v2-campo-etiqueta"><span>Expediente</span></div><div><div class="v2-input"><span>45/2026</span></div></div></div>
     <div class="botones"><span class="v2-boton v2-boton--secundario">Cancelar</span><span class="v2-boton v2-boton--primario">Aceptar</span></div>
   </div>

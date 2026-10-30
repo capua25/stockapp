@@ -11,16 +11,12 @@ public class TareaRepository : ITareaRepository
 
     public TareaRepository(AppDbContext ctx) => _ctx = ctx;
 
-    // Clasificadores (spec 2026-09-08): las 5 navs se cargan siempre, igual que TomadaPor —
-    // Api/TareasEndpoints.ADto (Task 6) y Presentation (Tasks 12-16) necesitan los nombres,
+    // Clasificación (spec 2026-09-08 y 2026-10-30): expediente y proyecto se cargan siempre,
+    // igual que TomadaPor — Api/TareasEndpoints.ADto y Presentation necesitan número y título,
     // no solo los ids.
     private IQueryable<Tarea> ConIncludes() =>
         _ctx.Tareas
             .Include(t => t.TomadaPor)
-            .Include(t => t.Zona)
-            .Include(t => t.DimensionTematica)
-            .Include(t => t.OrganismoResponsable)
-            .Include(t => t.OrigenFinanciamiento)
             .Include(t => t.DocumentoAdministrativo)
             .Include(t => t.Proyecto)
             .Include(t => t.Notas.OrderBy(n => n.Fecha).ThenBy(n => n.Id));

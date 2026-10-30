@@ -2,9 +2,9 @@ using Moq;
 using StockApp.ApiClient;
 using StockApp.Application.Auth;
 using StockApp.Application.Authorization;
-using StockApp.Application.Catalogo;
 using StockApp.Application.Documentos;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Proyectos;
 using StockApp.Application.Tareas;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
@@ -29,15 +29,9 @@ public static class DatosTareas
     private static readonly Usuario Maria = new() { Id = 1, NombreUsuario = "mperez" };
     private static readonly Usuario Sosa = new() { Id = 3, NombreUsuario = "jsosa" };
 
-    public static readonly Zona ZonaCentro = new() { Id = 1, Nombre = "Centro" };
-    public static readonly Zona ZonaCosta = new() { Id = 2, Nombre = "Costa" };
-    public static readonly Zona ZonaNorte = new() { Id = 3, Nombre = "Barrio Norte" };
-    public static readonly DimensionTematica DimInfraestructura = new() { Id = 1, Nombre = "Infraestructura" };
-    public static readonly DimensionTematica DimAmbiente = new() { Id = 2, Nombre = "Ambiente" };
-    public static readonly OrganismoResponsable OrgObras = new() { Id = 1, Nombre = "Dirección de Obras" };
-    public static readonly OrganismoResponsable OrgHigiene = new() { Id = 2, Nombre = "Higiene y Ambiente" };
-    public static readonly OrigenFinanciamiento OrigenFigm = new() { Id = 1, Nombre = "FIGM Literal B" };
-    public static readonly OrigenFinanciamiento OrigenRentas = new() { Id = 2, Nombre = "Rentas generales" };
+    public static readonly Proyecto ProyectoVial = new() { Id = 1, Titulo = "Plan de mantenimiento vial del centro 2026" };
+    public static readonly Proyecto ProyectoArbolado = new() { Id = 2, Titulo = "Arbolado urbano" };
+    public static readonly Proyecto ProyectoAlumbrado = new() { Id = 3, Titulo = "Alumbrado de la rambla" };
 
     private static readonly DocumentoAdministrativo Expediente45 = new()
     {
@@ -58,32 +52,30 @@ public static class DatosTareas
     ];
 
     private static Tarea T(int id, string titulo, EstadoTarea estado, PrioridadTarea prioridad, DateTime? limite, Usuario? tomadaPor,
-        Zona? zona, DimensionTematica? dim, OrganismoResponsable? org, OrigenFinanciamiento? origen, DocumentoAdministrativo? exp = null,
-        string? descripcion = null) => new()
+        Proyecto? proyecto, DocumentoAdministrativo? exp = null, string? descripcion = null) => new()
     {
         Id = id, Titulo = titulo, Descripcion = descripcion, Estado = estado, Prioridad = prioridad, FechaLimite = limite,
         CreadaPorUsuarioId = 1, CreadaPor = Maria, FechaCreacion = Hora(10, id, 8, 0),
         TomadaPor = tomadaPor, TomadaPorUsuarioId = tomadaPor?.Id,
-        Zona = zona, ZonaId = zona?.Id, DimensionTematica = dim, DimensionTematicaId = dim?.Id,
-        OrganismoResponsable = org, OrganismoResponsableId = org?.Id, OrigenFinanciamiento = origen, OrigenFinanciamientoId = origen?.Id,
+        Proyecto = proyecto, ProyectoId = proyecto?.Id,
         DocumentoAdministrativo = exp, DocumentoAdministrativoId = exp?.Id,
     };
 
     public static readonly IReadOnlyList<Tarea> Tareas =
     [
         T(6, "Relevar las luminarias de la rambla", EstadoTarea.Pendiente, PrioridadTarea.Alta, Dia(2030, 3, 15), null,
-            ZonaCosta, DimInfraestructura, null, null),
+            ProyectoAlumbrado),
         T(5, "Reparar el bache de la calle Zorrilla", EstadoTarea.Pendiente, PrioridadTarea.Media, Dia(2026, 9, 30), null,
-            ZonaCentro, DimInfraestructura, OrgObras, OrigenFigm, Expediente45),
+            ProyectoVial, Expediente45),
         T(4, "Poda de los plátanos de la avenida Artigas", EstadoTarea.EnCurso, PrioridadTarea.Alta, Dia(2030, 2, 1), Maria,
-            ZonaCentro, DimAmbiente, OrgHigiene, null,
+            ProyectoArbolado,
             descripcion: "Podar los ejemplares secos y retirar los restos antes del fin de semana."),
         T(3, "Limpieza de las cunetas del Barrio Norte", EstadoTarea.EnCurso, PrioridadTarea.Media, Dia(2030, 5, 20), Sosa,
-            ZonaNorte, DimAmbiente, OrgHigiene, OrigenRentas),
+            null),
         T(2, "Pintura de los cordones de la plaza", EstadoTarea.Terminada, PrioridadTarea.Baja, Dia(2030, 1, 10), Maria,
-            ZonaCentro, null, null, null),
+            ProyectoVial),
         T(1, "Instalar bancos en la peatonal", EstadoTarea.Cancelada, PrioridadTarea.Media, Dia(2030, 4, 4), null,
-            ZonaCentro, DimInfraestructura, null, null),
+            null),
     ];
 
     static DatosTareas() => Tareas[2].Notas.AddRange(Notas);
@@ -106,21 +98,19 @@ public static class DatosTareas
         return new TareaListViewModel(servicio.Object, Sesion(operador), Mock.Of<INavigationService>(), Mock.Of<IConfirmacionService>());
     }
 
-    /// <summary>Panel de clasificación con los catálogos de los datos fijos (los cuatro combos con "(ninguna)" y sus opciones).</summary>
-    public static ClasificacionTareaPanelViewModel Panel(bool sinCatalogos = false)
+    /// <summary>Panel de clasificación con los proyectos abiertos de los datos fijos ("(ninguno)" y sus opciones).</summary>
+    public static ClasificacionTareaPanelViewModel Panel()
     {
-        var zonas = new Mock<IZonaService>();
-        zonas.Setup(s => s.ListarActivasAsync()).ReturnsAsync(sinCatalogos ? [] : [ZonaCentro, ZonaCosta, ZonaNorte]);
-        var dims = new Mock<IDimensionTematicaService>();
-        dims.Setup(s => s.ListarActivasAsync()).ReturnsAsync(sinCatalogos ? [] : [DimInfraestructura, DimAmbiente]);
-        var orgs = new Mock<IOrganismoResponsableService>();
-        orgs.Setup(s => s.ListarActivasAsync()).ReturnsAsync(sinCatalogos ? [] : [OrgObras, OrgHigiene]);
-        var origenes = new Mock<IOrigenFinanciamientoService>();
-        origenes.Setup(s => s.ListarActivasAsync()).ReturnsAsync(sinCatalogos ? [] : [OrigenFigm, OrigenRentas]);
+        var proyectos = new Mock<IProyectoService>();
+        proyectos.Setup(s => s.ListarOpcionesAsync()).ReturnsAsync(
+        [
+            new OpcionProyectoDto(ProyectoAlumbrado.Id, ProyectoAlumbrado.Titulo, EstadoProyecto.Pendiente),
+            new OpcionProyectoDto(ProyectoArbolado.Id, ProyectoArbolado.Titulo, EstadoProyecto.EnCurso),
+            new OpcionProyectoDto(ProyectoVial.Id, ProyectoVial.Titulo, EstadoProyecto.EnCurso),
+        ]);
         var documentos = new Mock<IDocumentoAdministrativoService>();
         documentos.Setup(s => s.ObtenerPorIdAsync(45)).ReturnsAsync(Expediente45);
-        return new ClasificacionTareaPanelViewModel(zonas.Object, dims.Object, orgs.Object, origenes.Object, documentos.Object,
-            Mock.Of<IConfirmacionService>());
+        return new ClasificacionTareaPanelViewModel(proyectos.Object, documentos.Object, Mock.Of<IConfirmacionService>());
     }
 
     public static TareaFormViewModel Formulario(bool operador = false)
@@ -190,8 +180,7 @@ public static class DatosTareas
     public static ReclasificarTareaDialogViewModel Reclasificar()
     {
         var panel = Panel();
-        panel.InicializarAsync(new DatosClasificacionTarea(
-            ZonaCentro.Id, DimInfraestructura.Id, OrgObras.Id, OrigenFigm.Id, Expediente45.Id)).GetAwaiter().GetResult();
+        panel.InicializarAsync(new DatosClasificacionTarea(ProyectoVial.Id, Expediente45.Id)).GetAwaiter().GetResult();
         return new ReclasificarTareaDialogViewModel(panel);
     }
 }

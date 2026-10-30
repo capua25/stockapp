@@ -21,14 +21,14 @@
 .pie-conteo { margin-top: 12px; }
 /* Anchos MEDIDOS en headless (Skia, tema v2, interior de grilla 948 a 1280 y 1034 a 1366; iguales a los dos tamaños salvo
    la columna *, que toma el resto). Tareas: ESTADO 93 (insignia más ancha 77 + 16), PRIORIDAD 101, VENCE 167 (fecha 80 + 8 +
-   insignia Vencida 63 + 16), TOMADA POR 117, CLASIFICACIÓN 240 (tope). Documentos: TIPO 85, NÚMERO 89, EMISIÓN 90 (fecha con FechaCortaConverter),
+   insignia Vencida 63 + 16), TOMADA POR 117, PROYECTO 240 (tope). Documentos: TIPO 85, NÚMERO 89, EMISIÓN 90 (fecha con FechaCortaConverter),
    ESTADO 97 (81 + 16), REGISTRADO POR 142. Entran sin scroll horizontal. */
 .col-titulo, .col-desc { flex: 1 1 0; min-width: 200px; }
 .col-estado-t { flex: 0 0 93px; }
 .col-prioridad { flex: 0 0 101px; }
 .col-vence { flex: 0 0 167px; }
 .col-tomada { flex: 0 0 117px; }
-.col-clasif { flex: 0 0 240px; }
+.col-proyecto { flex: 0 0 240px; }
 .col-tipo { flex: 0 0 85px; }
 .col-numero { flex: 0 0 89px; }
 .col-emision { flex: 0 0 90px; }

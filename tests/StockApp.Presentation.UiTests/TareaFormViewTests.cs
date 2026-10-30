@@ -36,8 +36,7 @@ public class TareaFormViewTests
         """;
 
     private static ClasificacionTareaPanelViewModel NuevoPanelClasificacion() => new(
-        new ZonaServiceFake(), new DimensionTematicaServiceFake(),
-        new OrganismoResponsableServiceFake(), new OrigenFinanciamientoServiceFake(),
+        new ProyectoOpcionesFake(),
         new DocumentoServiceFake(), new ConfirmacionServiceFake());
 
     private static (Window Window, TareaFormViewModel Vm, TareaServiceFake Servicio, NavigationRecorderFake Nav,
@@ -335,19 +334,21 @@ public class TareaFormViewTests
         var tarea = new Tarea
         {
             Id = 5, Titulo = "x", Estado = EstadoTarea.Terminada,
-            ZonaId = 1, Zona = new Zona { Id = 1, Nombre = "Centro" },
+            ProyectoId = 1, Proyecto = new Proyecto { Id = 1, Titulo = "Plaza de deportes" },
         };
         var servicio = new TareaServiceFake(new System.Collections.Generic.List<Tarea> { tarea });
         var (window, vm, _, _, dialogoClasificacion) = MontarParaVer(tarea, rol: RolUsuario.Admin, servicioExistente: servicio);
-        dialogoClasificacion.ResultadoADevolver = new DatosClasificacionTarea(null, null, null, null, null);
+        Assert.Equal("Plaza de deportes", window.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "ValorProyecto").Text);
+        dialogoClasificacion.ResultadoADevolver = new DatosClasificacionTarea(null, null);
 
         var boton = BotonVisiblePorTexto(window, "Reclasificar");
         Clickear(window, boton);
         Dispatcher.UIThread.RunJobs();
 
         Assert.Equal(1, dialogoClasificacion.Llamadas);
-        Assert.Equal(1, dialogoClasificacion.UltimoActualRecibido?.ZonaId);
-        Assert.Contains((5, new DatosClasificacionTarea(null, null, null, null, null)), servicio.Reclasificaciones);
-        Assert.Null(vm.ZonaTexto);
+        Assert.Equal(1, dialogoClasificacion.UltimoActualRecibido?.ProyectoId);
+        Assert.Equal("Plaza de deportes", dialogoClasificacion.UltimoTituloProyectoRecibido);
+        Assert.Contains((5, new DatosClasificacionTarea(null, null)), servicio.Reclasificaciones);
+        Assert.Null(vm.ProyectoTexto);
     }
 }

@@ -1073,9 +1073,6 @@ namespace StockApp.Infrastructure.Migrations
                     b.Property<string>("Descripcion")
                         .HasColumnType("text");
 
-                    b.Property<int?>("DimensionTematicaId")
-                        .HasColumnType("integer");
-
                     b.Property<int?>("DocumentoAdministrativoId")
                         .HasColumnType("integer");
 
@@ -1094,12 +1091,6 @@ namespace StockApp.Infrastructure.Migrations
                     b.Property<DateTime?>("FechaLimite")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int?>("OrganismoResponsableId")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("OrigenFinanciamientoId")
-                        .HasColumnType("integer");
-
                     b.Property<int>("Prioridad")
                         .HasColumnType("integer");
 
@@ -1113,30 +1104,19 @@ namespace StockApp.Infrastructure.Migrations
                     b.Property<int?>("TomadaPorUsuarioId")
                         .HasColumnType("integer");
 
-                    b.Property<int?>("ZonaId")
-                        .HasColumnType("integer");
-
                     b.HasKey("Id");
 
                     b.HasIndex("CerradaPorUsuarioId");
 
                     b.HasIndex("CreadaPorUsuarioId");
 
-                    b.HasIndex("DimensionTematicaId");
-
                     b.HasIndex("DocumentoAdministrativoId");
 
                     b.HasIndex("Estado");
 
-                    b.HasIndex("OrganismoResponsableId");
-
-                    b.HasIndex("OrigenFinanciamientoId");
-
                     b.HasIndex("ProyectoId");
 
                     b.HasIndex("TomadaPorUsuarioId");
-
-                    b.HasIndex("ZonaId");
 
                     b.ToTable("Tareas");
                 });
@@ -1604,24 +1584,9 @@ namespace StockApp.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.HasOne("StockApp.Domain.Entities.DimensionTematica", "DimensionTematica")
-                        .WithMany()
-                        .HasForeignKey("DimensionTematicaId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("StockApp.Domain.Entities.DocumentoAdministrativo", "DocumentoAdministrativo")
                         .WithMany()
                         .HasForeignKey("DocumentoAdministrativoId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("StockApp.Domain.Entities.OrganismoResponsable", "OrganismoResponsable")
-                        .WithMany()
-                        .HasForeignKey("OrganismoResponsableId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("StockApp.Domain.Entities.OrigenFinanciamiento", "OrigenFinanciamiento")
-                        .WithMany()
-                        .HasForeignKey("OrigenFinanciamientoId")
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("StockApp.Domain.Entities.Proyecto", "Proyecto")
@@ -1634,28 +1599,15 @@ namespace StockApp.Infrastructure.Migrations
                         .HasForeignKey("TomadaPorUsuarioId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("StockApp.Domain.Entities.Zona", "Zona")
-                        .WithMany()
-                        .HasForeignKey("ZonaId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.Navigation("CerradaPor");
 
                     b.Navigation("CreadaPor");
 
-                    b.Navigation("DimensionTematica");
-
                     b.Navigation("DocumentoAdministrativo");
-
-                    b.Navigation("OrganismoResponsable");
-
-                    b.Navigation("OrigenFinanciamiento");
 
                     b.Navigation("Proyecto");
 
                     b.Navigation("TomadaPor");
-
-                    b.Navigation("Zona");
                 });
 
             modelBuilder.Entity("StockApp.Domain.Entities.DocumentoAdministrativo", b =>

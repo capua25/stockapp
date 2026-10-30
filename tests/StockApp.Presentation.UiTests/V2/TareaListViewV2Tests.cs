@@ -141,7 +141,7 @@ public class TareaListViewV2Tests
     {
         var m = Montar();
 
-        Assert.Equal(["TÍTULO", "ESTADO", "PRIORIDAD", "VENCE", "TOMADA POR", "CLASIFICACIÓN"],
+        Assert.Equal(["TÍTULO", "ESTADO", "PRIORIDAD", "VENCE", "TOMADA POR", "PROYECTO"],
             Control<DataGrid>(m, "Grilla").Columns.Select(c => (string)c.Header).ToArray());
     }
 

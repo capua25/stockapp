@@ -122,20 +122,11 @@
                                         <Button x:Name="BotonReclasificar" Grid.Column="1" Classes="secundario" Content="Reclasificar"
                                                 Command="{Binding ReclasificarCommand}" IsVisible="{Binding MuestraReclasificar}" />
                                     </Grid>
-                                    <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto,Auto">
-                                        <v2:CampoFormulario Grid.Row="0" Grid.Column="0" Etiqueta="Zona">
-                                            <TextBlock x:Name="ValorZona" Classes="cuerpo" Text="{Binding ZonaTexto, TargetNullValue='—'}" />
+                                    <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto">
+                                        <v2:CampoFormulario Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="3" Etiqueta="Proyecto">
+                                            <TextBlock x:Name="ValorProyecto" Classes="cuerpo" Text="{Binding ProyectoTexto, TargetNullValue='—'}" />
                                         </v2:CampoFormulario>
-                                        <v2:CampoFormulario Grid.Row="0" Grid.Column="2" Etiqueta="Dimensión">
-                                            <TextBlock x:Name="ValorDimension" Classes="cuerpo" Text="{Binding DimensionTematicaTexto, TargetNullValue='—'}" />
-                                        </v2:CampoFormulario>
-                                        <v2:CampoFormulario Grid.Row="1" Grid.Column="0" Margin="0,16,0,0" Etiqueta="Organismo responsable">
-                                            <TextBlock x:Name="ValorOrganismo" Classes="cuerpo" Text="{Binding OrganismoResponsableTexto, TargetNullValue='—'}" />
-                                        </v2:CampoFormulario>
-                                        <v2:CampoFormulario Grid.Row="1" Grid.Column="2" Margin="0,16,0,0" Etiqueta="Origen de financiamiento">
-                                            <TextBlock x:Name="ValorOrigen" Classes="cuerpo" Text="{Binding OrigenFinanciamientoTexto, TargetNullValue='—'}" />
-                                        </v2:CampoFormulario>
-                                        <v2:CampoFormulario Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,16,0,0" Etiqueta="Expediente">
+                                        <v2:CampoFormulario Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Margin="0,16,0,0" Etiqueta="Expediente">
                                             <TextBlock x:Name="ValorExpediente" Classes="cuerpo" Text="{Binding DocumentoAdministrativoTexto, TargetNullValue='—'}" />
                                         </v2:CampoFormulario>
                                     </Grid>

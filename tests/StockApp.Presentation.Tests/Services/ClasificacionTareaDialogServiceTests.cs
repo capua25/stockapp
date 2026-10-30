@@ -1,7 +1,7 @@
 using System.Threading.Tasks;
 using Moq;
-using StockApp.Application.Catalogo;
 using StockApp.Application.Documentos;
+using StockApp.Application.Proyectos;
 using StockApp.Application.Tareas;
 using StockApp.Presentation.Services;
 using Xunit;
@@ -20,11 +20,9 @@ public class ClasificacionTareaDialogServiceTests
     public async Task PedirClasificacionAsync_SinAppAvalonia_DevuelveNull()
     {
         var svc = new ClasificacionTareaDialogService(
-            Mock.Of<IZonaService>(), Mock.Of<IDimensionTematicaService>(),
-            Mock.Of<IOrganismoResponsableService>(), Mock.Of<IOrigenFinanciamientoService>(),
-            Mock.Of<IDocumentoAdministrativoService>(), Mock.Of<IConfirmacionService>());
+            Mock.Of<IProyectoService>(), Mock.Of<IDocumentoAdministrativoService>(), Mock.Of<IConfirmacionService>());
 
-        var resultado = await svc.PedirClasificacionAsync(new DatosClasificacionTarea(null, null, null, null, null));
+        var resultado = await svc.PedirClasificacionAsync(new DatosClasificacionTarea(null, null));
 
         Assert.Null(resultado);
     }

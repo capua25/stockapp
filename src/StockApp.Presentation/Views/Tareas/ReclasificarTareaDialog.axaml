@@ -24,7 +24,7 @@
             Padding="24">
         <StackPanel Spacing="16">
 
-            <TextBlock Text="Elegí los clasificadores. Dejar un campo vacío lo desasigna." Classes="cuerpo" TextWrapping="Wrap" />
+            <TextBlock Text="Elegí el proyecto y el expediente. Dejar un campo vacío lo desvincula." Classes="cuerpo" TextWrapping="Wrap" />
 
             <pnl:ClasificacionTareaPanelView DataContext="{Binding Panel}" />
 

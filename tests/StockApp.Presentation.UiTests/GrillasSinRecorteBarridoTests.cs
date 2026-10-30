@@ -155,8 +155,7 @@ public class GrillasSinRecorteBarridoTests
                 Id = i, Titulo = "Reparar el bache de la calle Zorrilla frente a la escuela número doce", Estado = i % 2 == 0 ? EstadoTarea.Pendiente : EstadoTarea.EnCurso,
                 Prioridad = PrioridadTarea.Media, FechaLimite = new DateTime(2026, 9, 30, 0, 0, 0, DateTimeKind.Utc),
                 TomadaPor = new Usuario { Id = 2, NombreUsuario = "operador.deposito.central" },
-                Zona = new Zona { Id = 1, Nombre = "Barrio Norte" }, DimensionTematica = new DimensionTematica { Id = 1, Nombre = "Infraestructura" },
-                OrganismoResponsable = new OrganismoResponsable { Id = 1, Nombre = "Dirección de Obras" },
+                ProyectoId = 1, Proyecto = new Proyecto { Id = 1, Titulo = "Repavimentación integral de la rambla costanera y accesos" },
             }, RolUsuario.Admin))),
         new("Documentos", () => new DocumentoListView(), _ => Muchos<object>(i => new DocumentoFila(new DocumentoAdministrativo
             {

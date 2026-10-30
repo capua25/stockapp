@@ -147,43 +147,24 @@ public class TareaFilaTests
         Assert.True(fila.DiasParaVencer > 1000m);
     }
 
-    // ── EtiquetasClasificacion (spec 2026-09-08, D19) ───────────────────────────
+    // ── ProyectoTitulo (spec 2026-10-30): columna PROYECTO ─────────────────────
 
     [Fact]
-    public void EtiquetasClasificacion_SinNingunClasificador_DevuelveNull()
+    public void ProyectoTitulo_TareaSuelta_DevuelveGuion()
     {
-        var tarea = TareaCon(fechaLimite: null);
-        var fila = new TareaFila(tarea, RolUsuario.Operador);
+        var fila = new TareaFila(TareaCon(fechaLimite: null), RolUsuario.Operador);
 
-        Assert.Null(fila.EtiquetasClasificacion);
+        Assert.Equal("—", fila.ProyectoTitulo);
     }
 
     [Fact]
-    public void EtiquetasClasificacion_ConAlgunosClasificadores_LosUneConPuntoMedio()
+    public void ProyectoTitulo_TareaDeUnProyecto_DevuelveSuTitulo()
     {
         var tarea = TareaCon(fechaLimite: null);
-        tarea.Zona = new Zona { Id = 1, Nombre = "Centro" };
-        tarea.OrigenFinanciamiento = new OrigenFinanciamiento { Id = 2, Nombre = "Presupuesto propio" };
+        tarea.ProyectoId = 4;
+        tarea.Proyecto = new Proyecto { Id = 4, Titulo = "Plaza de deportes" };
         var fila = new TareaFila(tarea, RolUsuario.Operador);
 
-        Assert.Equal("Centro · Presupuesto propio", fila.EtiquetasClasificacion);
-    }
-
-    /// <summary>Fix (revisión final, Hallazgo 1b): el expediente quedaba afuera de las cinco
-    /// etiquetas porque antes no tenía un texto presentable sin Anio (Numero solo no distingue
-    /// expedientes de años distintos). La ficha de detalle SIEMPRE mostró el expediente
-    /// (TareaFormViewModel) -- sin esto, la lista quedaba inconsistente con la ficha.</summary>
-    [Fact]
-    public void EtiquetasClasificacion_ConDocumentoAdministrativo_IncluyeExpedienteConNumeroYAnio()
-    {
-        var tarea = TareaCon(fechaLimite: null);
-        tarea.Zona = new Zona { Id = 1, Nombre = "Centro" };
-        tarea.DocumentoAdministrativo = new DocumentoAdministrativo
-        {
-            Id = 9, Numero = "0045", Anio = 2026, Tipo = TipoDocumento.Expediente,
-        };
-        var fila = new TareaFila(tarea, RolUsuario.Operador);
-
-        Assert.Equal("Centro · Exp. 0045/2026", fila.EtiquetasClasificacion);
+        Assert.Equal("Plaza de deportes", fila.ProyectoTitulo);
     }
 }

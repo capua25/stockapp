@@ -14,6 +14,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Proyectos;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -30,7 +31,7 @@ namespace StockApp.Presentation.UiTests.V2;
 /// pie fijo fuera del scroll a los dos tamaños.</summary>
 public class TareaFormViewV2Tests
 {
-    private static readonly Zona Centro = new() { Id = 1, Nombre = "Centro", Activo = true };
+    private static readonly OpcionProyectoDto Plaza = new(1, "Plaza de deportes", EstadoProyecto.EnCurso);
 
     private sealed record Montaje(Window Ventana, TareaFormView Vista, TareaFormViewModel Vm, TareasFake Servicio,
         DocumentosFake Documentos, NavigationRecorderFake Navegacion);
@@ -42,8 +43,7 @@ public class TareaFormViewV2Tests
         documentos ??= new DocumentosFake();
         sesion ??= new SesionFake(RolUsuario.Admin);
         var confirmacion = new ConfirmacionServiceFake();
-        var panel = new ClasificacionTareaPanelViewModel(new ZonaServiceFake([Centro]), new DimensionTematicaServiceFake(),
-            new OrganismoResponsableServiceFake(), new OrigenFinanciamientoServiceFake(), documentos, confirmacion);
+        var panel = new ClasificacionTareaPanelViewModel(new ProyectoOpcionesFake([Plaza]), documentos, confirmacion);
         var navegacion = new NavigationRecorderFake();
         var vm = new TareaFormViewModel(servicio, sesion, navegacion, confirmacion, panel, new ClasificacionDialogServiceFake());
         preparar?.Invoke(vm);
@@ -112,22 +112,20 @@ public class TareaFormViewV2Tests
     }
 
     [AvaloniaFact]
-    public void Alta_SeccionesDatosYClasificacion_PanelEnDosColumnas()
+    public void Alta_SeccionClasificacion_ProyectoArribaYExpedienteDebajo_SinClasificadores()
     {
         var m = Alta();
-        var zona = EnVentana(m.Ventana, Parte<ComboBox>(m, "ComboZona"));
-        var dimension = EnVentana(m.Ventana, Parte<ComboBox>(m, "ComboDimension"));
-        var organismo = EnVentana(m.Ventana, Parte<ComboBox>(m, "ComboOrganismo"));
-        var origen = EnVentana(m.Ventana, Parte<ComboBox>(m, "ComboOrigen"));
+        var proyecto = EnVentana(m.Ventana, Parte<ComboBox>(m, "ComboProyecto"));
         var expediente = EnVentana(m.Ventana, Parte<AutoCompleteBox>(m, "BuscadorExpediente"));
 
         Assert.True(VisibleNombre(m, "SeccionClasificacionAlta"));
-        Assert.Equal(zona.Y, dimension.Y, 0.5);
-        Assert.Equal(organismo.Y, origen.Y, 0.5);
-        Assert.True(dimension.X > zona.Right, "Dimensión no está a la derecha de Zona.");
-        Assert.True(organismo.Y > zona.Bottom);
-        Assert.True(expediente.Y > organismo.Bottom);
-        Assert.Equal(origen.Right - zona.X, expediente.Width, 1);
+        Assert.True(expediente.Y > proyecto.Bottom);
+        Assert.Equal(proyecto.Width, expediente.Width, 1);
+        Assert.Equal(proyecto.X, expediente.X, 1);
+        Assert.Equal(["(ninguno)", "Plaza de deportes"],
+            Parte<ComboBox>(m, "ComboProyecto").Items.Cast<OpcionProyectoTarea>().Select(o => o.Nombre).ToArray());
+        Assert.DoesNotContain(m.Vista.GetVisualDescendants().OfType<Control>(),
+            c => c.Name is "ComboZona" or "ComboDimension" or "ComboOrganismo" or "ComboOrigen");
         Assert.False(VisibleNombre(m, "SeccionDetalle"));
     }
 
@@ -241,7 +239,7 @@ public class TareaFormViewV2Tests
     {
         var m = Detalle();
 
-        foreach (var nombre in new[] { "ValorZona", "ValorDimension", "ValorOrganismo", "ValorOrigen", "ValorExpediente" })
+        foreach (var nombre in new[] { "ValorProyecto", "ValorExpediente" })
             Assert.Equal("—", Parte<TextBlock>(m, nombre).Text);
     }
 

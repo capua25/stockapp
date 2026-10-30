@@ -196,8 +196,7 @@ public class InicioPanelTareasTests
         var formVm = new TareaFormViewModel(
             new TareaServiceFake(), new SesionFake(RolUsuario.Admin), navegacion, new ConfirmacionServiceFake(),
             new ClasificacionTareaPanelViewModel(
-                new ZonaServiceFake(), new DimensionTematicaServiceFake(),
-                new OrganismoResponsableServiceFake(), new OrigenFinanciamientoServiceFake(),
+                new ProyectoOpcionesFake(),
                 new DocumentoServiceFake(), new ConfirmacionServiceFake()),
             new ClasificacionDialogServiceFake());
         navegacion.UltimoInicializadorTareaForm!(formVm);
@@ -248,8 +247,7 @@ public class InicioPanelTareasTests
         var formVm = new TareaFormViewModel(
             new TareaServiceFake(), new SesionFake(RolUsuario.Admin), navegacion, new ConfirmacionServiceFake(),
             new ClasificacionTareaPanelViewModel(
-                new ZonaServiceFake(), new DimensionTematicaServiceFake(),
-                new OrganismoResponsableServiceFake(), new OrigenFinanciamientoServiceFake(),
+                new ProyectoOpcionesFake(),
                 new DocumentoServiceFake(), new ConfirmacionServiceFake()),
             new ClasificacionDialogServiceFake());
         navegacion.UltimoInicializadorTareaForm!(formVm);
