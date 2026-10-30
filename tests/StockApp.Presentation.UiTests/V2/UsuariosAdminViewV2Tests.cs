@@ -111,7 +111,7 @@ public class UsuariosAdminViewV2Tests
         Assert.False(Visible(Parte<Button>(m, "BotonHacerOperador")));
         Assert.Contains("peligro", Parte<Button>(m, "BotonBaja").Classes);
         Assert.False(Visible(Parte<Alerta>(m, "AlertaAccesoTotal")));
-        Assert.Equal(12, Casillas(m).Count());
+        Assert.Equal(14, Casillas(m).Count());
         Assert.All(Casillas(m), c => Assert.True(c.IsEffectivelyEnabled));
         Assert.Equal(2, Casillas(m).Count(c => c.IsChecked == true));
         Assert.Equal("●", Parte<TextBox>(m, "CajaNuevaContrasenaSeleccionado").PasswordChar.ToString());
