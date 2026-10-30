@@ -30,6 +30,13 @@ public class TareaFormComparacionTests
         "Antialias Chromium vs Skia en texto de cuerpo y en negrita; layout alineado (cajas de texto a 1 px, misma línea base), teselas solo sobre el texto. Tope = medido.",
         mutacionPalida);
 
+    // Aprobación de Martin (2026-10-30): con la tarea sin clasificadores (spec Proyectos) el detalle es 52 px más corto y el
+    // scroll deja a la vista texto que antes quedaba arriba; las teselas nuevas son antialias de texto, sin desvío de layout.
+    private static UmbralAprobado AprobacionProyecto(int teselas, string mutacionPalida) => new(
+        teselas, "Martin", "2026-10-30",
+        "Antialias Chromium vs Skia en el texto que queda a la vista tras quitar los clasificadores; layout alineado. Tope = medido.",
+        mutacionPalida);
+
     private const string MutacionAgregarNota = "BotonAgregarNota sin Classes=secundario (relleno equivocado): ";
 
 
@@ -61,7 +68,7 @@ public class TareaFormComparacionTests
         Comparar(DatosTareas.NuevaConErrorDeCampo(), "gestion/tarea-nueva-error-campo.html", TamanoLienzo.Municipio, OcultarSidebarYScrollearAlFinal);
     [AvaloniaFact] public void TareaDetalle_IgualAlMockup() =>
         Comparar(DatosTareas.Detalle(), "gestion/tarea-detalle.html", preparar: OcultarSidebarYScrollearAlFinal,
-            aprobado: AprobacionAntialias(31, MutacionAgregarNota + "162 teselas"));
+            aprobado: AprobacionAntialias(32, MutacionAgregarNota + "162 teselas"));
     [AvaloniaFact] public void TareaDetalle_IgualAlMockup_1366x768() =>
         Comparar(DatosTareas.Detalle(), "gestion/tarea-detalle.html", TamanoLienzo.Municipio, OcultarSidebarYScrollearAlFinal,
             AprobacionAntialias(17, MutacionAgregarNota + "115 teselas"));
@@ -69,7 +76,8 @@ public class TareaFormComparacionTests
         Comparar(DatosTareas.DetalleOperador(), "gestion/tarea-detalle-operador.html", preparar: OcultarSidebarYScrollearAlFinal,
             aprobado: AprobacionAntialias(42, MutacionAgregarNota + "165 teselas"));
     [AvaloniaFact] public void TareaDetalleOperador_IgualAlMockup_1366x768() =>
-        Comparar(DatosTareas.DetalleOperador(), "gestion/tarea-detalle-operador.html", TamanoLienzo.Municipio, OcultarSidebarYScrollearAlFinal);
+        Comparar(DatosTareas.DetalleOperador(), "gestion/tarea-detalle-operador.html", TamanoLienzo.Municipio, OcultarSidebarYScrollearAlFinal,
+            AprobacionProyecto(22, MutacionAgregarNota + "125 teselas"));
     [AvaloniaFact] public void ReclasificarTarea_IgualAlMockup() =>
         CompararDialogo(AprobacionAntialias(13));
     [AvaloniaFact] public void ReclasificarTarea_IgualAlMockup_1366x768() =>

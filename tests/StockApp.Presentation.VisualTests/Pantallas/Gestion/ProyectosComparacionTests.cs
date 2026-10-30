@@ -22,10 +22,16 @@ public class ProyectosComparacionTests
     private static readonly string[] CortesDelMockup = ["Plan de mantenimiento vial del centro 2026"];
 
     private static void Comparar(ShellMainViewModel vm, string mockup, TamanoLienzo? tamano = null, Action<Control>? preparar = null,
-        string[]? recortesPermitidos = null) =>
+        string[]? recortesPermitidos = null, UmbralAprobado? aprobado = null) =>
         ComparacionVisual.CompararConMockup(new ShellMainView(), vm, mockup, tamano: tamano,
             ocultarEnMockup: [".v2-sidebar"], prepararApp: preparar ?? ProductosComparacionTests.OcultarSidebar,
-            recortesPermitidos: recortesPermitidos);
+            recortesPermitidos: recortesPermitidos, aprobado: aprobado);
+
+    // Aprobación de Martin (2026-10-30): antialias Chromium vs Skia en los tres montos y en los títulos "Clasificación",
+    // "Tareas" y "Volver"; layout alineado. Tope = medido.
+    private static readonly UmbralAprobado AprobacionSinFinanzas = new(16, "Martin", "2026-10-30",
+        "Antialias Chromium vs Skia en montos y títulos de la ficha sin finanzas; layout alineado. Tope = medido.",
+        "BotonGuardar sin Classes=primario (relleno equivocado): 32 teselas");
 
     private static Action<Control> SeleccionandoElProyecto(int id) => vista =>
     {
@@ -57,7 +63,8 @@ public class ProyectosComparacionTests
     [AvaloniaFact] public void ProyectoDetalleSobregiro_IgualAlMockup_1366x768() =>
         Comparar(DatosProyectos.DetalleConSobregiro(), "gestion/proyecto-detalle.html", TamanoLienzo.Municipio, OcultarSidebarYScrollearAGastos);
     [AvaloniaFact] public void ProyectoDetalleSinFinanzas_IgualAlMockup() =>
-        Comparar(DatosProyectos.DetalleSinFinanzas(), "gestion/proyecto-detalle-sin-finanzas.html", preparar: OcultarSidebarYScrollearAGastos);
+        Comparar(DatosProyectos.DetalleSinFinanzas(), "gestion/proyecto-detalle-sin-finanzas.html", preparar: OcultarSidebarYScrollearAGastos,
+            aprobado: AprobacionSinFinanzas);
     [AvaloniaFact] public void ProyectoDetalleSinFinanzas_IgualAlMockup_1366x768() =>
         Comparar(DatosProyectos.DetalleSinFinanzas(), "gestion/proyecto-detalle-sin-finanzas.html", TamanoLienzo.Municipio,
             OcultarSidebarYScrollearAGastos);
