@@ -439,6 +439,9 @@ namespace StockApp.Infrastructure.Migrations
                     b.Property<int>("ProveedorId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("ProyectoId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("RubroGastoId")
                         .HasColumnType("integer");
 
@@ -449,6 +452,8 @@ namespace StockApp.Infrastructure.Migrations
                     b.HasIndex("IdImportacion");
 
                     b.HasIndex("LineaPoaId");
+
+                    b.HasIndex("ProyectoId");
 
                     b.HasIndex("RubroGastoId");
 
@@ -660,6 +665,39 @@ namespace StockApp.Infrastructure.Migrations
                         .HasDatabaseName("IX_MovimientosStock_ProductoId_Fecha");
 
                     b.ToTable("MovimientosStock");
+                });
+
+            modelBuilder.Entity("StockApp.Domain.Entities.NotaProyecto", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("EsAutomatica")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ProyectoId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Texto")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProyectoId");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.ToTable("NotasProyecto");
                 });
 
             modelBuilder.Entity("StockApp.Domain.Entities.NotaTarea", b =>
@@ -926,6 +964,70 @@ namespace StockApp.Infrastructure.Migrations
                     b.ToTable("Proveedores");
                 });
 
+            modelBuilder.Entity("StockApp.Domain.Entities.Proyecto", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CreadoPorUsuarioId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Descripcion")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("DimensionTematicaId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Estado")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("FechaCreacion")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("FechaFin")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("FechaLimite")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("OrganismoResponsableId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("OrigenFinanciamientoId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("Presupuesto")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<int>("Prioridad")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Titulo")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int?>("ZonaId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DimensionTematicaId");
+
+                    b.HasIndex("Estado");
+
+                    b.HasIndex("OrganismoResponsableId");
+
+                    b.HasIndex("OrigenFinanciamientoId");
+
+                    b.HasIndex("ZonaId");
+
+                    b.ToTable("Proyectos");
+                });
+
             modelBuilder.Entity("StockApp.Domain.Entities.RubroGasto", b =>
                 {
                     b.Property<int>("Id")
@@ -1001,6 +1103,9 @@ namespace StockApp.Infrastructure.Migrations
                     b.Property<int>("Prioridad")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("ProyectoId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Titulo")
                         .IsRequired()
                         .HasColumnType("text");
@@ -1026,6 +1131,8 @@ namespace StockApp.Infrastructure.Migrations
                     b.HasIndex("OrganismoResponsableId");
 
                     b.HasIndex("OrigenFinanciamientoId");
+
+                    b.HasIndex("ProyectoId");
 
                     b.HasIndex("TomadaPorUsuarioId");
 
@@ -1263,6 +1370,11 @@ namespace StockApp.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("StockApp.Domain.Entities.Proyecto", "Proyecto")
+                        .WithMany()
+                        .HasForeignKey("ProyectoId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("StockApp.Domain.Entities.RubroGasto", "RubroGasto")
                         .WithMany()
                         .HasForeignKey("RubroGastoId")
@@ -1272,6 +1384,8 @@ namespace StockApp.Infrastructure.Migrations
                     b.Navigation("LineaPoa");
 
                     b.Navigation("Proveedor");
+
+                    b.Navigation("Proyecto");
 
                     b.Navigation("RubroGasto");
                 });
@@ -1348,6 +1462,23 @@ namespace StockApp.Infrastructure.Migrations
                     b.Navigation("Gasto");
 
                     b.Navigation("Producto");
+
+                    b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("StockApp.Domain.Entities.NotaProyecto", b =>
+                {
+                    b.HasOne("StockApp.Domain.Entities.Proyecto", null)
+                        .WithMany("Notas")
+                        .HasForeignKey("ProyectoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("StockApp.Domain.Entities.Usuario", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.Navigation("Usuario");
                 });
@@ -1429,6 +1560,37 @@ namespace StockApp.Infrastructure.Migrations
                     b.Navigation("UnidadMedida");
                 });
 
+            modelBuilder.Entity("StockApp.Domain.Entities.Proyecto", b =>
+                {
+                    b.HasOne("StockApp.Domain.Entities.DimensionTematica", "DimensionTematica")
+                        .WithMany()
+                        .HasForeignKey("DimensionTematicaId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("StockApp.Domain.Entities.OrganismoResponsable", "OrganismoResponsable")
+                        .WithMany()
+                        .HasForeignKey("OrganismoResponsableId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("StockApp.Domain.Entities.OrigenFinanciamiento", "OrigenFinanciamiento")
+                        .WithMany()
+                        .HasForeignKey("OrigenFinanciamientoId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("StockApp.Domain.Entities.Zona", "Zona")
+                        .WithMany()
+                        .HasForeignKey("ZonaId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("DimensionTematica");
+
+                    b.Navigation("OrganismoResponsable");
+
+                    b.Navigation("OrigenFinanciamiento");
+
+                    b.Navigation("Zona");
+                });
+
             modelBuilder.Entity("StockApp.Domain.Entities.Tarea", b =>
                 {
                     b.HasOne("StockApp.Domain.Entities.Usuario", "CerradaPor")
@@ -1462,6 +1624,11 @@ namespace StockApp.Infrastructure.Migrations
                         .HasForeignKey("OrigenFinanciamientoId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("StockApp.Domain.Entities.Proyecto", "Proyecto")
+                        .WithMany()
+                        .HasForeignKey("ProyectoId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("StockApp.Domain.Entities.Usuario", "TomadaPor")
                         .WithMany()
                         .HasForeignKey("TomadaPorUsuarioId")
@@ -1484,6 +1651,8 @@ namespace StockApp.Infrastructure.Migrations
 
                     b.Navigation("OrigenFinanciamiento");
 
+                    b.Navigation("Proyecto");
+
                     b.Navigation("TomadaPor");
 
                     b.Navigation("Zona");
@@ -1502,6 +1671,11 @@ namespace StockApp.Infrastructure.Migrations
             modelBuilder.Entity("StockApp.Domain.Entities.LineaPoa", b =>
                 {
                     b.Navigation("Asignaciones");
+                });
+
+            modelBuilder.Entity("StockApp.Domain.Entities.Proyecto", b =>
+                {
+                    b.Navigation("Notas");
                 });
 
             modelBuilder.Entity("StockApp.Domain.Entities.Tarea", b =>

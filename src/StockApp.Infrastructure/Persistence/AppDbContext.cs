@@ -27,6 +27,8 @@ public class AppDbContext : DbContext
     public DbSet<ConfiguracionAlertas> ConfiguracionesAlertas => Set<ConfiguracionAlertas>();
     public DbSet<Tarea> Tareas => Set<Tarea>();
     public DbSet<NotaTarea> NotasTarea => Set<NotaTarea>();
+    public DbSet<Proyecto> Proyectos => Set<Proyecto>();
+    public DbSet<NotaProyecto> NotasProyecto => Set<NotaProyecto>();
     // Esquema del importador ODS (eliminado 2026-10-21): inutilizado, se conserva para no generar drops. No borrar sin decisión.
     public DbSet<LoteImportacion> LotesImportacion => Set<LoteImportacion>();
     public DbSet<PermisoUsuario> PermisosUsuario => Set<PermisoUsuario>();
@@ -267,6 +269,9 @@ public class AppDbContext : DbContext
                 .HasFilter("\"Activo\" = TRUE AND \"NumeroFactura\" IS NOT NULL");
             e.HasOne(g => g.Proveedor).WithMany()
                 .HasForeignKey(g => g.ProveedorId).OnDelete(DeleteBehavior.Restrict);
+            // Proyecto (spec 2026-10-30): nullable y Restrict, migración aditiva.
+            e.HasOne(g => g.Proyecto).WithMany()
+                .HasForeignKey(g => g.ProyectoId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(g => g.RubroGasto).WithMany()
                 .HasForeignKey(g => g.RubroGastoId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(g => g.LineaPoa).WithMany()
@@ -404,6 +409,35 @@ public class AppDbContext : DbContext
                 .HasForeignKey(t => t.OrigenFinanciamientoId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(t => t.DocumentoAdministrativo).WithMany()
                 .HasForeignKey(t => t.DocumentoAdministrativoId).OnDelete(DeleteBehavior.Restrict);
+            // Proyecto (spec 2026-10-30): nullable y Restrict, migración aditiva.
+            e.HasOne(t => t.Proyecto).WithMany()
+                .HasForeignKey(t => t.ProyectoId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── Proyectos (spec 2026-10-30): calcado de Tarea; sin baja lógica ─────
+        modelBuilder.Entity<Proyecto>(e =>
+        {
+            e.Property(p => p.Titulo).IsRequired();
+            e.Property(p => p.Presupuesto).HasPrecision(18, 4);
+            e.HasIndex(p => p.Estado);
+            e.HasOne(p => p.Zona).WithMany()
+                .HasForeignKey(p => p.ZonaId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(p => p.DimensionTematica).WithMany()
+                .HasForeignKey(p => p.DimensionTematicaId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(p => p.OrganismoResponsable).WithMany()
+                .HasForeignKey(p => p.OrganismoResponsableId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(p => p.OrigenFinanciamiento).WithMany()
+                .HasForeignKey(p => p.OrigenFinanciamientoId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<NotaProyecto>(e =>
+        {
+            e.Property(n => n.Texto).IsRequired();
+            e.HasIndex(n => n.ProyectoId);
+            e.HasOne<Proyecto>().WithMany(p => p.Notas)
+                .HasForeignKey(n => n.ProyectoId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne(n => n.Usuario).WithMany()
+                .HasForeignKey(n => n.UsuarioId).OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<NotaTarea>(e =>
