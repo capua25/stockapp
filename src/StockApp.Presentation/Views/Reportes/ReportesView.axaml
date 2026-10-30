@@ -16,7 +16,7 @@
     <StackPanel Margin="28,24">
 
         <v2:EncabezadoPagina x:Name="Encabezado" Titulo="Reportes"
-                             Subtitulo="Consultas e informes del inventario, la auditoría y las tareas." />
+                             Subtitulo="Consultas e informes del inventario, la auditoría y los proyectos." />
 
         <v2:GrillaUniformeV2 x:Name="Tarjetas" Columnas="3" Espaciado="{DynamicResource V2Espacio12}">
             <v2:TarjetaAcceso x:Name="TarjetaValorizacion" Icono="mdi-currency-usd" Titulo="Valorización de inventario"
