@@ -63,7 +63,7 @@ Se crea la entidad **Proyecto**, y la Tarea vuelve a su simplicidad inicial. El 
    - Se agrega `Tarea.ProyectoId` (nullable, todas en null) y `Gasto.ProyectoId` (nullable, todos en null).
    - Las tablas maestras (Zona, DimensionTematica, OrganismoResponsable, OrigenFinanciamiento) no se tocan: pasan a usarlas los proyectos.
    - Requisito de despliegue: backup `pg_dump` verificado antes de aplicar la migración en el VPS.
-2. **Estados del proyecto**: se reusan las transiciones válidas de la Tarea (Pendiente→En curso, En curso→Terminado, Pendiente/En curso→Cancelado). El cambio de estado lo hace cualquiera con el permiso de gestión; cada cambio se audita con "estado anterior → nuevo".
+2. **Estados del proyecto**: se reusan las transiciones válidas de la Tarea (Pendiente→En curso, En curso→Pendiente, En curso→Terminado, Pendiente/En curso→Cancelado). En la ficha, En curso→Pendiente es el botón "Volver a pendiente". El cambio de estado lo hace cualquiera con el permiso de gestión; cada cambio se audita con "estado anterior → nuevo".
    - *(Decisión del agente.)* A diferencia de la Tarea, Terminado y Cancelado se pueden **reabrir** a En curso, con `proyectos.gestionar`. Sin esto, un proyecto cerrado por error no podría recibir más gastos.
    - *(Decisión del agente.)* El proyecto guarda `FechaCreacion` y `FechaFin`. `FechaFin` se sella al pasar a Terminado o Cancelado y se limpia al reabrir. Así el reporte-matriz conserva su criterio de fecha Creación/Cierre.
 3. **Gasto ↔ Proyecto**:
@@ -84,3 +84,9 @@ Se crea la entidad **Proyecto**, y la Tarea vuelve a su simplicidad inicial. El 
 - Si el estado y la prioridad del Proyecto reusan los enums `EstadoTarea`/`PrioridadTarea` o tienen los suyos.
 - Ubicación del módulo Proyectos en el sidebar.
 - Cómo queda el panel de clasificación (`ClasificacionTareaPanelViewModel`): se mueve a Proyectos sin el buscador de expedientes, y en la Tarea queda solo el expediente.
+
+## Deuda conocida (cierre, 2026-10-30)
+
+- `VerificadorConvencionesTests.MockupsDelRepo_RespetanLaConvencion` (UiV2.Herramientas.Tests) falla: en `gestion/proyectos.html` (encabezado PRESUPUESTO) y `gestion/proyecto-detalle.html` (encabezado MONTO) hay celdas `v2-num` sin su `<span>` único.
+- Tres comparaciones visuales esperan la decisión de umbral de Martin: `TareaDetalle_IgualAlMockup` (32 teselas, máximo 31), `TareaDetalleOperador_IgualAlMockup_1366x768` (22, máximo 11) y `ProyectoDetalleSinFinanzas_IgualAlMockup` (16, máximo 11).
+- Crear una tarea desde la ficha del proyecto la deja vinculada, pero al guardar vuelve a la lista de Tareas y no a la ficha.
