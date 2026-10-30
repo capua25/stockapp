@@ -91,3 +91,26 @@
 .fila-seleccionada { background: var(--v2-color-acento-suave); }
 /* Título de sección en los detalles de documento (el mismo que Adjuntos): 8 abajo cuando no lleva botón. */
 .titulo-sec { margin-bottom: 8px; }
+/* Proyectos (anchos MEDIDOS en headless, como los de Tareas): ESTADO 93 (la misma insignia), PRIORIDAD, ZONA,
+   PRESUPUESTO (derecha) y FECHA LÍMITE miden su contenido; TÍTULO toma el resto. */
+.col-prioridad-p { flex: 0 0 101px; }
+.col-zona { flex: 0 0 70px; }
+.col-presupuesto { flex: 0 0 124px; }
+.col-flimite { flex: 0 0 150px; }
+/* Ficha de proyecto: los tres totales de Gastos en un Grid *,16,*,16,* (columnas de 226 en el interior de 710), la lista
+   de gastos 16 debajo y las grillas de gastos y de tareas del ancho de la card. */
+.campos-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; column-gap: 16px; align-items: start; }
+.lista-gastos { margin-top: 16px; }
+.grilla-ficha .v2-grilla-header { flex: 0 0 auto; }
+.gcol-fecha { flex: 0 0 148px; }
+.gcol-prov { flex: 0 0 120px; }
+.gcol-det { flex: 1 1 0; min-width: 120px; }
+.gcol-monto { flex: 0 0 115px; }
+.tcol-titulo { flex: 1 1 0; min-width: 160px; }
+.tcol-estado { flex: 0 0 93px; }
+.tcol-tomada { flex: 0 0 117px; }
+.tcol-vence { flex: 0 0 150px; }
+/* Encabezado de la ficha de proyecto: la insignia centrada en el alto de los botones de estado (StackPanel horizontal). */
+.acciones-ficha { align-items: center; }
+/* TextBox con HorizontalContentAlignment=Right (Presupuesto). */
+.a-la-derecha { justify-content: flex-end; }

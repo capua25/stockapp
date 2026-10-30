@@ -12,7 +12,7 @@ public partial class TareaFormView : UserControl
         DataContextChanged += async (_, _) =>
         {
             if (DataContext is TareaFormViewModel vm && vm.EsNuevaTarea)
-                await vm.ClasificacionPanel.InicializarAsync();
+                await vm.InicializarAltaAsync();
         };
 
         // Salir de la caja sin completarla cuenta como tocarla: su error aparece ahí y no recién al guardar (que con el

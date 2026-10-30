@@ -23,12 +23,14 @@ using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.ViewModels.Documentos;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Movimientos;
+using StockApp.Presentation.ViewModels.Proyectos;
 using StockApp.Presentation.ViewModels.Tareas;
 using StockApp.Presentation.Views.Catalogo;
 using StockApp.Presentation.Views.Documentos;
 using StockApp.Presentation.Views.Finanzas;
 using StockApp.Presentation.Views.Movimientos;
 using StockApp.Presentation.Views.Reportes;
+using StockApp.Presentation.Views.Proyectos;
 using StockApp.Presentation.Views.Tareas;
 using Xunit;
 
@@ -150,6 +152,13 @@ public class GrillasSinRecorteBarridoTests
             new MovimientoCajaDto(new DateOnly(2026, 3, 15), i % 2 == 0 ? "Ingreso" : "Egreso", "Compra de materiales de construcción",
                 "Distribuidora Municipal del Este SRL", "A-0004521", "Rentas Generales Departamentales", "Materiales de construcción",
                 98765432.10m, 12345678.90m, -98765432.10m))),
+        new("Proyectos", () => new ProyectoListView(), _ => Muchos<object>(i => new ProyectoFila(new Proyecto
+            {
+                Id = i, Titulo = "Repavimentación integral de la rambla costanera y sus accesos principales",
+                Estado = i % 2 == 0 ? EstadoProyecto.Pendiente : EstadoProyecto.EnCurso, Prioridad = PrioridadTarea.Media,
+                FechaLimite = new DateTime(2026, 9, 30, 0, 0, 0, DateTimeKind.Utc), Presupuesto = 98765432.10m + i,
+                Zona = new Zona { Id = 1, Nombre = "Barrio Norte y alrededores del puerto", Activo = true }, ZonaId = 1,
+            }))),
         new("Tareas", () => new TareaListView(), _ => Muchos<object>(i => new TareaFila(new Tarea
             {
                 Id = i, Titulo = "Reparar el bache de la calle Zorrilla frente a la escuela número doce", Estado = i % 2 == 0 ? EstadoTarea.Pendiente : EstadoTarea.EnCurso,

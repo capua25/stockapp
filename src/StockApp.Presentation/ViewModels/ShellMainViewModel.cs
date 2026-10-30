@@ -17,6 +17,7 @@ using StockApp.Presentation.ViewModels.Documentos;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Movimientos;
 using StockApp.Presentation.ViewModels.Reportes;
+using StockApp.Presentation.ViewModels.Proyectos;
 using StockApp.Presentation.ViewModels.Tareas;
 
 namespace StockApp.Presentation.ViewModels;
@@ -70,6 +71,12 @@ public partial class ShellMainViewModel : ViewModelBase
 
     public bool PuedeGestionarTareas =>
         _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.GestionarTareas);
+
+    public bool PuedeVerProyectos =>
+        _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.VerProyectos);
+
+    public bool PuedeGestionarProyectos =>
+        _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.GestionarProyectos);
 
     public bool PuedeGestionarDocumentos =>
         _session.RolActual == RolUsuario.Admin || _session.PermisosActuales.Contains(Permisos.GestionarDocumentos);
@@ -249,6 +256,7 @@ public partial class ShellMainViewModel : ViewModelBase
             }),
             new GrupoNavegacion("GESTIÓN", new List<ItemNavegacion>
             {
+                CrearItem("Proyectos", "mdi-folder-outline", NavProyectosCommand, "Proyectos", () => PuedeVerProyectos),
                 CrearItem("Tareas", "mdi-checkbox-marked-outline", NavTareasCommand, "Tareas", () => PuedeGestionarTareas),
                 CrearItem("Documentos", "mdi-file-cabinet", NavDocumentosCommand, "Documentos", () => PuedeGestionarDocumentos),
             }),
@@ -333,6 +341,8 @@ public partial class ShellMainViewModel : ViewModelBase
         [typeof(LibroCajaViewModel)] = "LibroCaja",
         [typeof(ControlPoaViewModel)] = "ControlPoa",
         [typeof(CalendarioPagosViewModel)] = "CalendarioPagos",
+        [typeof(ProyectoListViewModel)] = "Proyectos",
+        [typeof(ProyectoFormViewModel)] = "Proyectos",
         [typeof(TareaListViewModel)] = "Tareas",
         [typeof(TareaFormViewModel)] = "Tareas",
         [typeof(DocumentoListViewModel)] = "Documentos",
@@ -374,6 +384,8 @@ public partial class ShellMainViewModel : ViewModelBase
         OnPropertyChanged(nameof(PuedeGestionarProductos));
         OnPropertyChanged(nameof(PuedeRegistrarMovimientos));
         OnPropertyChanged(nameof(PuedeGestionarTareas));
+        OnPropertyChanged(nameof(PuedeVerProyectos));
+        OnPropertyChanged(nameof(PuedeGestionarProyectos));
         OnPropertyChanged(nameof(PuedeGestionarDocumentos));
         OnPropertyChanged(nameof(PuedeVerFinanzas));
         OnPropertyChanged(nameof(PuedeGestionarMaestrosFinanzas));
@@ -519,6 +531,15 @@ public partial class ShellMainViewModel : ViewModelBase
     {
         SeccionActiva = "HistorialMovimientos";
         _navigation.Navegar<MovimientoHistorialViewModel>();
+    }
+
+    // ── Proyectos (spec 2026-10-30): Admin y Operador con proyectos.ver ───────
+
+    [RelayCommand]
+    private void NavProyectos()
+    {
+        SeccionActiva = "Proyectos";
+        _navigation.Navegar<ProyectoListViewModel>();
     }
 
     // ── Tareas (spec 2026-08-01): Admin y Operador ────────────────────────────

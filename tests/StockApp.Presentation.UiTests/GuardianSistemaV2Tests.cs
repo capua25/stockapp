@@ -21,6 +21,7 @@ using StockApp.Presentation.Views.Documentos;
 using StockApp.Presentation.Views.Finanzas;
 using StockApp.Presentation.Views.Movimientos;
 using StockApp.Presentation.Views.Reportes;
+using StockApp.Presentation.Views.Proyectos;
 using StockApp.Presentation.Views.Tareas;
 
 namespace StockApp.Presentation.UiTests;
@@ -115,6 +116,8 @@ public class GuardianSistemaV2Tests
         typeof(CatalogoListadoView),
         typeof(UsuariosAdminView),
         typeof(MantenimientoView),
+        typeof(ProyectoListView),
+        typeof(ProyectoFormView),
         typeof(TareaListView),
         typeof(TareaFormView),
         typeof(ClasificacionTareaPanelView),

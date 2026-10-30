@@ -9,6 +9,8 @@ using StockApp.Domain.Entities;
 using StockApp.Presentation.ViewModels;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Movimientos;
+using StockApp.Application.Proyectos;
+using StockApp.Presentation.ViewModels.Proyectos;
 using StockApp.Presentation.ViewModels.Tareas;
 using Xunit;
 
@@ -87,6 +89,43 @@ public class ReflexionVistaViewModelTests
             nameof(TareaFormViewModel.EsAdmin),
             // INotifyDataErrorInfo: lo consume el DataValidationErrors de cada control, no un binding propio.
             nameof(TareaFormViewModel.HasErrors),
+        };
+        AssertTodasExpuestas(axaml, miembros, exclusiones);
+    }
+
+    [Fact]
+    public void ProyectoListViewModel_TodaPropiedadYComando_TieneUnControlEnLaVista()
+    {
+        var axaml = LeerAxaml("StockApp.Presentation/Views/Proyectos/ProyectoListView.axaml");
+        var miembros = PropiedadesPublicasDeclaradas(typeof(ProyectoListViewModel));
+
+        var exclusiones = new HashSet<string>
+        {
+            // Lo consume NotificarPermisosActualizados del VM (vacía y marca "Sin permiso"); la vista muestra el resultado
+            // por SinPermiso, no lee este gate.
+            nameof(ProyectoListViewModel.PuedeVerProyectos),
+        };
+        AssertTodasExpuestas(axaml, miembros, exclusiones);
+    }
+
+    [Fact]
+    public void ProyectoFormViewModel_TodaPropiedadYComando_TieneUnControlEnLaVista()
+    {
+        var axaml = LeerAxaml("StockApp.Presentation/Views/Proyectos/ProyectoFormView.axaml");
+        var miembros = PropiedadesPublicasDeclaradas(typeof(ProyectoFormViewModel));
+
+        var exclusiones = new HashSet<string>
+        {
+            // Gates internos: la vista lee sus derivados (EsEditable, Puede*, MuestraTareas, MuestraAgregarNota), y
+            // PuedeVerProyectos lo consume NotificarPermisosActualizados (la vista muestra SinPermiso).
+            nameof(ProyectoFormViewModel.PuedeVerProyectos),
+            nameof(ProyectoFormViewModel.PuedeGestionarProyectos),
+            nameof(ProyectoFormViewModel.PuedeGestionarTareas),
+            nameof(ProyectoFormViewModel.EsCerrado),
+            // INotifyDataErrorInfo: lo consume el DataValidationErrors de cada control, no un binding propio.
+            nameof(ProyectoFormViewModel.HasErrors),
+            // Lo dispara el doble click en la grilla de tareas desde el code-behind (OnTareaDobleClick).
+            nameof(ProyectoFormViewModel.VerTareaCommand),
         };
         AssertTodasExpuestas(axaml, miembros, exclusiones);
     }
@@ -178,6 +217,38 @@ public class ReflexionVistaViewModelTests
         Assert.True(invalidos.Count == 0,
             "Binding(s) en TareaListView.axaml sin propiedad correspondiente ni en TareaListViewModel, "
             + "TareaFila, ViewModelBase ni OpcionEstadoTarea (posible typo silencioso de Avalonia): " + string.Join(", ", invalidos));
+    }
+
+    [Fact]
+    public void ProyectoListView_NingunBindingApuntaAUnaPropiedadInexistente()
+    {
+        var axaml = LeerAxaml("StockApp.Presentation/Views/Proyectos/ProyectoListView.axaml");
+        var validos = PropiedadesPublicasDeclaradas(typeof(ProyectoListViewModel))
+            .Concat(PropiedadesPublicasDeclaradas(typeof(ProyectoFila)))
+            .Concat(PropiedadesPublicasDeclaradas(typeof(ViewModelBase)))
+            .Concat(PropiedadesPublicasDeclaradas(typeof(OpcionEstadoProyecto)))
+            .ToHashSet();
+
+        var invalidos = ExtraerPrimerSegmentoDeBindings(axaml).Where(c => !validos.Contains(c)).ToList();
+        Assert.True(invalidos.Count == 0,
+            "Binding(s) en ProyectoListView.axaml sin propiedad correspondiente: " + string.Join(", ", invalidos));
+    }
+
+    [Fact]
+    public void ProyectoFormView_NingunBindingApuntaAUnaPropiedadInexistente()
+    {
+        var axaml = LeerAxaml("StockApp.Presentation/Views/Proyectos/ProyectoFormView.axaml");
+        var validos = PropiedadesPublicasDeclaradas(typeof(ProyectoFormViewModel))
+            .Concat(PropiedadesPublicasDeclaradas(typeof(ViewModelBase)))
+            .Concat(PropiedadesPublicasDeclaradas(typeof(OpcionCatalogoProyecto)))
+            .Concat(PropiedadesPublicasDeclaradas(typeof(GastoDeProyectoDto)))
+            .Concat(PropiedadesPublicasDeclaradas(typeof(TareaFila)))
+            .Concat(PropiedadesPublicasDeclaradas(typeof(NotaProyecto)))
+            .ToHashSet();
+
+        var invalidos = ExtraerPrimerSegmentoDeBindings(axaml).Where(c => !validos.Contains(c)).ToList();
+        Assert.True(invalidos.Count == 0,
+            "Binding(s) en ProyectoFormView.axaml sin propiedad correspondiente: " + string.Join(", ", invalidos));
     }
 
     [Fact]

@@ -221,6 +221,25 @@ public class ShellMainViewGatesTests
     }
 
     [AvaloniaFact]
+    public void Sidebar_OperadorConVerProyectos_MuestraProyectos()
+    {
+        // Permisos MIXTOS: proyectos.ver más uno sin relación (un Admin no prueba el gate).
+        var (window, vm) = Montar(RolUsuario.Operador, Permisos.VerProyectos, Permisos.VerFinanzas);
+
+        Assert.True(EsVisible(window, vm.NavProyectosCommand));
+    }
+
+    [AvaloniaFact]
+    public void Sidebar_OperadorSinVerProyectos_NoMuestraProyectos()
+    {
+        // Mixtos sin proyectos.ver, con los dos de Tareas: los permisos de Tareas no abren Proyectos (spec 2026-10-30).
+        var (window, vm) = Montar(RolUsuario.Operador, Permisos.GestionarTareas, Permisos.AdministrarTareas, Permisos.VerFinanzas);
+
+        Assert.False(EsVisible(window, vm.NavProyectosCommand));
+        Assert.True(EsVisible(window, vm.NavTareasCommand));
+    }
+
+    [AvaloniaFact]
     public void OperadorConGestionarDocumentos_VeDocumentos()
     {
         var (window, vm) = Montar(RolUsuario.Operador, Permisos.GestionarDocumentos, Permisos.RegistrarMovimientos);

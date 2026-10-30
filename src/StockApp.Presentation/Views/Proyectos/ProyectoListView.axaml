@@ -1,0 +1,178 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Proyectos"
+             xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
+             xmlns:b="using:StockApp.Presentation.Behaviors"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
+             x:Class="StockApp.Presentation.Views.Proyectos.ProyectoListView"
+             x:DataType="vm:ProyectoListViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
+
+    <!-- UI v2 (listado §5.1). Espejo: docs/ui-v2/mockups/gestion/proyectos.html. Mismo molde que TareaListView: una sola
+         grilla filtrada por Estado en el cliente ("Abiertos" por defecto). Ver abre la ficha de la fila seleccionada (doble
+         click equivale a Ver); Nuevo proyecto solo con proyectos.gestionar. Las acciones de estado viven en la ficha.
+         Cargando, sin servidor y los dos vacíos dentro de la card; tras un 403, Sin permiso en lugar de la card. -->
+    <DockPanel Margin="28,24">
+
+        <v2:EncabezadoPagina x:Name="Encabezado" DockPanel.Dock="Top" Titulo="Proyectos"
+                             Subtitulo="Obras y programas del municipio: su presupuesto y lo gastado.">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button x:Name="BotonVer" Classes="secundario" Content="Ver" Command="{Binding VerDetalleCommand}"
+                        CommandParameter="{Binding FilaSeleccionada}"
+                        IsEnabled="{Binding FilaSeleccionada, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                <Button x:Name="BotonNuevo" Classes="primario" Content="Nuevo proyecto" Command="{Binding NuevoCommand}"
+                        IsVisible="{Binding PuedeGestionarProyectos}" />
+            </StackPanel>
+        </v2:EncabezadoPagina>
+
+        <v2:EstadoVacio x:Name="EstadoSinPermiso" DockPanel.Dock="Top" UseLayoutRounding="False"
+                        Titulo="Sin permiso" Mensaje="{Binding MensajeSinPermiso}" EsError="True"
+                        IsVisible="{Binding SinPermiso}" />
+
+        <v2:TarjetaContenido x:Name="Tarjeta" IsVisible="{Binding !SinPermiso}">
+            <DockPanel>
+                <v2:BarraFiltros x:Name="Filtros" DockPanel.Dock="Top" MostrarBusqueda="False">
+                    <v2:CampoFormulario x:Name="CampoEstado" Etiqueta="Estado">
+                        <ComboBox x:Name="ComboEstado" Width="160"
+                                  ItemsSource="{Binding FiltrosEstado}" SelectedItem="{Binding FiltroEstado}">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:OpcionEstadoProyecto"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                    </v2:CampoFormulario>
+                </v2:BarraFiltros>
+
+                <TextBlock x:Name="PieConteo" DockPanel.Dock="Bottom" Classes="pie-conteo" Margin="0,12,0,0"
+                           Text="{Binding CantidadVisible, Converter={x:Static conv:ConteoConverter.Instance}, ConverterParameter='proyecto|proyectos'}">
+                    <TextBlock.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="CantidadVisible" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </TextBlock.IsVisible>
+                </TextBlock>
+
+                <v2:EstadoCargando x:Name="IndicadorCarga" DockPanel.Dock="Top" Texto="Cargando proyectos…">
+                    <v2:EstadoCargando.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" />
+                            <Binding Path="Proyectos.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                        </MultiBinding>
+                    </v2:EstadoCargando.IsVisible>
+                </v2:EstadoCargando>
+
+                <v2:EstadoVacio x:Name="EstadoSinConexion" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="No se pudo conectar con el servidor"
+                                Mensaje="Verificá que el servidor esté encendido y accesible en la red, y volvé a intentar."
+                                EsError="True" IsVisible="{Binding SinConexion}">
+                    <Button x:Name="BotonReintentar" Classes="secundario" Content="Reintentar" Command="{Binding ReintentarCargaCommand}" />
+                </v2:EstadoVacio>
+
+                <!-- Sin ningún proyecto: el botón es secundario porque el primario ya está en el encabezado. -->
+                <v2:EstadoVacio x:Name="EstadoSinProyectos" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="Todavía no hay proyectos"
+                                Mensaje="Cuando se cree un proyecto, va a aparecer acá.">
+                    <v2:EstadoVacio.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinPermiso" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="Proyectos.Count" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                        </MultiBinding>
+                    </v2:EstadoVacio.IsVisible>
+                    <Button x:Name="BotonNuevoVacio" Classes="secundario" Content="Nuevo proyecto" Command="{Binding NuevoCommand}"
+                            IsVisible="{Binding PuedeGestionarProyectos}" />
+                </v2:EstadoVacio>
+
+                <!-- Hay proyectos pero el filtro de Estado no deja ver ninguno. -->
+                <v2:EstadoVacio x:Name="EstadoSinResultados" DockPanel.Dock="Top" UseLayoutRounding="False"
+                                Titulo="No hay proyectos en este estado"
+                                Mensaje="Probá con otro estado.">
+                    <v2:EstadoVacio.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="Cargando" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinPermiso" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="Proyectos.Count" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="CantidadVisible" Converter="{x:Static conv:ConteoConverter.EsCero}" />
+                        </MultiBinding>
+                    </v2:EstadoVacio.IsVisible>
+                </v2:EstadoVacio>
+
+                <!-- Cada TextBlock de celda lleva Classes.inactivo con el proyecto cancelado (texto terciario por token). Las
+                     de texto libre miden su contenido y, si ceden, se cortan con tooltip; TÍTULO es la proporcional. ESTADO
+                     es de ancho fijo (conjunto cerrado). PRESUPUESTO va alineada a la derecha. La fecha es de calendario. -->
+                <DataGrid x:Name="Grilla" ItemsSource="{Binding ProyectosView}" SelectedItem="{Binding FilaSeleccionada}"
+                          DoubleTapped="OnFilaDobleClick" IsReadOnly="True" CanUserSortColumns="True" CanUserResizeColumns="True"
+                          ScrollViewer.HorizontalScrollBarVisibility="Auto">
+                    <DataGrid.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="CantidadVisible" Converter="{x:Static conv:ConteoConverter.HayElementos}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </DataGrid.IsVisible>
+                    <DataGrid.Columns>
+                        <DataGridTemplateColumn Header="TÍTULO" Width="*" MinWidth="200" SortMemberPath="Titulo">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:ProyectoFila">
+                                    <TextBlock Text="{Binding Titulo}" Classes.inactivo="{Binding Proyecto.Estado, Converter={x:Static conv:EstadoProyectoConverter.Inactivo}}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Titulo}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="ESTADO" Width="93" SortMemberPath="Proyecto.Estado">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:ProyectoFila">
+                                    <v2:Insignia Texto="{Binding Proyecto.Estado, Converter={x:Static conv:EstadoProyectoConverter.Texto}}"
+                                                 Variante="{Binding Proyecto.Estado, Converter={x:Static conv:EstadoProyectoConverter.Variante}}"
+                                                 HorizontalAlignment="Left" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="PRIORIDAD" Width="Auto" SortMemberPath="PrioridadTexto" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:ProyectoFila">
+                                    <TextBlock Text="{Binding PrioridadTexto}" Classes.inactivo="{Binding Proyecto.Estado, Converter={x:Static conv:EstadoProyectoConverter.Inactivo}}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="ZONA" Width="Auto" SortMemberPath="ZonaNombre" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:ProyectoFila">
+                                    <TextBlock Text="{Binding ZonaNombre}" Classes.inactivo="{Binding Proyecto.Estado, Converter={x:Static conv:EstadoProyectoConverter.Inactivo}}"
+                                               TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ZonaNombre}"
+                                               b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="PRESUPUESTO" Width="Auto" CellStyleClasses="num" SortMemberPath="Presupuesto"
+                                                b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:ProyectoFila">
+                                    <TextBlock Text="{Binding PresupuestoTexto}" Classes.inactivo="{Binding Proyecto.Estado, Converter={x:Static conv:EstadoProyectoConverter.Inactivo}}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                        <DataGridTemplateColumn Header="FECHA LÍMITE" Width="Auto" SortMemberPath="FechaLimite" b:ColumnaAuto.Medir="True">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate x:DataType="vm:ProyectoFila">
+                                    <TextBlock Text="{Binding FechaLimite, Converter={x:Static conv:FechaCortaConverter.Instance}}"
+                                               Classes.inactivo="{Binding Proyecto.Estado, Converter={x:Static conv:EstadoProyectoConverter.Inactivo}}"
+                                               VerticalAlignment="Center" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </DockPanel>
+        </v2:TarjetaContenido>
+    </DockPanel>
+
+</UserControl>

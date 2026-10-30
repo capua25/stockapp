@@ -1,0 +1,356 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:StockApp.Presentation.ViewModels.Proyectos"
+             xmlns:tvm="using:StockApp.Presentation.ViewModels.Tareas"
+             xmlns:app="using:StockApp.Application.Proyectos"
+             xmlns:dom="using:StockApp.Domain.Entities"
+             xmlns:conv="using:StockApp.Presentation.Converters"
+             xmlns:v2="using:StockApp.Presentation.Controls.V2"
+             xmlns:b="using:StockApp.Presentation.Behaviors"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
+             x:Class="StockApp.Presentation.Views.Proyectos.ProyectoFormView"
+             x:DataType="vm:ProyectoFormViewModel"
+             Classes="ui2"
+             Background="{DynamicResource V2FondoBrush}">
+
+    <!-- UI v2 (formulario §5.2). Espejo: docs/ui-v2/mockups/gestion/proyecto-*.html. Doble uso: alta (datos y clasificación)
+         y ficha (los mismos campos, en solo lectura si el proyecto está cerrado o sin proyectos.gestionar; botones de estado
+         en el encabezado; gastos, tareas y notas). Los gastos muestran siempre el total; presupuesto y disponible solo con
+         presupuesto, y el disponible negativo se ve como Sobregiro en rojo. La lista de gastos solo llega con finanzas.ver.
+         El error del servidor va en la Alerta de arriba del pie, que queda fijo fuera del scroll. -->
+    <UserControl.Styles>
+    <Style Selector="TextBlock.conBoton">
+        <Setter Property="Margin" Value="0,8,0,0" />
+    </Style>
+    <Style Selector="Border.nota">
+        <Setter Property="BorderThickness" Value="0,1,0,0" />
+        <Setter Property="BorderBrush" Value="{DynamicResource V2SeparadorGrillaBrush}" />
+        <Setter Property="Padding" Value="0,8" />
+    </Style>
+    <Style Selector="ItemsControl#ListaNotas > ContentPresenter:nth-child(1) > Border.nota">
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0,0,0,8" />
+    </Style>
+    </UserControl.Styles>
+
+    <Grid x:Name="Raiz" RowDefinitions="*,Auto,Auto">
+
+        <ScrollViewer x:Name="Scroll" Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="28,24">
+
+                <Grid x:Name="ColumnaEncabezado" UseLayoutRounding="False">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+                    </Grid.ColumnDefinitions>
+                    <v2:EncabezadoPagina x:Name="EncabezadoAlta" UseLayoutRounding="True" Titulo="Nuevo proyecto"
+                                         BreadcrumbOrigen="Proyectos" BreadcrumbComando="{Binding VolverCommand}"
+                                         BreadcrumbActual="Nuevo proyecto" IsVisible="{Binding EsNuevo}" />
+                    <v2:EncabezadoPagina x:Name="EncabezadoDetalle" UseLayoutRounding="True" Titulo="Detalle del proyecto"
+                                         BreadcrumbOrigen="Proyectos" BreadcrumbComando="{Binding VolverCommand}"
+                                         BreadcrumbActual="Detalle del proyecto" IsVisible="{Binding EsDetalle}">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <v2:Insignia x:Name="InsigniaEstado" VerticalAlignment="Center"
+                                         Texto="{Binding Estado, Converter={x:Static conv:EstadoProyectoConverter.Texto}}"
+                                         Variante="{Binding Estado, Converter={x:Static conv:EstadoProyectoConverter.Variante}}" />
+                            <Button x:Name="BotonIniciar" Classes="secundario" Content="Iniciar" Command="{Binding IniciarCommand}"
+                                    IsVisible="{Binding PuedeIniciar}" />
+                            <Button x:Name="BotonVolverAPendiente" Classes="secundario" Content="Volver a pendiente"
+                                    Command="{Binding VolverAPendienteCommand}" IsVisible="{Binding PuedeVolverAPendiente}" />
+                            <Button x:Name="BotonTerminar" Classes="secundario" Content="Terminar" Command="{Binding TerminarCommand}"
+                                    IsVisible="{Binding PuedeTerminar}" />
+                            <Button x:Name="BotonReabrir" Classes="secundario" Content="Reabrir" Command="{Binding ReabrirCommand}"
+                                    IsVisible="{Binding PuedeReabrir}" />
+                            <Button x:Name="BotonCancelar" Classes="peligro" Content="Cancelar" Command="{Binding CancelarCommand}"
+                                    IsVisible="{Binding PuedeCancelar}" />
+                        </StackPanel>
+                    </v2:EncabezadoPagina>
+                </Grid>
+
+                <v2:EstadoVacio x:Name="EstadoSinPermiso" UseLayoutRounding="False" HorizontalAlignment="Left"
+                                Width="{StaticResource V2AnchoFormularioMax}"
+                                Titulo="Sin permiso" Mensaje="{Binding MensajeSinPermiso}" EsError="True"
+                                IsVisible="{Binding SinPermiso}" />
+
+                <v2:EstadoVacio x:Name="EstadoSinConexion" UseLayoutRounding="False" HorizontalAlignment="Left"
+                                Width="{StaticResource V2AnchoFormularioMax}"
+                                Titulo="No se pudo conectar con el servidor"
+                                Mensaje="Verificá que el servidor esté encendido y accesible en la red, y volvé a intentar."
+                                EsError="True" IsVisible="{Binding SinConexion}">
+                    <Button x:Name="BotonReintentar" Classes="secundario" Content="Reintentar" Command="{Binding ReintentarCargaCommand}" />
+                </v2:EstadoVacio>
+
+                <Grid x:Name="ColumnaFormulario" UseLayoutRounding="False">
+                    <Grid.IsVisible>
+                        <MultiBinding Converter="{x:Static BoolConverters.And}">
+                            <Binding Path="SinPermiso" Converter="{x:Static BoolConverters.Not}" />
+                            <Binding Path="SinConexion" Converter="{x:Static BoolConverters.Not}" />
+                        </MultiBinding>
+                    </Grid.IsVisible>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+                    </Grid.ColumnDefinitions>
+
+                    <v2:TarjetaContenido x:Name="Tarjeta" Padding="24" UseLayoutRounding="True">
+                        <StackPanel>
+
+                            <!-- DATOS: los campos de DatosProyecto, editables según EsEditable. -->
+                            <StackPanel x:Name="SeccionDatos">
+                                <TextBlock Classes="subtitulo-formulario" Text="Datos del proyecto" Margin="0,0,0,12" />
+                                <v2:CampoFormulario x:Name="CampoTitulo" Etiqueta="Título" Requerido="True">
+                                    <TextBox x:Name="CajaTitulo" Text="{Binding Titulo}" IsEnabled="{Binding EsEditable}"
+                                             PlaceholderText="Ej.: Repavimentación de la rambla" />
+                                </v2:CampoFormulario>
+                                <v2:CampoFormulario x:Name="CampoDescripcion" Margin="0,16,0,0" Etiqueta="Descripción">
+                                    <TextBox x:Name="CajaDescripcion" Text="{Binding Descripcion}" IsEnabled="{Binding EsEditable}"
+                                             AcceptsReturn="True" TextWrapping="Wrap" Height="80" PlaceholderText="Objetivo y alcance del proyecto" />
+                                </v2:CampoFormulario>
+                                <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto" Margin="0,16,0,0">
+                                    <v2:CampoFormulario x:Name="CampoPrioridad" Grid.Row="0" Grid.Column="0" Etiqueta="Prioridad">
+                                        <ComboBox x:Name="ComboPrioridad" HorizontalAlignment="Stretch" IsEnabled="{Binding EsEditable}"
+                                                  ItemsSource="{Binding PrioridadesDisponibles}" SelectedItem="{Binding PrioridadSeleccionada}" />
+                                    </v2:CampoFormulario>
+                                    <v2:CampoFormulario x:Name="CampoFechaLimite" Grid.Row="0" Grid.Column="2" Etiqueta="Fecha límite">
+                                        <CalendarDatePicker x:Name="SelectorFechaLimite" HorizontalAlignment="Stretch" IsEnabled="{Binding EsEditable}"
+                                                            SelectedDate="{Binding FechaLimiteSeleccionada}"
+                                                            PlaceholderText="dd/mm/aaaa" SelectedDateFormat="Custom"
+                                                            CustomDateFormatString="dd/MM/yyyy"
+                                                            b:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+                                    </v2:CampoFormulario>
+                                    <v2:CampoFormulario x:Name="CampoPresupuesto" Grid.Row="1" Grid.Column="0" Margin="0,16,0,0" Etiqueta="Presupuesto">
+                                        <TextBox x:Name="CajaPresupuesto" Text="{Binding PresupuestoTexto}" IsEnabled="{Binding EsEditable}"
+                                                 HorizontalContentAlignment="Right" PlaceholderText="Sin presupuesto" />
+                                    </v2:CampoFormulario>
+                                </Grid>
+                            </StackPanel>
+
+                            <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
+                            <StackPanel x:Name="SeccionClasificacion">
+                                <TextBlock Classes="subtitulo-formulario" Text="Clasificación" Margin="0,0,0,12" />
+                                <Grid ColumnDefinitions="*,16,*" RowDefinitions="Auto,Auto">
+                                    <v2:CampoFormulario x:Name="CampoZona" Grid.Row="0" Grid.Column="0" Etiqueta="Zona">
+                                        <ComboBox x:Name="ComboZona" HorizontalAlignment="Stretch" IsEnabled="{Binding EsEditable}"
+                                                  ItemsSource="{Binding ZonasDisponibles}" SelectedItem="{Binding ZonaSeleccionada}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:OpcionCatalogoProyecto"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </v2:CampoFormulario>
+                                    <v2:CampoFormulario x:Name="CampoDimension" Grid.Row="0" Grid.Column="2" Etiqueta="Dimensión temática">
+                                        <ComboBox x:Name="ComboDimension" HorizontalAlignment="Stretch" IsEnabled="{Binding EsEditable}"
+                                                  ItemsSource="{Binding DimensionesDisponibles}" SelectedItem="{Binding DimensionSeleccionada}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:OpcionCatalogoProyecto"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </v2:CampoFormulario>
+                                    <v2:CampoFormulario x:Name="CampoOrganismo" Grid.Row="1" Grid.Column="0" Margin="0,16,0,0" Etiqueta="Organismo responsable">
+                                        <ComboBox x:Name="ComboOrganismo" HorizontalAlignment="Stretch" IsEnabled="{Binding EsEditable}"
+                                                  ItemsSource="{Binding OrganismosDisponibles}" SelectedItem="{Binding OrganismoSeleccionado}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:OpcionCatalogoProyecto"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </v2:CampoFormulario>
+                                    <v2:CampoFormulario x:Name="CampoOrigen" Grid.Row="1" Grid.Column="2" Margin="0,16,0,0" Etiqueta="Origen de financiamiento">
+                                        <ComboBox x:Name="ComboOrigen" HorizontalAlignment="Stretch" IsEnabled="{Binding EsEditable}"
+                                                  ItemsSource="{Binding OrigenesDisponibles}" SelectedItem="{Binding OrigenSeleccionado}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="vm:OpcionCatalogoProyecto"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </v2:CampoFormulario>
+                                </Grid>
+                            </StackPanel>
+
+                            <!-- FICHA: gastos, tareas y notas (no existen en el alta). -->
+                            <StackPanel x:Name="SeccionFicha" IsVisible="{Binding EsDetalle}">
+
+                                <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
+                                <StackPanel x:Name="SeccionGastos">
+                                    <TextBlock Classes="subtitulo-formulario" Text="Gastos" Margin="0,0,0,12" />
+                                    <Grid ColumnDefinitions="*,16,*,16,*">
+                                        <v2:CampoFormulario x:Name="CampoTotalGastado" Grid.Column="0" Etiqueta="Total gastado">
+                                            <TextBlock x:Name="ValorTotalGastado" Classes="cuerpo"
+                                                       Text="{Binding TotalGastado, Converter={x:Static conv:MonedaConverter.Instance}}" />
+                                        </v2:CampoFormulario>
+                                        <v2:CampoFormulario x:Name="CampoPresupuestoFicha" Grid.Column="2" Etiqueta="Presupuesto"
+                                                            IsVisible="{Binding TienePresupuesto}">
+                                            <TextBlock x:Name="ValorPresupuesto" Classes="cuerpo"
+                                                       Text="{Binding Presupuesto, Converter={x:Static conv:MonedaConverter.Instance}}" />
+                                        </v2:CampoFormulario>
+                                        <v2:CampoFormulario x:Name="CampoDisponible" Grid.Column="4" Etiqueta="Disponible"
+                                                            IsVisible="{Binding MuestraDisponible}">
+                                            <TextBlock x:Name="ValorDisponible" Classes="cuerpo"
+                                                       Text="{Binding Disponible, Converter={x:Static conv:MonedaConverter.Instance}}" />
+                                        </v2:CampoFormulario>
+                                        <v2:CampoFormulario x:Name="CampoSobregiro" Grid.Column="4" Etiqueta="Sobregiro"
+                                                            IsVisible="{Binding HaySobregiro}">
+                                            <TextBlock x:Name="ValorSobregiro" Classes="cuerpo negativo"
+                                                       Text="{Binding Sobregiro, Converter={x:Static conv:MonedaConverter.Instance}}" />
+                                        </v2:CampoFormulario>
+                                    </Grid>
+
+                                    <!-- Solo con finanzas.ver: sin ese permiso la API no manda la lista (Gastos == null). -->
+                                    <StackPanel x:Name="SeccionListaGastos" Margin="0,16,0,0" IsVisible="{Binding MuestraListaGastos}">
+                                        <TextBlock x:Name="TextoSinGastos" Classes="texto-secundario" Text="Todavía no hay gastos imputados a este proyecto."
+                                                   IsVisible="{Binding Gastos.Count, Converter={x:Static conv:ConteoConverter.EsCero}}" />
+                                        <DataGrid x:Name="GrillaGastos" ItemsSource="{Binding Gastos}" IsReadOnly="True"
+                                                  CanUserSortColumns="True" CanUserResizeColumns="True"
+                                                  IsVisible="{Binding Gastos.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}">
+                                            <DataGrid.Columns>
+                                                <DataGridTemplateColumn Header="FECHA" Width="Auto" SortMemberPath="Fecha" b:ColumnaAuto.Medir="True">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate x:DataType="app:GastoDeProyectoDto">
+                                                            <TextBlock Text="{Binding Fecha, Converter={x:Static conv:FechaCortaConverter.Instance}}" VerticalAlignment="Center" />
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+                                                <DataGridTemplateColumn Header="PROVEEDOR" Width="Auto" SortMemberPath="ProveedorNombre" b:ColumnaAuto.Medir="True">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate x:DataType="app:GastoDeProyectoDto">
+                                                            <TextBlock Text="{Binding ProveedorNombre}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding ProveedorNombre}"
+                                                                       b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+                                                <DataGridTemplateColumn Header="DETALLE" Width="*" MinWidth="120" SortMemberPath="Detalle">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate x:DataType="app:GastoDeProyectoDto">
+                                                            <TextBlock Text="{Binding Detalle}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Detalle}"
+                                                                       b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+                                                <DataGridTemplateColumn Header="MONTO" Width="Auto" CellStyleClasses="num" SortMemberPath="MontoTotal"
+                                                                        b:ColumnaAuto.Medir="True" b:ColumnaAuto.Conversor="{x:Static conv:MonedaConverter.Instance}">
+                                                    <DataGridTemplateColumn.CellTemplate>
+                                                        <DataTemplate x:DataType="app:GastoDeProyectoDto">
+                                                            <TextBlock Text="{Binding MontoTotal, Converter={x:Static conv:MonedaConverter.Instance}}" VerticalAlignment="Center" />
+                                                        </DataTemplate>
+                                                    </DataGridTemplateColumn.CellTemplate>
+                                                </DataGridTemplateColumn>
+                                            </DataGrid.Columns>
+                                        </DataGrid>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <!-- Las tareas se listan con el endpoint de tareas: sin tareas.gestionar la sección no aparece. -->
+                                <StackPanel x:Name="SeccionTareas" IsVisible="{Binding MuestraTareas}">
+                                    <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
+                                    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+                                        <TextBlock Classes="subtitulo-formulario" Classes.conBoton="{Binding PuedeCrearTarea}" Text="Tareas" VerticalAlignment="Top" />
+                                        <Button x:Name="BotonNuevaTarea" Grid.Column="1" Classes="secundario" Content="Nueva tarea"
+                                                Command="{Binding NuevaTareaCommand}" IsVisible="{Binding PuedeCrearTarea}" />
+                                    </Grid>
+                                    <TextBlock x:Name="TextoSinTareas" Classes="texto-secundario" Text="Este proyecto todavía no tiene tareas."
+                                               IsVisible="{Binding Tareas.Count, Converter={x:Static conv:ConteoConverter.EsCero}}" />
+                                    <DataGrid x:Name="GrillaTareas" ItemsSource="{Binding Tareas}" IsReadOnly="True" DoubleTapped="OnTareaDobleClick"
+                                              CanUserSortColumns="True" CanUserResizeColumns="True"
+                                              IsVisible="{Binding Tareas.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}">
+                                        <DataGrid.Columns>
+                                            <DataGridTemplateColumn Header="TÍTULO" Width="*" MinWidth="160" SortMemberPath="Titulo">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate x:DataType="tvm:TareaFila">
+                                                        <TextBlock Text="{Binding Titulo}" Classes.inactivo="{Binding Tarea.Estado, Converter={x:Static conv:EstadoTareaConverter.Inactivo}}"
+                                                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding Titulo}"
+                                                                   b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTemplateColumn Header="ESTADO" Width="93" SortMemberPath="Tarea.Estado">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate x:DataType="tvm:TareaFila">
+                                                        <v2:Insignia Texto="{Binding Tarea.Estado, Converter={x:Static conv:EstadoTareaConverter.Texto}}"
+                                                                     Variante="{Binding Tarea.Estado, Converter={x:Static conv:EstadoTareaConverter.Variante}}"
+                                                                     HorizontalAlignment="Left" VerticalAlignment="Center" />
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTemplateColumn Header="TOMADA POR" Width="Auto" SortMemberPath="TomadaPorNombre" b:ColumnaAuto.Medir="True">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate x:DataType="tvm:TareaFila">
+                                                        <TextBlock Text="{Binding TomadaPorNombre}" Classes.inactivo="{Binding Tarea.Estado, Converter={x:Static conv:EstadoTareaConverter.Inactivo}}"
+                                                                   TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding TomadaPorNombre}"
+                                                                   b:TooltipSiSeCorta.Activo="True" VerticalAlignment="Center" />
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                            <DataGridTemplateColumn Header="VENCE" Width="Auto" SortMemberPath="FechaLimite" b:ColumnaAuto.Medir="True">
+                                                <DataGridTemplateColumn.CellTemplate>
+                                                    <DataTemplate x:DataType="tvm:TareaFila">
+                                                        <TextBlock Text="{Binding FechaLimite, Converter={x:Static conv:FechaCortaConverter.Instance}}"
+                                                                   Classes.inactivo="{Binding Tarea.Estado, Converter={x:Static conv:EstadoTareaConverter.Inactivo}}"
+                                                                   VerticalAlignment="Center" />
+                                                    </DataTemplate>
+                                                </DataGridTemplateColumn.CellTemplate>
+                                            </DataGridTemplateColumn>
+                                        </DataGrid.Columns>
+                                    </DataGrid>
+                                </StackPanel>
+
+                                <Border Height="1" Margin="0,20" Background="{DynamicResource V2SeparadorGrillaBrush}" />
+                                <StackPanel x:Name="SeccionNotas">
+                                    <TextBlock Classes="subtitulo-formulario" Text="Notas" Margin="0,0,0,12" />
+                                    <TextBlock x:Name="TextoSinNotas" Classes="texto-secundario" Text="Todavía no hay notas."
+                                               IsVisible="{Binding Notas.Count, Converter={x:Static conv:ConteoConverter.EsCero}}" />
+                                    <ItemsControl x:Name="ListaNotas" ItemsSource="{Binding Notas}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="dom:NotaProyecto">
+                                                <Border Classes="nota">
+                                                    <StackPanel>
+                                                        <TextBlock Classes="cuerpo" TextWrapping="Wrap" Text="{Binding Texto}" />
+                                                        <TextBlock Classes="texto-secundario"
+                                                                   Text="{Binding Fecha, Converter={x:Static conv:FechaHoraLocalConverter.Instance}}" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <StackPanel x:Name="PanelNuevaNota" IsVisible="{Binding MuestraAgregarNota}">
+                                        <v2:CampoFormulario Margin="0,16,0,0" Etiqueta="Nueva nota">
+                                            <TextBox x:Name="CajaNuevaNota" Text="{Binding NuevaNotaTexto}" AcceptsReturn="True" TextWrapping="Wrap"
+                                                     Height="60" PlaceholderText="Agregar una nota al hilo" />
+                                        </v2:CampoFormulario>
+                                        <Button x:Name="BotonAgregarNota" Classes="secundario" Content="Agregar nota" Margin="0,8,0,0"
+                                                HorizontalAlignment="Left" Command="{Binding AgregarNotaCommand}" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+
+                        </StackPanel>
+                    </v2:TarjetaContenido>
+                </Grid>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Error general fuera del scroll, con el ancho de la card: se ve aunque el formulario esté scrolleado. -->
+        <Grid x:Name="FilaAlertaError" Grid.Row="1" Margin="28,0,28,12" UseLayoutRounding="False"
+              IsVisible="{Binding MensajeError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+            </Grid.ColumnDefinitions>
+            <v2:Alerta x:Name="AlertaError" Variante="Error" Texto="{Binding MensajeError}" />
+        </Grid>
+
+        <Border x:Name="Pie" Grid.Row="2"
+                Background="{DynamicResource V2SuperficieBrush}"
+                BorderBrush="{DynamicResource V2BordeBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="28,16">
+            <Grid UseLayoutRounding="False">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" MaxWidth="{StaticResource V2AnchoFormularioMax}" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                    <Button x:Name="BotonVolver" Classes="secundario" Content="Volver" Command="{Binding VolverCommand}" />
+                    <Button x:Name="BotonGuardar" Classes="primario" Content="Guardar" Command="{Binding GuardarCommand}"
+                            IsVisible="{Binding EsEditable}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+    </Grid>
+
+</UserControl>

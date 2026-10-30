@@ -19,6 +19,7 @@ using StockApp.Presentation.ViewModels.Catalogo;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Movimientos;
 using StockApp.Presentation.ViewModels.Reportes;
+using StockApp.Presentation.ViewModels.Proyectos;
 using StockApp.Presentation.ViewModels.Tareas;
 using Xunit;
 
@@ -71,6 +72,8 @@ public class ShellMainSeccionActivaTests
         { typeof(AuditoriaLogViewModel), "Reportes" },
         { typeof(ReporteProyectosViewModel), "Reportes" },
         { typeof(CalendarioPagosViewModel), "CalendarioPagos" },
+        { typeof(ProyectoListViewModel), "Proyectos" },
+        { typeof(ProyectoFormViewModel), "Proyectos" },
         { typeof(TareaListViewModel), "Tareas" },
         { typeof(TareaFormViewModel), "Tareas" },
     };

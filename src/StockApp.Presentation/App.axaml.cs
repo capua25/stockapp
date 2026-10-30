@@ -39,6 +39,7 @@ using StockApp.Presentation.ViewModels.Documentos;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Presentation.ViewModels.Movimientos;
 using StockApp.Presentation.ViewModels.Reportes;
+using StockApp.Presentation.ViewModels.Proyectos;
 using StockApp.Presentation.ViewModels.Tareas;
 using StockApp.Presentation.Views;
 
@@ -396,6 +397,10 @@ public partial class App : AvaloniaApp
         services.AddTransient<ControlPoaViewModel>();
         services.AddTransient<AdjuntosPanelViewModel>();
         services.AddTransient<CalendarioPagosViewModel>();
+
+        // ── Módulo Proyectos (spec 2026-10-30) ────────────────────────────────
+        services.AddTransient<ProyectoListViewModel>();
+        services.AddTransient<ProyectoFormViewModel>();
 
         // ── Módulo Tareas (spec 2026-08-01) ───────────────────────────────────
         services.AddTransient<TareaListViewModel>();

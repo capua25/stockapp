@@ -157,8 +157,14 @@ public partial class TareaFormViewModel : ViewModelBase, INotifyDataErrorInfo
         _ => null,
     };
 
-    public void CargarParaCrear()
+    /// <summary>Proyecto con el que nace la tarea cuando se crea desde la ficha de un proyecto ("Nueva tarea").</summary>
+    private int? _proyectoPreseleccionado;
+
+    /// <param name="proyectoId">Proyecto que el panel de clasificación trae elegido al inicializarse (ver
+    /// <see cref="InicializarAltaAsync"/>); null = sin proyecto.</param>
+    public void CargarParaCrear(int? proyectoId = null)
     {
+        _proyectoPreseleccionado = proyectoId;
         _idTarea = 0;
         _tareaEsTerminal = false;
         EsNuevaTarea = true;
@@ -172,6 +178,11 @@ public partial class TareaFormViewModel : ViewModelBase, INotifyDataErrorInfo
         // Al final: asignar Titulo arriba lo marcaría como tocado y el alta nacería en rojo.
         _tocados.Clear();
     }
+
+    /// <summary>Puebla el panel de clasificación del alta con el proyecto preseleccionado por
+    /// <see cref="CargarParaCrear"/>, si lo hay. La llama TareaFormView en DataContextChanged.</summary>
+    public Task InicializarAltaAsync() => ClasificacionPanel.InicializarAsync(
+        _proyectoPreseleccionado is int proyectoId ? new DatosClasificacionTarea(proyectoId, null) : null);
 
     public void CargarParaVer(Tarea tarea)
     {
