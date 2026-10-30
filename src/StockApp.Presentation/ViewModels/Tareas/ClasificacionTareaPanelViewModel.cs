@@ -46,6 +46,13 @@ public partial class ClasificacionTareaPanelViewModel : ViewModelBase
     [ObservableProperty] private DocumentoAdministrativo? _documentoSeleccionado;
     [ObservableProperty] private string? _mensajeBuscadorExpediente;
 
+    // Valores actuales que InicializarAsync no pudo cargar (API caída, 500): ObtenerDatos los
+    // devuelve tal cual para que Aceptar no desvincule en silencio lo que el Admin nunca vio. Se
+    // limpian al cargar bien o cuando el Admin elige otro valor en ese campo.
+    private int? _proyectoSinCargar;
+    private int? _documentoSinCargar;
+    private bool _inicializando;
+
     /// <summary>Delegado para AutoCompleteBox.AsyncPopulator (D22 del spec: mínimo de
     /// caracteres antes de disparar la búsqueda y tope de resultados con aviso — mismo
     /// motivo que MovimientoHistorialViewModel.BuscarProductosAsync: ListarActivosAsync NO
@@ -75,6 +82,9 @@ public partial class ClasificacionTareaPanelViewModel : ViewModelBase
     /// operario. Molde de AdjuntosDocumentoPanelViewModel.RecargarAsync.</summary>
     public async Task InicializarAsync(DatosClasificacionTarea? actual = null, string? tituloProyectoActual = null)
     {
+        _proyectoSinCargar = actual?.ProyectoId;
+        _documentoSinCargar = actual?.DocumentoAdministrativoId;
+        _inicializando = true;
         try
         {
             var proyectos = await _proyectosService.ListarOpcionesAsync();
@@ -82,15 +92,21 @@ public partial class ClasificacionTareaPanelViewModel : ViewModelBase
 
             ProyectoSeleccionado = ProyectosDisponibles.FirstOrDefault(o => o.Id == actual?.ProyectoId)
                 ?? ProyectosDisponibles[0];
+            _proyectoSinCargar = null;
             DocumentoSeleccionado = null;
             MensajeBuscadorExpediente = null;
 
             if (actual?.DocumentoAdministrativoId is int documentoId)
                 DocumentoSeleccionado = await _documentosService.ObtenerPorIdAsync(documentoId);
+            _documentoSinCargar = null;
         }
         catch (Exception ex)
         {
             await ManejarErrorAsync(ex);
+        }
+        finally
+        {
+            _inicializando = false;
         }
     }
 
@@ -172,8 +188,22 @@ public partial class ClasificacionTareaPanelViewModel : ViewModelBase
     }
 
     /// <summary>Reemplazo total (D21): los dos campos SIEMPRE reflejan la selección actual,
-    /// incluido null como desvinculación explícita (el centinela "(ninguno)" tiene Id=null).</summary>
-    public DatosClasificacionTarea ObtenerDatos() => new(ProyectoSeleccionado?.Id, DocumentoSeleccionado?.Id);
+    /// incluido null como desvinculación explícita (el centinela "(ninguno)" tiene Id=null). Si
+    /// InicializarAsync no pudo cargar un campo y el Admin no lo tocó, devuelve su valor actual en
+    /// vez de null.</summary>
+    public DatosClasificacionTarea ObtenerDatos() => new(
+        _proyectoSinCargar ?? ProyectoSeleccionado?.Id,
+        _documentoSinCargar ?? DocumentoSeleccionado?.Id);
+
+    partial void OnProyectoSeleccionadoChanged(OpcionProyectoTarea? value)
+    {
+        if (!_inicializando) _proyectoSinCargar = null;
+    }
+
+    partial void OnDocumentoSeleccionadoChanged(DocumentoAdministrativo? value)
+    {
+        if (!_inicializando) _documentoSinCargar = null;
+    }
 }
 
 /// <summary>Opción del ComboBox de proyecto de este panel -- molde de

@@ -100,6 +100,42 @@ public class ClasificacionTareaPanelViewModelTests
         Assert.Null(ctx.Vm.ObtenerDatos().ProyectoId);
     }
 
+    // ── Fallo al inicializar (fix de revisión, Task 9): Aceptar no debe desvincular en silencio ──
+
+    [Fact]
+    public async Task ObtenerDatos_FallaLaCargaDeProyectos_ConservaElProyectoYElExpedienteActuales()
+    {
+        var ctx = Crear();
+        ctx.Proyectos.Setup(p => p.ListarOpcionesAsync()).ThrowsAsync(new ServidorNoDisponibleException());
+
+        await ctx.Vm.InicializarAsync(new DatosClasificacionTarea(7, 9), "Puente");
+
+        Assert.Equal(new DatosClasificacionTarea(7, 9), ctx.Vm.ObtenerDatos());
+    }
+
+    [Fact]
+    public async Task ObtenerDatos_FallaLaCargaDelExpediente_ConservaElExpedienteActual()
+    {
+        var ctx = Crear();
+        ctx.Documentos.Setup(d => d.ObtenerPorIdAsync(9)).ThrowsAsync(new ServidorNoDisponibleException());
+
+        await ctx.Vm.InicializarAsync(new DatosClasificacionTarea(1, 9));
+
+        Assert.Equal(new DatosClasificacionTarea(1, 9), ctx.Vm.ObtenerDatos());
+    }
+
+    [Fact]
+    public async Task ObtenerDatos_FallaLaCargaDelExpedienteYElAdminEligeOtro_UsaElElegido()
+    {
+        var ctx = Crear();
+        ctx.Documentos.Setup(d => d.ObtenerPorIdAsync(9)).ThrowsAsync(new ServidorNoDisponibleException());
+        await ctx.Vm.InicializarAsync(new DatosClasificacionTarea(1, 9));
+
+        ctx.Vm.DocumentoSeleccionado = new DocumentoAdministrativo { Id = 4, Numero = "0004", Tipo = TipoDocumento.Expediente };
+
+        Assert.Equal(4, ctx.Vm.ObtenerDatos().DocumentoAdministrativoId);
+    }
+
     [Fact]
     public void ObtenerDatos_SinSeleccion_DevuelveAmbosCamposEnNull()
     {

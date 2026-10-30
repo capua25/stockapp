@@ -217,8 +217,9 @@ public class ProyectoService : IProyectoService
     }
 
     /// <summary>
-    /// Misma regla que TareaService.ValidarClasificacionAsync: cada catálogo asignado debe
-    /// existir y estar activo. Ids nulos no disparan consultas.
+    /// Cada catálogo asignado (zona, dimensión temática, organismo responsable, origen de
+    /// financiamiento) debe existir y estar activo; si no, ReglaDeNegocioException. Ids nulos no
+    /// disparan consultas.
     /// </summary>
     private async Task<(Zona? Zona, DimensionTematica? Dimension, OrganismoResponsable? Organismo,
                          OrigenFinanciamiento? Origen)>

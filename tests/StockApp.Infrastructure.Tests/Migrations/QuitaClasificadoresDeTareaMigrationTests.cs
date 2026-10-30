@@ -73,7 +73,7 @@ public sealed class QuitaClasificadoresDeTareaMigrationTests
             "(SELECT count(*) FROM \"OrganismosResponsables\") + (SELECT count(*) FROM \"OrigenesFinanciamiento\")");
 
     private sealed record Sembrado(
-        string Cs, int Tarea, int Operador, int Documento, long CatalogosAntes);
+        string Cs, int Tarea, int Terminada, int Proyecto, int Operador, int Documento, long CatalogosAntes);
 
     /// <summary>Migra hasta AgregaProyectos, siembra una tarea EnCurso con los 4 clasificadores, expediente,
     /// 2 notas, TomadaPor y FechaInicio, y migra a QuitaClasificadoresDeTarea.</summary>
@@ -81,7 +81,7 @@ public sealed class QuitaClasificadoresDeTareaMigrationTests
     {
         var cs = await CrearBaseVaciaAsync();
         await MigrarAsync(cs, BuscarMigracion(cs, "AgregaProyectos"));
-        int tarea, operador, documento;
+        int tarea, terminada, proyecto, operador, documento;
         long catalogosAntes;
         await using (var con = new NpgsqlConnection(cs))
         {
@@ -106,6 +106,17 @@ public sealed class QuitaClasificadoresDeTareaMigrationTests
                 "\"OrigenFinanciamientoId\", \"DocumentoAdministrativoId\") " +
                 $"VALUES ('Bacheo', 1, 2, {operador}, now(), {operador}, '2026-10-01 12:30:00+00', {zona}, {dimension}, " +
                 $"{organismo}, {origen}, {documento}) RETURNING \"Id\"");
+            proyecto = await InsertarAsync(con,
+                "INSERT INTO \"Proyectos\" (\"Titulo\", \"Estado\", \"Prioridad\", \"CreadoPorUsuarioId\", \"FechaCreacion\") " +
+                $"VALUES ('Plaza', 1, 1, {operador}, now()) RETURNING \"Id\"");
+            terminada = await InsertarAsync(con,
+                "INSERT INTO \"Tareas\" (\"Titulo\", \"Descripcion\", \"Estado\", \"Prioridad\", \"FechaLimite\", " +
+                "\"CreadaPorUsuarioId\", \"FechaCreacion\", \"TomadaPorUsuarioId\", \"FechaInicio\", " +
+                "\"CerradaPorUsuarioId\", \"FechaFin\", \"ZonaId\", \"DimensionTematicaId\", \"OrganismoResponsableId\", " +
+                "\"OrigenFinanciamientoId\", \"ProyectoId\") " +
+                "VALUES ('Poda', 'Lado norte', 2, 0, '2026-11-15 00:00:00+00', " +
+                $"{operador}, '2026-09-01 08:00:00+00', {operador}, '2026-09-02 09:00:00+00', " +
+                $"{operador}, '2026-09-03 10:00:00+00', {zona}, {dimension}, {organismo}, {origen}, {proyecto}) RETURNING \"Id\"");
             for (var i = 1; i <= 2; i++)
                 await InsertarAsync(con,
                     "INSERT INTO \"NotasTarea\" (\"TareaId\", \"UsuarioId\", \"Fecha\", \"Texto\", \"EsAutomatica\") " +
@@ -114,7 +125,7 @@ public sealed class QuitaClasificadoresDeTareaMigrationTests
         }
 
         await MigrarAsync(cs, BuscarMigracion(cs, "QuitaClasificadoresDeTarea"));
-        return new Sembrado(cs, tarea, operador, documento, catalogosAntes);
+        return new Sembrado(cs, tarea, terminada, proyecto, operador, documento, catalogosAntes);
     }
 
     [Fact]
@@ -136,6 +147,22 @@ public sealed class QuitaClasificadoresDeTareaMigrationTests
             "AND \"CerradaPorUsuarioId\" IS NULL AND \"FechaFin\" IS NULL AND \"ProyectoId\" IS NULL"));
         Assert.Equal(2, await ContarAsync(con,
             $"SELECT count(*) FROM \"NotasTarea\" WHERE \"TareaId\" = {s.Tarea} AND \"Texto\" IN ('nota 1', 'nota 2')"));
+    }
+
+    [Fact]
+    public async Task Up_TareaTerminadaConProyecto_ConservaCierreFechasYProyecto()
+    {
+        var s = await MigrarConDatosAsync();
+        await using var con = new NpgsqlConnection(s.Cs);
+        await con.OpenAsync();
+
+        Assert.Equal(1, await ContarAsync(con,
+            $"SELECT count(*) FROM \"Tareas\" WHERE \"Id\" = {s.Terminada} AND \"Titulo\" = 'Poda' " +
+            "AND \"Descripcion\" = 'Lado norte' AND \"Estado\" = 2 AND \"Prioridad\" = 0 " +
+            "AND \"FechaLimite\" = '2026-11-15 00:00:00+00' AND \"FechaCreacion\" = '2026-09-01 08:00:00+00' " +
+            $"AND \"TomadaPorUsuarioId\" = {s.Operador} AND \"FechaInicio\" = '2026-09-02 09:00:00+00' " +
+            $"AND \"CerradaPorUsuarioId\" = {s.Operador} AND \"FechaFin\" = '2026-09-03 10:00:00+00' " +
+            $"AND \"ProyectoId\" = {s.Proyecto} AND \"DocumentoAdministrativoId\" IS NULL"));
     }
 
     [Fact]
@@ -167,6 +194,18 @@ public sealed class QuitaClasificadoresDeTareaMigrationTests
                 $"AND column_name = '{columna}' AND is_nullable = 'YES'"));
             Assert.Equal(1, await ContarAsync(con,
                 $"SELECT count(*) FROM \"Tareas\" WHERE \"Id\" = {s.Tarea} AND \"{columna}\" IS NULL"));
+            Assert.Equal(1, await ContarAsync(con,
+                $"SELECT count(*) FROM pg_indexes WHERE tablename = 'Tareas' AND indexname = 'IX_Tareas_{columna}'"));
         }
+
+        foreach (var fk in new[]
+                 {
+                     "FK_Tareas_Zonas_ZonaId", "FK_Tareas_DimensionesTematicas_DimensionTematicaId",
+                     "FK_Tareas_OrganismosResponsables_OrganismoResponsableId",
+                     "FK_Tareas_OrigenesFinanciamiento_OrigenFinanciamientoId",
+                 })
+            Assert.Equal(1, await ContarAsync(con,
+                "SELECT count(*) FROM information_schema.table_constraints WHERE table_name = 'Tareas' " +
+                $"AND constraint_type = 'FOREIGN KEY' AND constraint_name = '{fk}'"));
     }
 }
