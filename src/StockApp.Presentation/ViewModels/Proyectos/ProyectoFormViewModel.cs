@@ -335,19 +335,13 @@ public partial class ProyectoFormViewModel : ViewModelBase, INotifyDataErrorInfo
         IEnumerable<(int Id, string Nombre)> zonas = [], dimensiones = [], organismos = [], origenes = [];
         if (EsEditable)
         {
-            try
-            {
-                zonas = (await _zonas.ListarActivasAsync()).Select(z => (z.Id, z.Nombre)).ToList();
-                dimensiones = (await _dimensiones.ListarActivasAsync()).Select(d => (d.Id, d.Nombre)).ToList();
-                organismos = (await _organismos.ListarActivasAsync()).Select(o => (o.Id, o.Nombre)).ToList();
-                origenes = (await _origenes.ListarActivasAsync()).Select(o => (o.Id, o.Nombre)).ToList();
-            }
-            catch (UnauthorizedAccessException)
-            {
-                // Los catálogos los gatea el servidor con tareas.gestionar: sin ese permiso los combos quedan con
-                // "(ninguna)" y el valor actual, y el resto del formulario sigue funcionando (no pasa a "Sin permiso").
-                zonas = dimensiones = organismos = origenes = [];
-            }
+            // Sin catch propio, como GastoFormViewModel.InicializarAsync: los cuatro se habilitan con proyectos.gestionar
+            // (el mismo permiso que deja editar), así que un 403 acá es un permiso perdido y la carga protegida deja la
+            // ficha en "Sin permiso" (el aviso global ya lo dio AuthTokenHandler).
+            zonas = (await _zonas.ListarActivasAsync()).Select(z => (z.Id, z.Nombre)).ToList();
+            dimensiones = (await _dimensiones.ListarActivasAsync()).Select(d => (d.Id, d.Nombre)).ToList();
+            organismos = (await _organismos.ListarActivasAsync()).Select(o => (o.Id, o.Nombre)).ToList();
+            origenes = (await _origenes.ListarActivasAsync()).Select(o => (o.Id, o.Nombre)).ToList();
         }
 
         ZonaSeleccionada = Poblar(ZonasDisponibles, zonas, _proyecto?.ZonaId, _proyecto?.Zona?.Nombre);
@@ -426,7 +420,10 @@ public partial class ProyectoFormViewModel : ViewModelBase, INotifyDataErrorInfo
 
             await _service.ModificarAsync(_idProyecto, datos);
             await InicializarAsync();
-            await _confirmacion.InformarAsync("Proyecto guardado.");
+            // La recarga es protegida: si falló (403 o sin servidor) la ficha ya muestra ese estado y avisar
+            // "guardado" sobre una pantalla que no refleja lo guardado confunde.
+            if (!SinPermiso && !SinConexion)
+                await _confirmacion.InformarAsync("Proyecto guardado.");
         }
         catch (Exception ex)
         {

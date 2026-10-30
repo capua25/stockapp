@@ -156,8 +156,8 @@ public class ZonaServiceTests
     [Fact]
     public async Task ListarActivasAsync_Operador_NoLanzaUnauthorized()
     {
-        // Gateada con GestionarTareas (el permiso del CONSUMIDOR del catálogo — el futuro
-        // formulario de alta de tarea), no con GestionarTablasMaestras (el permiso del
+        // Gateada con GestionarProyectos (el permiso del CONSUMIDOR del catálogo — el
+        // formulario de proyecto), no con GestionarTablasMaestras (el permiso del
         // ADMINISTRADOR del catálogo, que gatea el resto de los verbos). El mock de Crear()
         // solo hace throw para GestionarTablasMaestras: como ListarActivasAsync ahora verifica
         // un permiso distinto, un Operador sin permisos de administración igual puede listar
@@ -169,6 +169,30 @@ public class ZonaServiceTests
         var ex = await Record.ExceptionAsync(() => svc.ListarActivasAsync());
 
         Assert.Null(ex);
+    }
+
+    /// <summary>Spec 2026-10-30: lo consume el formulario de proyecto; se habilita con proyectos.gestionar, nunca con
+    /// tareas.gestionar (los permisos de Tareas no dan acceso a Proyectos).</summary>
+    [Fact]
+    public async Task ListarActivasAsync_VerificaGestionarProyectos()
+    {
+        var (svc, repo, session, auth, _) = Crear(RolUsuario.Operador);
+        repo.Setup(r => r.ListarTodasAsync()).ReturnsAsync(new List<Zona>());
+
+        await svc.ListarActivasAsync();
+
+        auth.Verify(a => a.Verificar(session.Object, Permisos.GestionarProyectos), Times.Once);
+        auth.Verify(a => a.Verificar(session.Object, Permisos.GestionarTareas), Times.Never);
+    }
+
+    [Fact]
+    public async Task ListarActivasAsync_SinGestionarProyectos_LanzaUnauthorized()
+    {
+        var (svc, repo, session, auth, _) = Crear(RolUsuario.Operador);
+        auth.Setup(a => a.Verificar(session.Object, Permisos.GestionarProyectos)).Throws<UnauthorizedAccessException>();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => svc.ListarActivasAsync());
+        repo.Verify(r => r.ListarTodasAsync(), Times.Never);
     }
 
     // ─── EntidadNoEncontradaException ───────────────────────────────────────

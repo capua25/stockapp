@@ -117,8 +117,8 @@ public class DimensionTematicaService : IDimensionTematicaService
 
     public async Task<IReadOnlyList<DimensionTematica>> ListarActivasAsync()
     {
-        // Gateada con GestionarTareas — ver nota en ZonaService.ListarActivasAsync.
-        _auth.Verificar(_session, Permisos.GestionarTareas);
+        // Gateada con GestionarProyectos — ver nota en ZonaService.ListarActivasAsync.
+        _auth.Verificar(_session, Permisos.GestionarProyectos);
         var todas = await _repo.ListarTodasAsync();
         return todas.Where(d => d.Activo).ToList();
     }

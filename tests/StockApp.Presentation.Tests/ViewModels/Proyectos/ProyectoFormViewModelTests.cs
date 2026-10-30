@@ -23,7 +23,7 @@ public class ProyectoFormViewModelTests
 {
     private sealed record Contexto(
         ProyectoFormViewModel Vm, Mock<IProyectoService> Proyectos, Mock<ITareaService> Tareas,
-        Mock<INavigationService> Nav, Mock<IConfirmacionService> Confirm);
+        Mock<INavigationService> Nav, Mock<IConfirmacionService> Confirm, Mock<IZonaService> Zonas);
 
     private static Proyecto ProyectoDe(int id, EstadoProyecto estado, decimal? presupuesto = null) => new()
     {
@@ -55,7 +55,7 @@ public class ProyectoFormViewModelTests
         var vm = new ProyectoFormViewModel(
             proyectos.Object, tareas.Object, zonas.Object, dimensiones.Object, organismos.Object, origenes.Object,
             sesion.Object, nav.Object, confirm.Object);
-        return new Contexto(vm, proyectos, tareas, nav, confirm);
+        return new Contexto(vm, proyectos, tareas, nav, confirm, zonas);
     }
 
     private static async Task<Contexto> AbrirFicha(FichaProyectoDto ficha, RolUsuario rol = RolUsuario.Admin, params string[] permisos)
@@ -195,6 +195,56 @@ public class ProyectoFormViewModelTests
 
         ctx.Proyectos.Verify(p => p.ModificarAsync(3, It.Is<DatosProyecto>(d =>
             d.Titulo == "Rambla" && d.Presupuesto == 2500.50m && d.Prioridad == PrioridadTarea.Media)), Times.Once);
+    }
+
+    [Fact]
+    public async Task Guardar_RecargaBien_InformaProyectoGuardado()
+    {
+        var ctx = await AbrirFicha(new FichaProyectoDto(ProyectoDe(3, EstadoProyecto.EnCurso), 0m, null, null));
+        ctx.Vm.Titulo = "Rambla";
+
+        await ctx.Vm.GuardarCommand.ExecuteAsync(null);
+
+        ctx.Confirm.Verify(c => c.InformarAsync("Proyecto guardado."), Times.Once);
+    }
+
+    [Fact]
+    public async Task Guardar_RecargaSinServidor_NoInformaProyectoGuardado()
+    {
+        var ctx = await AbrirFicha(new FichaProyectoDto(ProyectoDe(3, EstadoProyecto.EnCurso), 0m, null, null));
+        ctx.Vm.Titulo = "Rambla";
+        ctx.Proyectos.Setup(p => p.ObtenerFichaAsync(3)).ThrowsAsync(new StockApp.ApiClient.ServidorNoDisponibleException());
+
+        await ctx.Vm.GuardarCommand.ExecuteAsync(null);
+
+        ctx.Proyectos.Verify(p => p.ModificarAsync(3, It.IsAny<DatosProyecto>()), Times.Once);
+        Assert.True(ctx.Vm.SinConexion);
+        ctx.Confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Guardar_RecargaSinPermiso_NoInformaProyectoGuardado()
+    {
+        var ctx = await AbrirFicha(new FichaProyectoDto(ProyectoDe(3, EstadoProyecto.EnCurso), 0m, null, null));
+        ctx.Vm.Titulo = "Rambla";
+        ctx.Proyectos.Setup(p => p.ObtenerFichaAsync(3)).ThrowsAsync(new UnauthorizedAccessException());
+
+        await ctx.Vm.GuardarCommand.ExecuteAsync(null);
+
+        Assert.True(ctx.Vm.SinPermiso);
+        ctx.Confirm.Verify(c => c.InformarAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Inicializar_UnCatalogoSinPermiso_MarcaSinPermisoComoGastoForm()
+    {
+        var ctx = Crear();
+        ctx.Vm.CargarParaCrear();
+        ctx.Zonas.Setup(z => z.ListarActivasAsync()).ThrowsAsync(new UnauthorizedAccessException());
+
+        await ctx.Vm.InicializarAsync();
+
+        Assert.True(ctx.Vm.SinPermiso);
     }
 
     [Fact]

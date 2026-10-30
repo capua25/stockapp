@@ -40,10 +40,10 @@ public static class DimensionesTematicasEndpoints
         })
         .RequireAuthorization(Permisos.GestionarTablasMaestras);
 
-        // Gateada con GestionarTareas — ver nota en ZonasEndpoints.
+        // Gateada con GestionarProyectos — ver nota en ZonasEndpoints.
         group.MapGet("/activas", async (IDimensionTematicaService dimensiones) =>
             Results.Ok((await dimensiones.ListarActivasAsync()).Select(ADimensionTematicaDto)))
-            .RequireAuthorization(Permisos.GestionarTareas);
+            .RequireAuthorization(Permisos.GestionarProyectos);
 
         return app;
     }

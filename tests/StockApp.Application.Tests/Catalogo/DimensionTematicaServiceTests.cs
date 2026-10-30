@@ -156,13 +156,37 @@ public class DimensionTematicaServiceTests
     [Fact]
     public async Task ListarActivasAsync_Operador_NoLanzaUnauthorized()
     {
-        // Gateada con GestionarTareas — ver nota completa en ZonaServiceTests.
+        // Gateada con GestionarProyectos — ver nota completa en ZonaServiceTests.
         var (svc, repo, _, _, _) = Crear(RolUsuario.Operador);
         repo.Setup(r => r.ListarTodasAsync()).ReturnsAsync(new List<DimensionTematica>());
 
         var ex = await Record.ExceptionAsync(() => svc.ListarActivasAsync());
 
         Assert.Null(ex);
+    }
+
+    /// <summary>Spec 2026-10-30: lo consume el formulario de proyecto; se habilita con proyectos.gestionar, nunca con
+    /// tareas.gestionar (los permisos de Tareas no dan acceso a Proyectos).</summary>
+    [Fact]
+    public async Task ListarActivasAsync_VerificaGestionarProyectos()
+    {
+        var (svc, repo, session, auth, _) = Crear(RolUsuario.Operador);
+        repo.Setup(r => r.ListarTodasAsync()).ReturnsAsync(new List<DimensionTematica>());
+
+        await svc.ListarActivasAsync();
+
+        auth.Verify(a => a.Verificar(session.Object, Permisos.GestionarProyectos), Times.Once);
+        auth.Verify(a => a.Verificar(session.Object, Permisos.GestionarTareas), Times.Never);
+    }
+
+    [Fact]
+    public async Task ListarActivasAsync_SinGestionarProyectos_LanzaUnauthorized()
+    {
+        var (svc, repo, session, auth, _) = Crear(RolUsuario.Operador);
+        auth.Setup(a => a.Verificar(session.Object, Permisos.GestionarProyectos)).Throws<UnauthorizedAccessException>();
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => svc.ListarActivasAsync());
+        repo.Verify(r => r.ListarTodasAsync(), Times.Never);
     }
 
     // ─── EntidadNoEncontradaException ───────────────────────────────────────

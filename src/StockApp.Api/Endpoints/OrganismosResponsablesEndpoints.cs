@@ -40,10 +40,10 @@ public static class OrganismosResponsablesEndpoints
         })
         .RequireAuthorization(Permisos.GestionarTablasMaestras);
 
-        // Gateada con GestionarTareas — ver nota en ZonasEndpoints.
+        // Gateada con GestionarProyectos — ver nota en ZonasEndpoints.
         group.MapGet("/activas", async (IOrganismoResponsableService organismos) =>
             Results.Ok((await organismos.ListarActivasAsync()).Select(AOrganismoResponsableDto)))
-            .RequireAuthorization(Permisos.GestionarTareas);
+            .RequireAuthorization(Permisos.GestionarProyectos);
 
         return app;
     }

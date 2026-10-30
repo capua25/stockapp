@@ -119,10 +119,11 @@ public class ZonaService : IZonaService
 
     public async Task<IReadOnlyList<Zona>> ListarActivasAsync()
     {
-        // Gateada con GestionarTareas (permiso del consumidor), NO con GestionarTablasMaestras
-        // (permiso del administrador) — mismo patrón que CategoriaService.ListarActivasAsync
-        // con GestionarProductos. Ver decisión en Global Constraints del plan.
-        _auth.Verificar(_session, Permisos.GestionarTareas);
+        // Gateada con GestionarProyectos (permiso del consumidor: el formulario de proyecto, spec
+        // 2026-10-30), NO con GestionarTablasMaestras (permiso del administrador) ni con el de
+        // Tareas (los permisos de Tareas no dan acceso a Proyectos) — mismo patrón que
+        // CategoriaService.ListarActivasAsync con GestionarProductos.
+        _auth.Verificar(_session, Permisos.GestionarProyectos);
         var todas = await _repo.ListarTodasAsync();
         return todas.Where(z => z.Activo).ToList();
     }

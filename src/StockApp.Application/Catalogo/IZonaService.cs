@@ -10,8 +10,8 @@ public interface IZonaService
     Task<IReadOnlyList<Zona>> ListarTodasAsync();
 
     /// <summary>
-    /// Zonas activas disponibles para selección. Gateada con GestionarTareas — el permiso de
-    /// QUIEN CONSUME el catálogo (el futuro formulario de alta de tarea), no GestionarTablasMaestras
+    /// Zonas activas disponibles para selección. Gateada con GestionarProyectos — el permiso de
+    /// QUIEN CONSUME el catálogo (el formulario de proyecto, spec 2026-10-30), no GestionarTablasMaestras
     /// (quien lo administra). Mismo patrón que ICategoriaService.ListarActivasAsync con
     /// GestionarProductos (ver Global Constraints del plan 2026-09-08-tareas-catalogos.md).
     /// </summary>

@@ -10,7 +10,7 @@ public interface IDimensionTematicaService
     Task<IReadOnlyList<DimensionTematica>> ListarTodasAsync();
 
     /// <summary>
-    /// Dimensiones activas disponibles para selección. Gateada con GestionarTareas —
+    /// Dimensiones activas disponibles para selección. Gateada con GestionarProyectos —
     /// ver nota en IZonaService.
     /// </summary>
     Task<IReadOnlyList<DimensionTematica>> ListarActivasAsync();

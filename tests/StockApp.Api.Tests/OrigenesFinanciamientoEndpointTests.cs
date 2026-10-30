@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using StockApp.Api.Auth;
 using StockApp.Api.Endpoints;
 using StockApp.Api.Tests.Fixtures;
+using StockApp.Application.Authorization;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using Xunit;
@@ -162,15 +163,17 @@ public class OrigenesFinanciamientoEndpointTests : ApiTestBase
         Assert.DoesNotContain(origenes!, o => o.Nombre == "Inactivo");
     }
 
+    /// <summary>Spec 2026-10-30: el catálogo lo consume el formulario de proyecto, así que el listado de activas se
+    /// habilita con proyectos.gestionar y no con tareas.gestionar (los permisos de Tareas no dan acceso a Proyectos).</summary>
     [Fact]
-    public async Task GetOrigenesActivos_ConTokenOperador_Devuelve200()
+    public async Task GetOrigenesActivos_ConOperadorSoloGestionarProyectos_Devuelve200()
     {
-        // Gateada con GestionarTareas — ver nota completa en ZonasEndpointTests.
         await using var ctx = Factory.CrearContexto();
         ctx.OrigenesFinanciamiento.Add(new OrigenFinanciamiento { Nombre = "Activo", Activo = true });
         await ctx.SaveChangesAsync();
-        var (_, token) = await DatosDePrueba.SeedOperadorConTokenAsync(
-            ctx, Factory.Services.GetRequiredService<IJwtTokenService>(), "operador.test");
+        var operador = await DatosDePrueba.SeedOperadorConPermisosAsync(
+            ctx, "opproyectos", "Secreta123!", new[] { Permisos.VerProyectos, Permisos.GestionarProyectos });
+        var token = Factory.Services.GetRequiredService<IJwtTokenService>().GenerarToken(operador.Id, RolUsuario.Operador);
 
         var client = Factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -178,7 +181,23 @@ public class OrigenesFinanciamientoEndpointTests : ApiTestBase
         var response = await client.GetAsync("/origenes-financiamiento/activas");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var origenes = await response.Content.ReadFromJsonAsync<List<OrigenFinanciamientoDto>>();
-        Assert.Contains(origenes!, o => o.Nombre == "Activo");
+        var lista = await response.Content.ReadFromJsonAsync<List<OrigenFinanciamientoDto>>();
+        Assert.Contains(lista!, x => x.Nombre == "Activo");
+    }
+
+    [Fact]
+    public async Task GetOrigenesActivos_ConOperadorSoloGestionarTareas_Devuelve403()
+    {
+        await using var ctx = Factory.CrearContexto();
+        var operador = await DatosDePrueba.SeedOperadorConPermisosAsync(
+            ctx, "optareas", "Secreta123!", new[] { Permisos.GestionarTareas, Permisos.AdministrarTareas });
+        var token = Factory.Services.GetRequiredService<IJwtTokenService>().GenerarToken(operador.Id, RolUsuario.Operador);
+
+        var client = Factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await client.GetAsync("/origenes-financiamiento/activas");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 }

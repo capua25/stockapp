@@ -10,7 +10,7 @@ public interface IOrigenFinanciamientoService
     Task<IReadOnlyList<OrigenFinanciamiento>> ListarTodasAsync();
 
     /// <summary>
-    /// Orígenes activos disponibles para selección. Gateada con GestionarTareas —
+    /// Orígenes activos disponibles para selección. Gateada con GestionarProyectos —
     /// ver nota en IZonaService.
     /// </summary>
     Task<IReadOnlyList<OrigenFinanciamiento>> ListarActivasAsync();

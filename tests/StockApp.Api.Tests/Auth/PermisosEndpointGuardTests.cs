@@ -45,7 +45,7 @@ public class PermisosEndpointGuardTests : ApiTestBase
         ("POST",   "/dimensiones-tematicas", Permisos.GestionarTablasMaestras),
         ("PUT",    "/dimensiones-tematicas/{id}", Permisos.GestionarTablasMaestras),
         ("DELETE", "/dimensiones-tematicas/{id}", Permisos.GestionarTablasMaestras),
-        ("GET",    "/dimensiones-tematicas/activas", Permisos.GestionarTareas),
+        ("GET",    "/dimensiones-tematicas/activas", Permisos.GestionarProyectos),
 
         ("GET",    "/documentos/activos", Permisos.GestionarDocumentos),
         ("GET",    "/documentos/historial", Permisos.GestionarDocumentos),
@@ -112,13 +112,13 @@ public class PermisosEndpointGuardTests : ApiTestBase
         ("POST",   "/organismos-responsables", Permisos.GestionarTablasMaestras),
         ("PUT",    "/organismos-responsables/{id}", Permisos.GestionarTablasMaestras),
         ("DELETE", "/organismos-responsables/{id}", Permisos.GestionarTablasMaestras),
-        ("GET",    "/organismos-responsables/activas", Permisos.GestionarTareas),
+        ("GET",    "/organismos-responsables/activas", Permisos.GestionarProyectos),
 
         ("GET",    "/origenes-financiamiento", Permisos.GestionarTablasMaestras),
         ("POST",   "/origenes-financiamiento", Permisos.GestionarTablasMaestras),
         ("PUT",    "/origenes-financiamiento/{id}", Permisos.GestionarTablasMaestras),
         ("DELETE", "/origenes-financiamiento/{id}", Permisos.GestionarTablasMaestras),
-        ("GET",    "/origenes-financiamiento/activas", Permisos.GestionarTareas),
+        ("GET",    "/origenes-financiamiento/activas", Permisos.GestionarProyectos),
 
         ("GET",    "/productos", Permisos.GestionarProductos),
         ("POST",   "/productos", Permisos.GestionarProductos),
@@ -184,7 +184,7 @@ public class PermisosEndpointGuardTests : ApiTestBase
         ("POST",   "/zonas", Permisos.GestionarTablasMaestras),
         ("PUT",    "/zonas/{id}", Permisos.GestionarTablasMaestras),
         ("DELETE", "/zonas/{id}", Permisos.GestionarTablasMaestras),
-        ("GET",    "/zonas/activas", Permisos.GestionarTareas),
+        ("GET",    "/zonas/activas", Permisos.GestionarProyectos),
     ];
 
     [Fact]

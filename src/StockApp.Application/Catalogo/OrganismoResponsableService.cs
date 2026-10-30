@@ -117,8 +117,8 @@ public class OrganismoResponsableService : IOrganismoResponsableService
 
     public async Task<IReadOnlyList<OrganismoResponsable>> ListarActivasAsync()
     {
-        // Gateada con GestionarTareas — ver nota en ZonaService.ListarActivasAsync.
-        _auth.Verificar(_session, Permisos.GestionarTareas);
+        // Gateada con GestionarProyectos — ver nota en ZonaService.ListarActivasAsync.
+        _auth.Verificar(_session, Permisos.GestionarProyectos);
         var todas = await _repo.ListarTodasAsync();
         return todas.Where(o => o.Activo).ToList();
     }

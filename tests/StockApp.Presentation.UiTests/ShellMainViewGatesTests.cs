@@ -240,6 +240,30 @@ public class ShellMainViewGatesTests
     }
 
     [AvaloniaFact]
+    public void Sidebar_SeQuitaVerProyectosEnCaliente_OcultaProyectos()
+    {
+        // Mixto: proyectos.ver y finanzas.ver. Un 403 refresca el cache sin proyectos.ver y la composition root llama
+        // NotificarPermisosActualizados: el ítem tiene que irse sin esperar a la próxima navegación.
+        var sesion = new SesionFake(RolUsuario.Operador, Permisos.VerProyectos, Permisos.VerFinanzas);
+        var vm = new ShellMainViewModel(sesion, new NavigationServiceFake(), new InfoAppFake(), new ConfirmacionServiceFake(),
+            new AuthServiceFake(), new PreferenciasSidebarFake());
+        foreach (var grupo in vm.Grupos)
+            grupo.EstaExpandido = true;
+        var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);
+        window.DataContext = vm;
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(EsVisible(window, vm.NavProyectosCommand)); // precondición
+
+        sesion.EstablecerPermisos(new HashSet<string> { Permisos.VerFinanzas });
+        vm.NotificarPermisosActualizados();
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(EsVisible(window, vm.NavProyectosCommand));
+        Assert.True(EsVisible(window, vm.NavGastosCommand));
+    }
+
+    [AvaloniaFact]
     public void OperadorConGestionarDocumentos_VeDocumentos()
     {
         var (window, vm) = Montar(RolUsuario.Operador, Permisos.GestionarDocumentos, Permisos.RegistrarMovimientos);

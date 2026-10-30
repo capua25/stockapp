@@ -40,12 +40,12 @@ public static class ZonasEndpoints
         })
         .RequireAuthorization(Permisos.GestionarTablasMaestras);
 
-        // Gateada con GestionarTareas (permiso del consumidor), NO GestionarTablasMaestras
-        // (permiso del administrador) — mismo patrón que GET /categorias/activas con
-        // GestionarProductos. Ver decisión en Global Constraints del plan.
+        // Gateada con GestionarProyectos (permiso del consumidor: el formulario de proyecto, spec
+        // 2026-10-30), NO GestionarTablasMaestras (permiso del administrador) ni el de Tareas —
+        // mismo patrón que GET /categorias/activas con GestionarProductos.
         group.MapGet("/activas", async (IZonaService zonas) =>
             Results.Ok((await zonas.ListarActivasAsync()).Select(AZonaDto)))
-            .RequireAuthorization(Permisos.GestionarTareas);
+            .RequireAuthorization(Permisos.GestionarProyectos);
 
         return app;
     }

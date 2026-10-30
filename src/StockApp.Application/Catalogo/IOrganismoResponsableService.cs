@@ -10,7 +10,7 @@ public interface IOrganismoResponsableService
     Task<IReadOnlyList<OrganismoResponsable>> ListarTodasAsync();
 
     /// <summary>
-    /// Organismos activos disponibles para selección. Gateada con GestionarTareas —
+    /// Organismos activos disponibles para selección. Gateada con GestionarProyectos —
     /// ver nota en IZonaService.
     /// </summary>
     Task<IReadOnlyList<OrganismoResponsable>> ListarActivasAsync();

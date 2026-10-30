@@ -40,10 +40,10 @@ public static class OrigenesFinanciamientoEndpoints
         })
         .RequireAuthorization(Permisos.GestionarTablasMaestras);
 
-        // Gateada con GestionarTareas — ver nota en ZonasEndpoints.
+        // Gateada con GestionarProyectos — ver nota en ZonasEndpoints.
         group.MapGet("/activas", async (IOrigenFinanciamientoService origenes) =>
             Results.Ok((await origenes.ListarActivasAsync()).Select(AOrigenFinanciamientoDto)))
-            .RequireAuthorization(Permisos.GestionarTareas);
+            .RequireAuthorization(Permisos.GestionarProyectos);
 
         return app;
     }
