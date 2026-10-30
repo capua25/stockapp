@@ -171,6 +171,39 @@ public class ProyectoServiceTests
             "Zona: (sin asignar) → Centro"), Times.Once);
     }
 
+    [Fact]
+    public async Task ModificarAsync_CatalogoInactivoSinCambio_Guarda()
+    {
+        var ctx = Crear();
+        var proyecto = Existente();
+        proyecto.ZonaId = 3;
+        proyecto.Zona = new Zona { Id = 3, Nombre = "Centro", Activo = false };
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(proyecto);
+        ctx.Zonas.Setup(z => z.ObtenerPorIdAsync(3)).ReturnsAsync(new Zona { Id = 3, Nombre = "Centro", Activo = false });
+
+        await ctx.Svc.ModificarAsync(5, Datos("Plaza Central", zonaId: 3));
+
+        Assert.Equal("Plaza Central", proyecto.Titulo);
+        Assert.Equal(3, proyecto.ZonaId);
+        ctx.Repo.Verify(r => r.ActualizarAsync(proyecto), Times.Once);
+        ctx.Audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.ModificacionProyecto, "Proyecto", 5,
+            "Título: Plaza → Plaza Central"), Times.Once);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_CambiaACatalogoInactivo_Lanza()
+    {
+        var ctx = Crear();
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(Existente());
+        ctx.Zonas.Setup(z => z.ObtenerPorIdAsync(3)).ReturnsAsync(new Zona { Id = 3, Nombre = "Centro", Activo = false });
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => ctx.Svc.ModificarAsync(5, Datos(zonaId: 3)));
+
+        Assert.Equal("La zona 'Centro' está inactiva.", ex.Message);
+        ctx.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Proyecto>()), Times.Never);
+    }
+
     // ── CambiarEstadoAsync ────────────────────────────────────────────────────
 
     [Fact]

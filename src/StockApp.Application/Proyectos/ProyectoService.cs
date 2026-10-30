@@ -81,7 +81,11 @@ public class ProyectoService : IProyectoService
             throw new ReglaDeNegocioException("Reabrí el proyecto para editarlo.");
 
         ValidarCampos(datos);
-        var (zona, dimension, organismo, origen) = await ValidarClasificacionAsync(datos);
+        // Solo se validan los catálogos que cambian: un valor desactivado después de asignarse
+        // no debe impedir guardar el resto del proyecto (el desktop lo conserva en el combo).
+        var (zona, dimension, organismo, origen) = await ValidarClasificacionAsync(datos, proyecto);
+        string? NombreNuevo(int? idNuevo, int? idActual, string? nombreActual, string? nombreValidado) =>
+            idNuevo == idActual ? nombreActual : nombreValidado;
 
         var titulo = datos.Titulo.Trim();
         var cambios = new List<string>();
@@ -96,10 +100,14 @@ public class ProyectoService : IProyectoService
         Comparar("Prioridad", proyecto.Prioridad, datos.Prioridad);
         Comparar("Fecha límite", proyecto.FechaLimite, datos.FechaLimite);
         Comparar("Presupuesto", proyecto.Presupuesto, datos.Presupuesto);
-        Comparar("Zona", proyecto.Zona?.Nombre ?? ConId(proyecto.ZonaId), zona?.Nombre);
-        Comparar("Dimensión", proyecto.DimensionTematica?.Nombre ?? ConId(proyecto.DimensionTematicaId), dimension?.Nombre);
-        Comparar("Organismo", proyecto.OrganismoResponsable?.Nombre ?? ConId(proyecto.OrganismoResponsableId), organismo?.Nombre);
-        Comparar("Origen de financiamiento", proyecto.OrigenFinanciamiento?.Nombre ?? ConId(proyecto.OrigenFinanciamientoId), origen?.Nombre);
+        var zonaActual = proyecto.Zona?.Nombre ?? ConId(proyecto.ZonaId);
+        Comparar("Zona", zonaActual, NombreNuevo(datos.ZonaId, proyecto.ZonaId, zonaActual, zona?.Nombre));
+        var dimensionActual = proyecto.DimensionTematica?.Nombre ?? ConId(proyecto.DimensionTematicaId);
+        Comparar("Dimensión", dimensionActual, NombreNuevo(datos.DimensionTematicaId, proyecto.DimensionTematicaId, dimensionActual, dimension?.Nombre));
+        var organismoActual = proyecto.OrganismoResponsable?.Nombre ?? ConId(proyecto.OrganismoResponsableId);
+        Comparar("Organismo", organismoActual, NombreNuevo(datos.OrganismoResponsableId, proyecto.OrganismoResponsableId, organismoActual, organismo?.Nombre));
+        var origenActual = proyecto.OrigenFinanciamiento?.Nombre ?? ConId(proyecto.OrigenFinanciamientoId);
+        Comparar("Origen de financiamiento", origenActual, NombreNuevo(datos.OrigenFinanciamientoId, proyecto.OrigenFinanciamientoId, origenActual, origen?.Nombre));
 
         if (cambios.Count == 0)
             return;   // sin cambios: no hay nada que persistir ni auditar
@@ -221,12 +229,13 @@ public class ProyectoService : IProyectoService
     /// financiamiento) debe existir y estar activo; si no, ReglaDeNegocioException. Ids nulos no
     /// disparan consultas.
     /// </summary>
+    /// <summary>Valida los ids de catálogo; con <paramref name="actual"/> omite los que no cambian (devuelve null para ellos).</summary>
     private async Task<(Zona? Zona, DimensionTematica? Dimension, OrganismoResponsable? Organismo,
                          OrigenFinanciamiento? Origen)>
-        ValidarClasificacionAsync(DatosProyecto datos)
+        ValidarClasificacionAsync(DatosProyecto datos, Proyecto? actual = null)
     {
         Zona? zona = null;
-        if (datos.ZonaId is int zid)
+        if (datos.ZonaId is int zid && zid != actual?.ZonaId)
         {
             zona = await _zonas.ObtenerPorIdAsync(zid)
                 ?? throw new ReglaDeNegocioException($"La zona {zid} no existe.");
@@ -235,7 +244,7 @@ public class ProyectoService : IProyectoService
         }
 
         DimensionTematica? dimension = null;
-        if (datos.DimensionTematicaId is int did)
+        if (datos.DimensionTematicaId is int did && did != actual?.DimensionTematicaId)
         {
             dimension = await _dimensiones.ObtenerPorIdAsync(did)
                 ?? throw new ReglaDeNegocioException($"La dimensión temática {did} no existe.");
@@ -244,7 +253,7 @@ public class ProyectoService : IProyectoService
         }
 
         OrganismoResponsable? organismo = null;
-        if (datos.OrganismoResponsableId is int oid)
+        if (datos.OrganismoResponsableId is int oid && oid != actual?.OrganismoResponsableId)
         {
             organismo = await _organismos.ObtenerPorIdAsync(oid)
                 ?? throw new ReglaDeNegocioException($"El organismo responsable {oid} no existe.");
@@ -253,7 +262,7 @@ public class ProyectoService : IProyectoService
         }
 
         OrigenFinanciamiento? origen = null;
-        if (datos.OrigenFinanciamientoId is int fid)
+        if (datos.OrigenFinanciamientoId is int fid && fid != actual?.OrigenFinanciamientoId)
         {
             origen = await _origenes.ObtenerPorIdAsync(fid)
                 ?? throw new ReglaDeNegocioException($"El origen de financiamiento {fid} no existe.");
