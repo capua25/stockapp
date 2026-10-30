@@ -20,6 +20,7 @@ public record TareaDto(
     int? OrigenFinanciamientoId, string? OrigenFinanciamientoNombre,
     int? DocumentoAdministrativoId, string? DocumentoAdministrativoNumero,
     int? DocumentoAdministrativoAnio, TipoDocumento? DocumentoAdministrativoTipo,
+    int? ProyectoId, string? ProyectoTitulo,
     List<NotaTareaDto> Notas);
 
 // Los 5 ids de clasificación con default null (bugfix de compatibilidad): los sitios de
@@ -28,7 +29,8 @@ public record TareaDto(
 public record CrearTareaRequest(
     string Titulo, string? Descripcion, DateTime? FechaLimite,
     int? ZonaId = null, int? DimensionTematicaId = null, int? OrganismoResponsableId = null,
-    int? OrigenFinanciamientoId = null, int? DocumentoAdministrativoId = null);
+    int? OrigenFinanciamientoId = null, int? DocumentoAdministrativoId = null,
+    int? ProyectoId = null);
 
 public record CambiarPrioridadRequest(PrioridadTarea Prioridad);
 public record AgregarNotaRequest(string Texto);
@@ -38,7 +40,7 @@ public record TareaCreadaResponse(int Id);
 /// null en un campo desasigna ese clasificador.</summary>
 public record ClasificarTareaRequest(
     int? ZonaId, int? DimensionTematicaId, int? OrganismoResponsableId,
-    int? OrigenFinanciamientoId, int? DocumentoAdministrativoId);
+    int? OrigenFinanciamientoId, int? DocumentoAdministrativoId, int? ProyectoId = null);
 
 public static class TareasEndpoints
 {
@@ -58,6 +60,7 @@ public static class TareasEndpoints
                 OrganismoResponsableId  = request.OrganismoResponsableId,
                 OrigenFinanciamientoId  = request.OrigenFinanciamientoId,
                 DocumentoAdministrativoId = request.DocumentoAdministrativoId,
+                ProyectoId                = request.ProyectoId,
             };
             var id = await service.CrearAsync(tarea);
             return Results.Created((string?)null, new TareaCreadaResponse(id));
@@ -78,11 +81,14 @@ public static class TareasEndpoints
         // sin él, el comportamiento es idéntico al GET /tareas de siempre; con él, delega en
         // ListarPorDocumentoAsync (D11/D13 del spec: el endpoint vive en Tareas, no en
         // Documentos). Mismo permiso (GestionarTareas) en los dos casos.
-        group.MapGet("/", async (int? documentoId, ITareaService service) =>
+        // proyectoId (spec 2026-10-30) sigue el mismo criterio; si vinieran ambos filtros gana documentoId.
+        group.MapGet("/", async (int? documentoId, int? proyectoId, ITareaService service) =>
         {
             var tareas = documentoId is int did
                 ? await service.ListarPorDocumentoAsync(did)
-                : await service.ListarAsync();
+                : proyectoId is int pid
+                    ? await service.ListarPorProyectoAsync(pid)
+                    : await service.ListarAsync();
             return Results.Ok(tareas.Select(ADto));
         })
         .RequireAuthorization(Permisos.GestionarTareas);
@@ -91,7 +97,7 @@ public static class TareasEndpoints
         {
             await service.ReclasificarAsync(id, new DatosClasificacionTarea(
                 request.ZonaId, request.DimensionTematicaId, request.OrganismoResponsableId,
-                request.OrigenFinanciamientoId, request.DocumentoAdministrativoId));
+                request.OrigenFinanciamientoId, request.DocumentoAdministrativoId, request.ProyectoId));
             return Results.Ok();
         })
         .RequireAuthorization(Permisos.AdministrarTareas);
@@ -153,6 +159,7 @@ public static class TareasEndpoints
         t.OrigenFinanciamientoId, t.OrigenFinanciamiento?.Nombre,
         t.DocumentoAdministrativoId, t.DocumentoAdministrativo?.Numero,
         t.DocumentoAdministrativo?.Anio, t.DocumentoAdministrativo?.Tipo,
+        t.ProyectoId, t.Proyecto?.Titulo,
         t.Notas.OrderBy(n => n.Fecha).ThenBy(n => n.Id)
             .Select(n => new NotaTareaDto(n.Id, n.UsuarioId, n.Fecha, n.Texto, n.EsAutomatica))
             .ToList());

@@ -1,7 +1,7 @@
 namespace StockApp.Application.Tareas;
 
 /// <summary>
-/// Datos de clasificación de una tarea (spec 2026-09-08, D21): REEMPLAZO TOTAL de los cinco
+/// Datos de clasificación de una tarea (suma ProyectoId, spec 2026-10-30; mismo reemplazo total) (spec 2026-09-08, D21): REEMPLAZO TOTAL de los cinco
 /// campos en cada llamada a ITareaService.ReclasificarAsync — null en un campo significa
 /// desasignar explícitamente ese clasificador, no "no tocar". Esta semántica es la que
 /// permite que el modal de reclasificación (Presentation, Task 11) precargado funcione sin
@@ -13,4 +13,5 @@ public record DatosClasificacionTarea(
     int? DimensionTematicaId,
     int? OrganismoResponsableId,
     int? OrigenFinanciamientoId,
-    int? DocumentoAdministrativoId);
+    int? DocumentoAdministrativoId,
+    int? ProyectoId = null);

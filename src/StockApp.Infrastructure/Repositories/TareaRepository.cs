@@ -22,6 +22,7 @@ public class TareaRepository : ITareaRepository
             .Include(t => t.OrganismoResponsable)
             .Include(t => t.OrigenFinanciamiento)
             .Include(t => t.DocumentoAdministrativo)
+            .Include(t => t.Proyecto)
             .Include(t => t.Notas.OrderBy(n => n.Fecha).ThenBy(n => n.Id));
 
     public async Task<int> AgregarAsync(Tarea tarea)
@@ -40,6 +41,12 @@ public class TareaRepository : ITareaRepository
     public async Task<IReadOnlyList<Tarea>> ListarPorDocumentoAsync(int documentoId)
         => await ConIncludes()
             .Where(t => t.DocumentoAdministrativoId == documentoId)
+            .OrderByDescending(t => t.FechaCreacion)
+            .ToListAsync();
+
+    public async Task<IReadOnlyList<Tarea>> ListarPorProyectoAsync(int proyectoId)
+        => await ConIncludes()
+            .Where(t => t.ProyectoId == proyectoId)
             .OrderByDescending(t => t.FechaCreacion)
             .ToListAsync();
 

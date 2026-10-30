@@ -261,4 +261,45 @@ public class TareaApiClientTests
         Assert.Contains("documentoId=9", fake.UltimaRequest.RequestUri!.Query);
         Assert.Empty(tareas);
     }
+
+    [Fact]
+    public async Task ListarPorProyectoAsync_GETConQueryString_DeserializaProyecto()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(new[]
+        {
+            new
+            {
+                id = 1, titulo = "x", descripcion = (string?)null,
+                estado = EstadoTarea.Pendiente, prioridad = PrioridadTarea.Media, fechaLimite = (DateTime?)null,
+                creadaPorUsuarioId = 1, fechaCreacion = new DateTime(2026, 9, 1),
+                proyectoId = 4, proyectoTitulo = "Plaza nueva",
+                notas = Array.Empty<object>(),
+            },
+        }));
+        var client = new TareaApiClient(TestHttp.CrearCliente(fake));
+
+        var tareas = await client.ListarPorProyectoAsync(4);
+
+        Assert.Equal("/tareas", fake.UltimaRequest!.RequestUri!.AbsolutePath);
+        Assert.Contains("proyectoId=4", fake.UltimaRequest.RequestUri!.Query);
+        var t = Assert.Single(tareas);
+        Assert.Equal(4, t.ProyectoId);
+        Assert.Equal("Plaza nueva", t.Proyecto!.Titulo);
+    }
+
+    [Fact]
+    public async Task CrearAsync_ConProyecto_EnviaProyectoIdEnElBody()
+    {
+        string? body = null;
+        var fake = new FakeHttpHandler(r =>
+        {
+            body = r.Content!.ReadAsStringAsync().Result;
+            return TestHttp.Json(new { id = 1 });
+        });
+        var client = new TareaApiClient(TestHttp.CrearCliente(fake));
+
+        await client.CrearAsync(new Tarea { Titulo = "x", ProyectoId = 4 });
+
+        Assert.Contains("\"proyectoId\":4", body);
+    }
 }

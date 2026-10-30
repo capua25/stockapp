@@ -15,6 +15,9 @@ public interface ITareaRepository
     /// documento pregunta acá en vez de que Documentos cargue una colección de tareas.</summary>
     Task<IReadOnlyList<Tarea>> ListarPorDocumentoAsync(int documentoId);
 
+    /// <summary>Tareas de un proyecto (spec 2026-10-30), por FechaCreacion descendente.</summary>
+    Task<IReadOnlyList<Tarea>> ListarPorProyectoAsync(int proyectoId);
+
     /// <summary><paramref name="tarea"/> debe ser la instancia tracked de ObtenerPorIdAsync.</summary>
     Task ActualizarAsync(Tarea tarea);
 }

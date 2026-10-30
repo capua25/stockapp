@@ -491,4 +491,50 @@ public class TareasEndpointTests : ApiTestBase
         Assert.Equal(2026, tarea.DocumentoAdministrativoAnio);
         Assert.Equal(TipoDocumento.Expediente, tarea.DocumentoAdministrativoTipo);
     }
+
+    [Fact]
+    public async Task TareaVinculadaAProyecto_ExponeProyectoYSeFiltraPorProyectoId()
+    {
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+        int proyectoId;
+        await using (var ctx = Factory.CrearContexto())
+        {
+            var admin = await ctx.Usuarios.FirstAsync();
+            var proyecto = new Proyecto
+            {
+                Titulo = "Plaza nueva", Estado = EstadoProyecto.EnCurso,
+                CreadoPorUsuarioId = admin.Id, FechaCreacion = DateTime.UtcNow,
+            };
+            ctx.Proyectos.Add(proyecto);
+            await ctx.SaveChangesAsync();
+            proyectoId = proyecto.Id;
+        }
+
+        var alta = await client.PostAsJsonAsync("/tareas",
+            new CrearTareaRequest("Vinculada", null, null, ProyectoId: proyectoId));
+        Assert.Equal(HttpStatusCode.Created, alta.StatusCode);
+        await CrearTareaAsync(client, "Suelta");
+
+        var response = await client.GetAsync($"/tareas?proyectoId={proyectoId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var tareas = await response.Content.ReadFromJsonAsync<List<TareaDto>>();
+        var fila = Assert.Single(tareas!);
+        Assert.Equal("Vinculada", fila.Titulo);
+        Assert.Equal(proyectoId, fila.ProyectoId);
+        Assert.Equal("Plaza nueva", fila.ProyectoTitulo);
+    }
+
+    [Fact]
+    public async Task PostTareas_ConProyectoInexistente_Devuelve404()
+    {
+        await SeedUsuariosAsync();
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsJsonAsync("/tareas",
+            new CrearTareaRequest("x", null, null, ProyectoId: 9999));
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
 }

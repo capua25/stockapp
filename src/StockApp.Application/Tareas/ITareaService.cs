@@ -50,4 +50,8 @@ public interface ITareaService
     /// <summary>Tareas vinculadas a un expediente (D11/D13): la dependencia va en un solo
     /// sentido, Documentos pregunta acá.</summary>
     Task<IReadOnlyList<Tarea>> ListarPorDocumentoAsync(int documentoId);
+
+    /// <summary>Tareas de un proyecto (spec 2026-10-30): la dependencia va en un solo sentido,
+    /// Proyectos pregunta acá. Exige GestionarTareas.</summary>
+    Task<IReadOnlyList<Tarea>> ListarPorProyectoAsync(int proyectoId);
 }

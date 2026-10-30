@@ -284,4 +284,25 @@ public class TareaRepositoryTests : PostgresRepositoryTestBase
         var fila = Assert.Single(resultado);
         Assert.Equal("Vinculada al expediente", fila.Titulo);
     }
+
+    [Fact]
+    public async Task ListarPorProyectoAsync_DevuelveSoloLasDelProyectoConSuTitulo()
+    {
+        Context.Usuarios.Add(NuevoUsuario());
+        await Context.SaveChangesAsync();
+        var proyecto = new Proyecto { Titulo = "Plaza nueva", CreadoPorUsuarioId = 1, FechaCreacion = DateTime.UtcNow };
+        Context.Proyectos.Add(proyecto);
+        await Context.SaveChangesAsync();
+
+        var vinculada = NuevaTarea("Del proyecto");
+        vinculada.ProyectoId = proyecto.Id;
+        await _repo.AgregarAsync(vinculada);
+        await _repo.AgregarAsync(NuevaTarea("Suelta"));
+
+        var resultado = await _repo.ListarPorProyectoAsync(proyecto.Id);
+
+        var fila = Assert.Single(resultado);
+        Assert.Equal("Del proyecto", fila.Titulo);
+        Assert.Equal("Plaza nueva", fila.Proyecto!.Titulo);
+    }
 }

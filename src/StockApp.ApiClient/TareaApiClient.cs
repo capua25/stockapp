@@ -20,18 +20,19 @@ internal sealed record TareaWire(
     int? OrigenFinanciamientoId, string? OrigenFinanciamientoNombre,
     int? DocumentoAdministrativoId, string? DocumentoAdministrativoNumero,
     int? DocumentoAdministrativoAnio, TipoDocumento? DocumentoAdministrativoTipo,
+    int? ProyectoId, string? ProyectoTitulo,
     List<NotaTareaWire> Notas);
 
 internal sealed record CrearTareaBody(
     string Titulo, string? Descripcion, DateTime? FechaLimite,
     int? ZonaId, int? DimensionTematicaId, int? OrganismoResponsableId,
-    int? OrigenFinanciamientoId, int? DocumentoAdministrativoId);
+    int? OrigenFinanciamientoId, int? DocumentoAdministrativoId, int? ProyectoId);
 
 internal sealed record CambiarPrioridadBody(PrioridadTarea Prioridad);
 internal sealed record AgregarNotaBody(string Texto);
 internal sealed record ClasificarTareaBody(
     int? ZonaId, int? DimensionTematicaId, int? OrganismoResponsableId,
-    int? OrigenFinanciamientoId, int? DocumentoAdministrativoId);
+    int? OrigenFinanciamientoId, int? DocumentoAdministrativoId, int? ProyectoId);
 
 /// <summary>ITareaService contra /tareas.</summary>
 public sealed class TareaApiClient : ITareaService
@@ -61,7 +62,7 @@ public sealed class TareaApiClient : ITareaService
         var body = new CrearTareaBody(
             tarea.Titulo, tarea.Descripcion, tarea.FechaLimite,
             tarea.ZonaId, tarea.DimensionTematicaId, tarea.OrganismoResponsableId,
-            tarea.OrigenFinanciamientoId, tarea.DocumentoAdministrativoId);
+            tarea.OrigenFinanciamientoId, tarea.DocumentoAdministrativoId, tarea.ProyectoId);
         var response = await ApiErrores.EnviarAsync(() => _http.PostAsJsonAsync("tareas", body));
         await ApiErrores.AsegurarExitoAsync(response);
 
@@ -82,6 +83,15 @@ public sealed class TareaApiClient : ITareaService
     public async Task<IReadOnlyList<Tarea>> ListarPorDocumentoAsync(int documentoId)
     {
         var response = await ApiErrores.EnviarAsync(() => _http.GetAsync($"tareas?documentoId={documentoId}"));
+        await ApiErrores.AsegurarExitoAsync(response);
+
+        var dtos = await response.Content.ReadFromJsonAsync<List<TareaWire>>() ?? new();
+        return dtos.Select(AEntidad).ToList();
+    }
+
+    public async Task<IReadOnlyList<Tarea>> ListarPorProyectoAsync(int proyectoId)
+    {
+        var response = await ApiErrores.EnviarAsync(() => _http.GetAsync($"tareas?proyectoId={proyectoId}"));
         await ApiErrores.AsegurarExitoAsync(response);
 
         var dtos = await response.Content.ReadFromJsonAsync<List<TareaWire>>() ?? new();
@@ -111,7 +121,7 @@ public sealed class TareaApiClient : ITareaService
     {
         var body = new ClasificarTareaBody(
             datos.ZonaId, datos.DimensionTematicaId, datos.OrganismoResponsableId,
-            datos.OrigenFinanciamientoId, datos.DocumentoAdministrativoId);
+            datos.OrigenFinanciamientoId, datos.DocumentoAdministrativoId, datos.ProyectoId);
         var response = await ApiErrores.EnviarAsync(() => _http.PutAsJsonAsync($"tareas/{id}/clasificacion", body));
         await ApiErrores.AsegurarExitoAsync(response);
     }
@@ -162,6 +172,9 @@ public sealed class TareaApiClient : ITareaService
                 Anio = dto.DocumentoAdministrativoAnio ?? 0,
                 Tipo = dto.DocumentoAdministrativoTipo ?? default,
             },
+        ProyectoId = dto.ProyectoId,
+        Proyecto = dto.ProyectoTitulo is null
+            ? null : new Proyecto { Id = dto.ProyectoId!.Value, Titulo = dto.ProyectoTitulo },
         Notas = dto.Notas.Select(n => new NotaTarea
         {
             Id = n.Id, TareaId = dto.Id, UsuarioId = n.UsuarioId, Fecha = n.Fecha,

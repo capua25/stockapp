@@ -29,13 +29,14 @@ public class TareaService : ITareaService
     private readonly IOrganismoResponsableRepository _organismos;
     private readonly IOrigenFinanciamientoRepository _origenes;
     private readonly IDocumentoAdministrativoRepository _documentos;
+    private readonly IProyectoRepository             _proyectos;
 
     public TareaService(
         ITareaRepository repo, IUsuarioRepository usuarios, ICurrentSession session,
         IAuthorizationService auth, IAuditLogger audit,
         IZonaRepository zonas, IDimensionTematicaRepository dimensiones,
         IOrganismoResponsableRepository organismos, IOrigenFinanciamientoRepository origenes,
-        IDocumentoAdministrativoRepository documentos)
+        IDocumentoAdministrativoRepository documentos, IProyectoRepository proyectos)
     {
         _repo        = repo;
         _usuarios    = usuarios;
@@ -47,6 +48,7 @@ public class TareaService : ITareaService
         _organismos  = organismos;
         _origenes    = origenes;
         _documentos  = documentos;
+        _proyectos   = proyectos;
     }
 
     public async Task<int> CrearAsync(Tarea tarea)
@@ -61,6 +63,7 @@ public class TareaService : ITareaService
         await ValidarClasificacionAsync(
             tarea.ZonaId, tarea.DimensionTematicaId, tarea.OrganismoResponsableId,
             tarea.OrigenFinanciamientoId, tarea.DocumentoAdministrativoId);
+        await ValidarProyectoAsync(tarea.ProyectoId);
 
         // Decisión 8 del spec: la prioridad nace SIEMPRE en Media, incluso si el llamador
         // (Admin incluido) trae otra cosa en la entidad.
@@ -146,6 +149,23 @@ public class TareaService : ITareaService
         }
 
         return (zona, dimension, organismo, origen, documento);
+    }
+
+    /// <summary>
+    /// Vínculo NUEVO con un proyecto (spec 2026-10-30): debe existir y estar Pendiente o En
+    /// curso. Quien reclasifica no llama acá si el id no cambia: mantener el mismo proyecto es
+    /// válido aunque ya esté cerrado.
+    /// </summary>
+    private async Task<Proyecto?> ValidarProyectoAsync(int? proyectoId)
+    {
+        if (proyectoId is not int pid)
+            return null;
+
+        var proyecto = await _proyectos.ObtenerPorIdAsync(pid)
+            ?? throw new EntidadNoEncontradaException($"Proyecto {pid} no encontrado.");
+        if (proyecto.EsCerrado)
+            throw new ReglaDeNegocioException("Solo se pueden vincular proyectos pendientes o en curso.");
+        return proyecto;
     }
 
     public async Task<IReadOnlyList<Tarea>> ListarAsync()
@@ -344,13 +364,16 @@ public class TareaService : ITareaService
         var (zona, dimension, organismo, origen, documento) = await ValidarClasificacionAsync(
             datos.ZonaId, datos.DimensionTematicaId, datos.OrganismoResponsableId,
             datos.OrigenFinanciamientoId, datos.DocumentoAdministrativoId);
+        var proyectoCambia = datos.ProyectoId != tarea.ProyectoId;
+        var proyecto = proyectoCambia ? await ValidarProyectoAsync(datos.ProyectoId) : tarea.Proyecto;
 
         var huboCambios =
             tarea.ZonaId != datos.ZonaId ||
             tarea.DimensionTematicaId != datos.DimensionTematicaId ||
             tarea.OrganismoResponsableId != datos.OrganismoResponsableId ||
             tarea.OrigenFinanciamientoId != datos.OrigenFinanciamientoId ||
-            tarea.DocumentoAdministrativoId != datos.DocumentoAdministrativoId;
+            tarea.DocumentoAdministrativoId != datos.DocumentoAdministrativoId ||
+            tarea.ProyectoId != datos.ProyectoId;
 
         // Guard "sin cambios" (D10 del spec, mismo patrón que CambiarPrioridadAsync,
         // TareaService.cs): si la reclasificación no cambia ningún valor, no se genera
@@ -358,7 +381,7 @@ public class TareaService : ITareaService
         if (!huboCambios)
             return;
 
-        var diff = ConstruirDiffClasificacion(tarea, zona, dimension, organismo, origen, documento);
+        var diff = ConstruirDiffClasificacion(tarea, zona, dimension, organismo, origen, documento, proyecto);
 
         // D9: reclasificar NO toca Estado — alcanza también tareas Terminada/Cancelada.
         tarea.ZonaId = datos.ZonaId;
@@ -366,6 +389,9 @@ public class TareaService : ITareaService
         tarea.OrganismoResponsableId = datos.OrganismoResponsableId;
         tarea.OrigenFinanciamientoId = datos.OrigenFinanciamientoId;
         tarea.DocumentoAdministrativoId = datos.DocumentoAdministrativoId;
+        tarea.ProyectoId = datos.ProyectoId;
+        if (proyectoCambia)
+            tarea.Proyecto = proyecto;
 
         // D10: doble registro — nota automática en el hilo + entrada de auditoría, mismo
         // patrón que AnularAsync en Documentos.
@@ -393,7 +419,7 @@ public class TareaService : ITareaService
     private static string ConstruirDiffClasificacion(
         Tarea tarea, Zona? nuevaZona, DimensionTematica? nuevaDimension,
         OrganismoResponsable? nuevoOrganismo, OrigenFinanciamiento? nuevoOrigen,
-        DocumentoAdministrativo? nuevoDocumento)
+        DocumentoAdministrativo? nuevoDocumento, Proyecto? nuevoProyecto)
     {
         var partes = new List<string>();
 
@@ -414,6 +440,8 @@ public class TareaService : ITareaService
             tarea.DocumentoAdministrativo is null ? null : $"{tarea.DocumentoAdministrativo.Numero}/{tarea.DocumentoAdministrativo.Anio}",
             nuevoDocumento is null ? null : $"{nuevoDocumento.Numero}/{nuevoDocumento.Anio}");
 
+        AgregarSiCambio("Proyecto", tarea.Proyecto?.Titulo, nuevoProyecto?.Titulo);
+
         return string.Join("; ", partes);
     }
 
@@ -421,5 +449,11 @@ public class TareaService : ITareaService
     {
         _auth.Verificar(_session, Permisos.GestionarTareas);
         return await _repo.ListarPorDocumentoAsync(documentoId);
+    }
+
+    public async Task<IReadOnlyList<Tarea>> ListarPorProyectoAsync(int proyectoId)
+    {
+        _auth.Verificar(_session, Permisos.GestionarTareas);
+        return await _repo.ListarPorProyectoAsync(proyectoId);
     }
 }

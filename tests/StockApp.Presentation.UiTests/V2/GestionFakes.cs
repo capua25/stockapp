@@ -103,6 +103,9 @@ internal sealed class TareasFake : ITareaService
         return Task.CompletedTask;
     }
 
+    public Task<IReadOnlyList<Tarea>> ListarPorProyectoAsync(int proyectoId) =>
+        Task.FromResult<IReadOnlyList<Tarea>>(Lista.Where(t => t.ProyectoId == proyectoId).ToList());
+
     public Task<IReadOnlyList<Tarea>> ListarPorDocumentoAsync(int documentoId) =>
         Task.FromResult<IReadOnlyList<Tarea>>(Lista.Where(t => t.DocumentoAdministrativoId == documentoId).ToList());
 }

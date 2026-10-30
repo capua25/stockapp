@@ -16,7 +16,8 @@ public class TareaServiceTests
                      Mock<ICurrentSession> Session, Mock<IAuthorizationService> Auth, Mock<IAuditLogger> Audit,
                      Mock<IZonaRepository> Zonas, Mock<IDimensionTematicaRepository> Dimensiones,
                      Mock<IOrganismoResponsableRepository> Organismos, Mock<IOrigenFinanciamientoRepository> Origenes,
-                     Mock<IDocumentoAdministrativoRepository> Documentos)
+                     Mock<IDocumentoAdministrativoRepository> Documentos,
+                     Mock<IProyectoRepository> Proyectos)
         Crear(RolUsuario rol = RolUsuario.Admin, int idSesion = 1, string nombreUsuario = "admin.test")
     {
         var repo        = new Mock<ITareaRepository>();
@@ -29,6 +30,7 @@ public class TareaServiceTests
         var organismos  = new Mock<IOrganismoResponsableRepository>();
         var origenes    = new Mock<IOrigenFinanciamientoRepository>();
         var documentos  = new Mock<IDocumentoAdministrativoRepository>();
+        var proyectos   = new Mock<IProyectoRepository>();
 
         session.Setup(s => s.RolActual).Returns(rol);
         session.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(idSesion, nombreUsuario, rol, null));
@@ -44,8 +46,8 @@ public class TareaServiceTests
 
         var svc = new TareaService(
             repo.Object, usuarios.Object, session.Object, auth.Object, audit.Object,
-            zonas.Object, dimensiones.Object, organismos.Object, origenes.Object, documentos.Object);
-        return (svc, repo, usuarios, session, auth, audit, zonas, dimensiones, organismos, origenes, documentos);
+            zonas.Object, dimensiones.Object, organismos.Object, origenes.Object, documentos.Object, proyectos.Object);
+        return (svc, repo, usuarios, session, auth, audit, zonas, dimensiones, organismos, origenes, documentos, proyectos);
     }
 
     // ── CrearAsync ────────────────────────────────────────────────────────────
@@ -472,6 +474,7 @@ public class TareaServiceTests
             nameof(ITareaService.ObtenerPorIdAsync),
             nameof(ITareaService.ReclasificarAsync),
             nameof(ITareaService.ListarPorDocumentoAsync),
+            nameof(ITareaService.ListarPorProyectoAsync),
         };
 
         var metodos = typeof(ITareaService).GetMethods().Select(m => m.Name).ToHashSet();
@@ -838,5 +841,89 @@ public class TareaServiceTests
         var tareas = await ctx.Svc.ListarPorDocumentoAsync(7);
 
         Assert.Single(tareas);
+    }
+
+    // ── Proyecto (spec 2026-10-30) ────────────────────────────────────────────
+
+    private static Proyecto UnProyecto(int id, EstadoProyecto estado) =>
+        new() { Id = id, Titulo = "Plaza", Estado = estado };
+
+    [Fact]
+    public async Task CrearAsync_ConProyectoEnCurso_Vincula()
+    {
+        var ctx = Crear();
+        ctx.Proyectos.Setup(p => p.ObtenerPorIdAsync(5)).ReturnsAsync(UnProyecto(5, EstadoProyecto.EnCurso));
+        ctx.Repo.Setup(r => r.AgregarAsync(It.IsAny<Tarea>())).ReturnsAsync(1);
+
+        await ctx.Svc.CrearAsync(new Tarea { Titulo = "x", ProyectoId = 5 });
+
+        ctx.Repo.Verify(r => r.AgregarAsync(It.Is<Tarea>(t => t.ProyectoId == 5)), Times.Once);
+    }
+
+    [Fact]
+    public async Task CrearAsync_ConProyectoTerminado_Lanza()
+    {
+        var ctx = Crear();
+        ctx.Proyectos.Setup(p => p.ObtenerPorIdAsync(5)).ReturnsAsync(UnProyecto(5, EstadoProyecto.Terminado));
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => ctx.Svc.CrearAsync(new Tarea { Titulo = "x", ProyectoId = 5 }));
+
+        Assert.Equal("Solo se pueden vincular proyectos pendientes o en curso.", ex.Message);
+        ctx.Repo.Verify(r => r.AgregarAsync(It.IsAny<Tarea>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CrearAsync_ConProyectoInexistente_Lanza()
+    {
+        var ctx = Crear();
+        ctx.Proyectos.Setup(p => p.ObtenerPorIdAsync(9)).ReturnsAsync((Proyecto?)null);
+
+        var ex = await Assert.ThrowsAsync<EntidadNoEncontradaException>(
+            () => ctx.Svc.CrearAsync(new Tarea { Titulo = "x", ProyectoId = 9 }));
+
+        Assert.Equal("Proyecto 9 no encontrado.", ex.Message);
+    }
+
+    [Fact]
+    public async Task ReclasificarAsync_MismoProyectoCerrado_Permitido()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin);
+        var tarea = new Tarea { Id = 1, Titulo = "x", Estado = EstadoTarea.Pendiente, ProyectoId = 5, ZonaId = null };
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(tarea);
+        ctx.Proyectos.Setup(p => p.ObtenerPorIdAsync(5)).ReturnsAsync(UnProyecto(5, EstadoProyecto.Cancelado));
+        ctx.Zonas.Setup(z => z.ObtenerPorIdAsync(3)).ReturnsAsync(new Zona { Id = 3, Nombre = "Centro", Activo = true });
+
+        await ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(3, null, null, null, null, 5));
+
+        Assert.Equal(5, tarea.ProyectoId);
+        Assert.Equal(3, tarea.ZonaId);
+        ctx.Repo.Verify(r => r.ActualizarAsync(tarea), Times.Once);
+    }
+
+    [Fact]
+    public async Task ReclasificarAsync_QuitarProyecto_DejaNull()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin);
+        var tarea = new Tarea { Id = 1, Titulo = "x", Estado = EstadoTarea.Pendiente, ProyectoId = 5 };
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(tarea);
+
+        await ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(null, null, null, null, null, null));
+
+        Assert.Null(tarea.ProyectoId);
+        ctx.Repo.Verify(r => r.ActualizarAsync(tarea), Times.Once);
+    }
+
+    [Fact]
+    public async Task ListarPorProyectoAsync_SoloLasDelProyecto()
+    {
+        var ctx = Crear();
+        var tareas = new List<Tarea> { new() { Id = 1, Titulo = "a", ProyectoId = 5 } };
+        ctx.Repo.Setup(r => r.ListarPorProyectoAsync(5)).ReturnsAsync(tareas);
+
+        var res = await ctx.Svc.ListarPorProyectoAsync(5);
+
+        Assert.Same(tareas, res);
+        ctx.Auth.Verify(a => a.Verificar(It.IsAny<ICurrentSession>(), Permisos.GestionarTareas), Times.AtLeastOnce);
     }
 }
