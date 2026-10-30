@@ -905,12 +905,16 @@ public class TareaServiceTests
     public async Task ReclasificarAsync_QuitarProyecto_DejaNull()
     {
         var ctx = Crear(rol: RolUsuario.Admin);
-        var tarea = new Tarea { Id = 1, Titulo = "x", Estado = EstadoTarea.Pendiente, ProyectoId = 5 };
+        var tarea = new Tarea { Id = 1, Titulo = "x", Estado = EstadoTarea.Pendiente, ProyectoId = 5,
+                            Proyecto = UnProyecto(5, EstadoProyecto.EnCurso) };
         ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(tarea);
 
         await ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(null, null, null, null, null, null));
 
         Assert.Null(tarea.ProyectoId);
+        ctx.Audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.ReclasificacionTarea, "Tarea", 1,
+            It.Is<string>(d => d.Contains("Proyecto: Plaza → (sin asignar)"))), Times.Once);
         ctx.Repo.Verify(r => r.ActualizarAsync(tarea), Times.Once);
     }
 
@@ -925,5 +929,35 @@ public class TareaServiceTests
 
         Assert.Same(tareas, res);
         ctx.Auth.Verify(a => a.Verificar(It.IsAny<ICurrentSession>(), Permisos.GestionarTareas), Times.AtLeastOnce);
+    }
+
+    [Fact]
+    public async Task ReclasificarAsync_NuevoProyectoTerminado_Lanza()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin);
+        var tarea = new Tarea { Id = 1, Titulo = "x", Estado = EstadoTarea.Pendiente };
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(tarea);
+        ctx.Proyectos.Setup(p => p.ObtenerPorIdAsync(5)).ReturnsAsync(UnProyecto(5, EstadoProyecto.Terminado));
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(null, null, null, null, null, 5)));
+
+        Assert.Equal("Solo se pueden vincular proyectos pendientes o en curso.", ex.Message);
+        ctx.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Tarea>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ReclasificarAsync_NuevoProyectoInexistente_Lanza()
+    {
+        var ctx = Crear(rol: RolUsuario.Admin);
+        var tarea = new Tarea { Id = 1, Titulo = "x", Estado = EstadoTarea.Pendiente };
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(tarea);
+        ctx.Proyectos.Setup(p => p.ObtenerPorIdAsync(9)).ReturnsAsync((Proyecto?)null);
+
+        var ex = await Assert.ThrowsAsync<EntidadNoEncontradaException>(
+            () => ctx.Svc.ReclasificarAsync(1, new DatosClasificacionTarea(null, null, null, null, null, 9)));
+
+        Assert.Equal("Proyecto 9 no encontrado.", ex.Message);
+        ctx.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Tarea>()), Times.Never);
     }
 }
