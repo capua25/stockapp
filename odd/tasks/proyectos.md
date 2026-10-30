@@ -20,18 +20,18 @@ Objective: Proyecto entity with classifiers, optional budget and imputed expense
 
 | ID | Specs | Route | Status | Commit |
 |---|---|---|---|---|
-| T1 Dominio | S1,S7,S8 | delegated (SDD, user rule) | pending | |
-| T2 Permisos | S1,S9 | delegated | pending | |
-| T3 Persistencia + migración aditiva | S1,S3,S6 | delegated | pending | |
-| T4 ProyectoService | S1,S7,S8,S9 | delegated | pending | |
-| T5 API + ApiClient | S1,S9 | delegated | pending | |
-| T6 Tarea↔Proyecto | S3 | delegated | pending | |
-| T7 Gasto↔Proyecto | S6 | delegated | pending | |
-| T8 Reporte → proyectos | S10 | delegated | pending | |
-| T9 Quitar clasificadores de Tarea (high risk item 1) | S3,S4,S5 | delegated | pending | |
-| T10 Desktop Proyectos | S1,S7,S8,S9 | delegated | pending | |
-| T11 Selector en gasto/factura | S6 | delegated | pending | |
-| T12 Suites + GATE orgánico | all | delegated | pending | |
+| T1 Dominio | S1,S7,S8 | delegated (SDD, user rule) | done | 196e6066 |
+| T2 Permisos | S1,S9 | delegated | done | a48c5449 (+516430ca UiTests count) |
+| T3 Persistencia + migración aditiva | S1,S3,S6 | delegated | done | df67854b |
+| T4 ProyectoService | S1,S7,S8,S9 | delegated | done | 5bcbbfb0 (+bd9e28ad final fix) |
+| T5 API + ApiClient | S1,S9 | delegated | done | af3091ae |
+| T6 Tarea↔Proyecto | S3 | delegated | done | 1d3a2998, c12d8ebe |
+| T7 Gasto↔Proyecto | S6 | delegated | done | 7841a786, bde6d441 |
+| T8 Reporte → proyectos | S10 | delegated | done | c64352f7 (+c4af9cd4) |
+| T9 Quitar clasificadores de Tarea (high risk item 1) | S3,S4,S5 | delegated | done | 8767899d, f17027ec |
+| T10 Desktop Proyectos | S1,S7,S8,S9 | delegated | done | ac486336, 283162b5, 0005e7e0 |
+| T11 Selector en gasto/factura | S6 | delegated | done | 5076ab61, 625f038a |
+| T12 Suites + GATE orgánico | all | delegated | done | fad379a0, 92641dd7 (spec) |
 
 Route evidence: the user's personal rule "SIEMPRE ejecutar planes con subagentes (subagent-driven)".
 
@@ -39,4 +39,7 @@ Route evidence: the user's personal rule "SIEMPRE ejecutar planes con subagentes
 
 - L1 (2026-10-30) user: "vamos con los proyectos"
 - L2 design approved by user ("aprobado"), spec commit c25a2330.
-- L3 plan written: docs/superpowers/plans/2026-10-30-proyectos.md. Awaiting user review.
+- L3 plan written and approved by user ("si, dale").
+- L4 all 12 tasks implemented via SDD with per-task review; final whole-branch review "Ready after fixes" → one fix wave (catalog revalidation on edit, hub subtitle, spec Despliegue section) re-reviewed clean.
+- L5 Evidence: all suites green except 3 VisualTests awaiting user threshold decision (TareaDetalle 32/31, TareaDetalleOperador_1366 22/11, ProyectoDetalleSinFinanzas 16/11; images in /tmp/proyectos-gate-wrGx/visual-reds/). GATE orgánico 9/9 OK in the real app (WSLg). Dev DB backup before migration: /tmp/proyectos-gate-wrGx/stockapp-dev-pre-proyectos.dump.
+- L6 Pending user decisions: visual thresholds; merge; strip Co-Authored-By from early commits; desktop version bump + coordinated release (see spec Despliegue).
