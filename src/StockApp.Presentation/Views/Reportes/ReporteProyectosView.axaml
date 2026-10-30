@@ -9,15 +9,15 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1040" d:DesignHeight="760"
-             x:Class="StockApp.Presentation.Views.Reportes.ReporteTareasView"
-             x:DataType="vm:ReporteTareasViewModel"
+             x:Class="StockApp.Presentation.Views.Reportes.ReporteProyectosView"
+             x:DataType="vm:ReporteProyectosViewModel"
              Classes="ui2"
              Background="{DynamicResource V2FondoBrush}">
 
     <!-- UI v2. Espejo: docs/ui-v2/mockups/reportes/. Pantalla de consulta: sin botón primario. La estructura común (breadcrumb al hub,
          estados de carga, sin conexión, sin permiso y vacío, pie) la da MarcoReporte. -->
     <DockPanel Margin="28,24">
-        <r:MarcoReporte x:Name="Marco" Titulo="Estadística de tareas"
+        <r:MarcoReporte x:Name="Marco" Titulo="Estadística de proyectos"
                         VolverCommand="{Binding VolverCommand}"
                         HayDatos="{Binding Items.Count, Converter={x:Static conv:ConteoConverter.HayElementos}}"
                         TituloVacio="{Binding TituloVacio}"
@@ -67,14 +67,14 @@
             <r:MarcoReporte.Contenido>
                 <DockPanel>
                     <v2:Alerta x:Name="AlertaCriterioCierre" DockPanel.Dock="Top" Margin="0,0,0,12" Variante="Advertencia"
-                               Texto="Criterio 'Fecha de cierre': solo se cuentan tareas Terminadas o Canceladas. Las columnas 'Pendientes' y 'En curso' muestran 0 a propósito, no faltan datos."
+                               Texto="Criterio 'Fecha de cierre': solo se cuentan proyectos Terminados o Cancelados. Las columnas 'Pendientes' y 'En curso' muestran 0 a propósito, no faltan datos."
                                IsVisible="{Binding EsCriterioCierre}" />
                 <DataGrid x:Name="Grilla" ItemsSource="{Binding Items}" IsReadOnly="True" CanUserSortColumns="True" CanUserResizeColumns="True"
                           ScrollViewer.HorizontalScrollBarVisibility="Auto">
                     <DataGrid.Columns>
                         <DataGridTemplateColumn Header="CLASIFICADOR" SortMemberPath="Clasificador" Width="*">
                             <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="dto:FilaReporteTareas">
+                                <DataTemplate x:DataType="dto:FilaReporteProyectos">
                                     <TextBlock Text="{Binding Clasificador}"
                                                TextTrimming="CharacterEllipsis"
                                                ToolTip.Tip="{Binding Clasificador}"
@@ -85,7 +85,7 @@
                         </DataGridTemplateColumn>
                         <DataGridTemplateColumn Header="PENDIENTES" SortMemberPath="Pendientes" Width="Auto" b:ColumnaAuto.Medir="True" CellStyleClasses="num">
                             <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="dto:FilaReporteTareas">
+                                <DataTemplate x:DataType="dto:FilaReporteProyectos">
                                     <TextBlock Text="{Binding Pendientes}"
                                                VerticalAlignment="Center" />
                                 </DataTemplate>
@@ -93,31 +93,31 @@
                         </DataGridTemplateColumn>
                         <DataGridTemplateColumn Header="EN CURSO" SortMemberPath="EnCurso" Width="Auto" b:ColumnaAuto.Medir="True" CellStyleClasses="num">
                             <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="dto:FilaReporteTareas">
+                                <DataTemplate x:DataType="dto:FilaReporteProyectos">
                                     <TextBlock Text="{Binding EnCurso}"
                                                VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="TERMINADAS" SortMemberPath="Terminadas" Width="Auto" b:ColumnaAuto.Medir="True" CellStyleClasses="num">
+                        <DataGridTemplateColumn Header="TERMINADOS" SortMemberPath="Terminados" Width="Auto" b:ColumnaAuto.Medir="True" CellStyleClasses="num">
                             <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="dto:FilaReporteTareas">
-                                    <TextBlock Text="{Binding Terminadas}"
+                                <DataTemplate x:DataType="dto:FilaReporteProyectos">
+                                    <TextBlock Text="{Binding Terminados}"
                                                VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
-                        <DataGridTemplateColumn Header="CANCELADAS" SortMemberPath="Canceladas" Width="Auto" b:ColumnaAuto.Medir="True" CellStyleClasses="num">
+                        <DataGridTemplateColumn Header="CANCELADOS" SortMemberPath="Cancelados" Width="Auto" b:ColumnaAuto.Medir="True" CellStyleClasses="num">
                             <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="dto:FilaReporteTareas">
-                                    <TextBlock Text="{Binding Canceladas}"
+                                <DataTemplate x:DataType="dto:FilaReporteProyectos">
+                                    <TextBlock Text="{Binding Cancelados}"
                                                VerticalAlignment="Center" />
                                 </DataTemplate>
                             </DataGridTemplateColumn.CellTemplate>
                         </DataGridTemplateColumn>
                         <DataGridTemplateColumn Header="TOTAL" SortMemberPath="Total" Width="Auto" b:ColumnaAuto.Medir="True" CellStyleClasses="num">
                             <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate x:DataType="dto:FilaReporteTareas">
+                                <DataTemplate x:DataType="dto:FilaReporteProyectos">
                                     <TextBlock Text="{Binding Total}"
                                                VerticalAlignment="Center" />
                                 </DataTemplate>

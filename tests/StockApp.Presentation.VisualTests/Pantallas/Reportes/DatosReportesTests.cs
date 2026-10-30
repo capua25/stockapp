@@ -18,15 +18,15 @@ public class DatosReportesTests
         var historial = Contenido<HistorialPorProductoViewModel>(DatosReportes.HistorialProducto());
         var masMovidos = Contenido<MasMovidosViewModel>(DatosReportes.MasMovidos());
         var auditoria = Contenido<AuditoriaLogViewModel>(DatosReportes.Auditoria());
-        var tareas = Contenido<ReporteTareasViewModel>(DatosReportes.Tareas());
+        var proyectos = Contenido<ReporteProyectosViewModel>(DatosReportes.Proyectos());
 
         Assert.Equal(8, valorizacion.Items.Count);
         Assert.Equal(5, stock.Items.Count);
         Assert.Equal(9, historial.Items.Count);
         Assert.Equal(10, masMovidos.Items.Count);
         Assert.Equal(11, auditoria.Items.Count);
-        Assert.Equal(5, tareas.Items.Count);
-        foreach (ViewModelBase vm in new ViewModelBase[] { valorizacion, stock, historial, masMovidos, auditoria, tareas })
+        Assert.Equal(5, proyectos.Items.Count);
+        foreach (ViewModelBase vm in new ViewModelBase[] { valorizacion, stock, historial, masMovidos, auditoria, proyectos })
         {
             Assert.False(vm.Cargando);
             Assert.False(vm.SinPermiso);
@@ -83,9 +83,9 @@ public class DatosReportesTests
     }
 
     [Fact]
-    public void TareasCierre_EsCriterioCierre()
+    public void ProyectosCierre_EsCriterioCierre()
     {
-        var vm = Contenido<ReporteTareasViewModel>(DatosReportes.TareasCierre());
+        var vm = Contenido<ReporteProyectosViewModel>(DatosReportes.ProyectosCierre());
 
         Assert.True(vm.EsCriterioCierre);
         Assert.Equal("Fecha de cierre", vm.CriterioOpcionSeleccionada.Nombre);
@@ -93,15 +93,15 @@ public class DatosReportesTests
     }
 
     [Fact]
-    public void Tareas_RangoFijoYTotalGeneral()
+    public void Proyectos_RangoFijoYTotalGeneral()
     {
-        var vm = Contenido<ReporteTareasViewModel>(DatosReportes.Tareas());
+        var vm = Contenido<ReporteProyectosViewModel>(DatosReportes.Proyectos());
 
         Assert.Equal("01/09/2026", vm.FechaDesde!.Value.ToString("dd/MM/yyyy"));
         Assert.Equal("31/10/2026", vm.FechaHasta!.Value.ToString("dd/MM/yyyy"));
         Assert.Equal("Zona", vm.AgrupadorSeleccionado.Nombre);
         Assert.Equal(95, vm.TotalGeneral);
-        Assert.All(vm.Items, f => Assert.Equal(f.Pendientes + f.EnCurso + f.Terminadas + f.Canceladas, f.Total));
+        Assert.All(vm.Items, f => Assert.Equal(f.Pendientes + f.EnCurso + f.Terminados + f.Cancelados, f.Total));
     }
 
     [Fact]

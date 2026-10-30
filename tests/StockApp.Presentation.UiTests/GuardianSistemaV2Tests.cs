@@ -100,7 +100,7 @@ public class GuardianSistemaV2Tests
         typeof(MasMovidosView),
         typeof(HistorialPorProductoView),
         typeof(AuditoriaLogView),
-        typeof(ReporteTareasView),
+        typeof(ReporteProyectosView),
         typeof(CatalogosView),
         typeof(CategoriaFormView),
         typeof(ProveedorFormView),

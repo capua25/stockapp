@@ -160,21 +160,21 @@ public class ReportesEndpointTests : ApiTestBase
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
-    // ── GET /reportes/tareas ──────────────────────────────────────────────
+    // ── GET /reportes/proyectos ──────────────────────────────────────────────
 
     [Fact]
-    public async Task GetReporteTareas_SinToken_Devuelve401()
+    public async Task GetReporteProyectos_SinToken_Devuelve401()
     {
         var client = Factory.CreateClient();
 
         var response = await client.GetAsync(
-            "/reportes/tareas?agrupador=Zona&criterio=Creacion&desde=2026-01-01&hasta=2026-12-31");
+            "/reportes/proyectos?agrupador=Zona&criterio=Creacion&desde=2026-01-01&hasta=2026-12-31");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
-    public async Task GetReporteTareas_ConTokenOperadorSinPermiso_Devuelve403()
+    public async Task GetReporteProyectos_ConTokenOperadorSinPermiso_Devuelve403()
     {
         // Operador REAL (SeedOperadorConTokenAsync, los 10 PermisosInicialesOperador
         // completos) -- ninguno de esos es VerReportes (queda afuera adrede, ver
@@ -190,29 +190,29 @@ public class ReportesEndpointTests : ApiTestBase
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await client.GetAsync(
-            "/reportes/tareas?agrupador=Zona&criterio=Creacion&desde=2026-01-01&hasta=2026-12-31");
+            "/reportes/proyectos?agrupador=Zona&criterio=Creacion&desde=2026-01-01&hasta=2026-12-31");
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Fact]
-    public async Task GetReporteTareas_ConTokenAdmin_Devuelve200()
+    public async Task GetReporteProyectos_ConTokenAdmin_Devuelve200()
     {
         var client = Factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
 
         var response = await client.GetAsync(
-            "/reportes/tareas?agrupador=Zona&criterio=Creacion&desde=2026-01-01&hasta=2026-12-31");
+            "/reportes/proyectos?agrupador=Zona&criterio=Creacion&desde=2026-01-01&hasta=2026-12-31");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var reporte = await response.Content.ReadFromJsonAsync<ReporteTareasDto>();
+        var reporte = await response.Content.ReadFromJsonAsync<ReporteProyectosDto>();
         Assert.NotNull(reporte);
     }
 
     [Fact]
-    public async Task GetReporteTareas_ConTokenOperadorConVerReportes_Devuelve200()
+    public async Task GetReporteProyectos_ConTokenOperadorConVerReportes_Devuelve200()
     {
-        // GetReporteTareas_ConTokenAdmin_Devuelve200 usa Admin, que en este repo cortocircuita
+        // GetReporteProyectos_ConTokenAdmin_Devuelve200 usa Admin, que en este repo cortocircuita
         // la autorización (PermisosEstructuralesAdmin/Admin-siempre-Succeed) ANTES de mirar
         // PermisosActuales -- acredita que el pipeline no rompe, no que la policy VerReportes
         // filtre nada. Este test sí ejercita esa policy: un Operador real sembrado con
@@ -227,72 +227,72 @@ public class ReportesEndpointTests : ApiTestBase
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         var response = await client.GetAsync(
-            "/reportes/tareas?agrupador=Zona&criterio=Creacion&desde=2026-01-01&hasta=2026-12-31");
+            "/reportes/proyectos?agrupador=Zona&criterio=Creacion&desde=2026-01-01&hasta=2026-12-31");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var reporte = await response.Content.ReadFromJsonAsync<ReporteTareasDto>();
+        var reporte = await response.Content.ReadFromJsonAsync<ReporteProyectosDto>();
         Assert.NotNull(reporte);
     }
 
     [Fact]
-    public async Task GetReporteTareas_SinRangoDeFechas_Devuelve400()
+    public async Task GetReporteProyectos_SinRangoDeFechas_Devuelve400()
     {
         var client = Factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
 
-        var response = await client.GetAsync("/reportes/tareas?agrupador=Zona&criterio=Creacion");
+        var response = await client.GetAsync("/reportes/proyectos?agrupador=Zona&criterio=Creacion");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
-    public async Task GetReporteTareas_RangoDeFechasInvertido_Devuelve400()
+    public async Task GetReporteProyectos_RangoDeFechasInvertido_Devuelve400()
     {
         // A diferencia de SinRangoDeFechas_400 (que ni siquiera llega al servicio -- lo
         // rechaza el model-binder de ASP.NET porque faltan los query params), este caso manda
         // las dos fechas presentes pero invertidas: ejercita el segundo `if` de
-        // ReporteTareasService.ObtenerAsync (Desde > Hasta), no el primero.
+        // ReporteProyectosService.ObtenerAsync (Desde > Hasta), no el primero.
         var client = Factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
 
         var response = await client.GetAsync(
-            "/reportes/tareas?agrupador=Zona&criterio=Creacion&desde=2026-12-31&hasta=2026-01-01");
+            "/reportes/proyectos?agrupador=Zona&criterio=Creacion&desde=2026-12-31&hasta=2026-01-01");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
-    public async Task GetReporteTareas_AgrupadoPorExpediente_Devuelve200()
+    public async Task GetReporteProyectos_AgrupadoPorOrganismoYCierre_Devuelve200()
     {
         var client = Factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
 
         var response = await client.GetAsync(
-            "/reportes/tareas?agrupador=Expediente&criterio=Cierre&desde=2026-01-01&hasta=2026-12-31");
+            "/reportes/proyectos?agrupador=OrganismoResponsable&criterio=Cierre&desde=2026-01-01&hasta=2026-12-31");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     [Fact]
-    public async Task GetReporteTareas_AgrupadorInvalidoPorNumero_Devuelve400()
+    public async Task GetReporteProyectos_AgrupadorInvalidoPorNumero_Devuelve400()
     {
-        // AgrupadorTareas 99 no existe: el model-binder de Minimal API lo bindea igual (un
+        // AgrupadorProyectos 99 no existe: el model-binder de Minimal API lo bindea igual (un
         // enum sin [Flags] acepta cualquier valor numérico vía Enum.TryParse), y el switch de
-        // ReporteTareasRepository.ObtenerAsync lo rechaza con ArgumentOutOfRangeException --
+        // ReporteProyectosRepository.ObtenerAsync lo rechaza con ArgumentOutOfRangeException --
         // que hereda de ArgumentException y por eso el 400 llega hoy por herencia accidental
         // del DomainExceptionHandler, no por una validación explícita del valor del enum.
         var client = Factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
 
         var response = await client.GetAsync(
-            "/reportes/tareas?agrupador=99&criterio=Creacion&desde=2026-01-01&hasta=2026-12-31");
+            "/reportes/proyectos?agrupador=99&criterio=Creacion&desde=2026-01-01&hasta=2026-12-31");
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
-    // ── GET /reportes/tareas — normalización de fechas de query string ──────
+    // ── GET /reportes/proyectos — normalización de fechas de query string ──────
 
-    private static async Task SembrarTareaAsync(AppDbContext ctx, DateTime fechaCreacionUtc)
+    private static async Task SembrarProyectoAsync(AppDbContext ctx, DateTime fechaCreacionUtc)
     {
         var creador = new Usuario
         {
@@ -305,12 +305,12 @@ public class ReportesEndpointTests : ApiTestBase
         ctx.Usuarios.Add(creador);
         await ctx.SaveChangesAsync();
 
-        ctx.Tareas.Add(new Tarea
+        ctx.Proyectos.Add(new Proyecto
         {
-            Titulo = "Tarea límite de rango",
-            CreadaPorUsuarioId = creador.Id,
+            Titulo = "Proyecto límite de rango",
+            CreadoPorUsuarioId = creador.Id,
             FechaCreacion = fechaCreacionUtc,
-            Estado = EstadoTarea.Pendiente,
+            Estado = EstadoProyecto.Pendiente,
         });
         await ctx.SaveChangesAsync();
     }
@@ -323,7 +323,7 @@ public class ReportesEndpointTests : ApiTestBase
     // que ejercita la rama Unspecified de NormalizarAUtc (la única normalización real que
     // hace este endpoint); los casos con "Z" y con offset caen en la rama passthrough (Kind ya
     // es Utc, NormalizarAUtc es un no-op) y lo que confirman es que el binder ya entrega el
-    // instante correcto por sí solo. La tarea sembrada tiene FechaCreacion exactamente en ese
+    // instante correcto por sí solo. El proyecto sembrado tiene FechaCreacion exactamente en ese
     // instante: si la normalización corrompe el instante (bug original: SpecifyKind ciego sin
     // ToUniversalTime, que sí sería un bug si Kind llegara Local), el filtro "hasta fin del
     // día" calcula el límite sobre el día equivocado y la excluye -- Total pasa de 1 a 0.
@@ -331,20 +331,20 @@ public class ReportesEndpointTests : ApiTestBase
     [InlineData("2026-01-01")]
     [InlineData("2026-01-01T00:00:00Z")]
     [InlineData("2025-12-31T21:00:00-03:00")]
-    public async Task GetReporteTareas_NormalizaElInstanteUtcDeLaFechaDeQueryString_IncluyeLaTareaDelLimite(
+    public async Task GetReporteProyectos_NormalizaElInstanteUtcDeLaFechaDeQueryString_IncluyeElProyectoDelLimite(
         string fecha)
     {
         await using var ctx = Factory.CrearContexto();
-        await SembrarTareaAsync(ctx, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+        await SembrarProyectoAsync(ctx, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
 
         var client = Factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
 
         var response = await client.GetAsync(
-            $"/reportes/tareas?agrupador=Zona&criterio=Creacion&desde={Uri.EscapeDataString(fecha)}&hasta={Uri.EscapeDataString(fecha)}");
+            $"/reportes/proyectos?agrupador=Zona&criterio=Creacion&desde={Uri.EscapeDataString(fecha)}&hasta={Uri.EscapeDataString(fecha)}");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var reporte = await response.Content.ReadFromJsonAsync<ReporteTareasDto>();
-        Assert.Equal(1, reporte!.TotalGeneral);
+        var reporte = await response.Content.ReadFromJsonAsync<ReporteProyectosDto>();
+        Assert.Equal(1, reporte!.TotalGeneral.Total);
     }
 }

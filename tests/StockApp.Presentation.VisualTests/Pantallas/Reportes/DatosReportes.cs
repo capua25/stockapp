@@ -127,9 +127,9 @@ public static class DatosReportes
         new(3, "mlopez", "Marta López", RolUsuario.Operador, true, new DateTime(2026, 9, 22)),
     ];
 
-    // ── Estadística de tareas (5 zonas) ───────────────────────────────────────────────────────────────
+    // ── Estadística de proyectos (5 zonas) ───────────────────────────────────────────────────────────────
 
-    public static readonly IReadOnlyList<FilaReporteTareas> Zonas =
+    public static readonly IReadOnlyList<FilaReporteProyectos> Zonas =
     [
         new("Zona Centro", 4, 6, 12, 1, 23),
         new("Zona Norte", 7, 3, 9, 2, 21),
@@ -138,9 +138,9 @@ public static class DatosReportes
         new("Zona Oeste", 1, 4, 8, 1, 14),
     ];
 
-    public static readonly ReporteTareasDto ReporteZonas = new(Zonas, Zonas.Sum(z => z.Total));
+    public static readonly ReporteProyectosDto ReporteZonas = new(Zonas, TotalDe(Zonas));
 
-    public static readonly IReadOnlyList<FilaReporteTareas> ZonasPorCierre =
+    public static readonly IReadOnlyList<FilaReporteProyectos> ZonasPorCierre =
     [
         new("Zona Centro", 0, 0, 12, 1, 13),
         new("Zona Norte", 0, 0, 9, 2, 11),
@@ -149,7 +149,11 @@ public static class DatosReportes
         new("Zona Oeste", 0, 0, 8, 1, 9),
     ];
 
-    public static readonly ReporteTareasDto ReporteZonasPorCierre = new(ZonasPorCierre, ZonasPorCierre.Sum(z => z.Total));
+    public static readonly ReporteProyectosDto ReporteZonasPorCierre = new(ZonasPorCierre, TotalDe(ZonasPorCierre));
+
+    private static FilaReporteProyectos TotalDe(IReadOnlyList<FilaReporteProyectos> filas) => new(
+        "Total general", filas.Sum(f => f.Pendientes), filas.Sum(f => f.EnCurso), filas.Sum(f => f.Terminados),
+        filas.Sum(f => f.Cancelados), filas.Sum(f => f.Total));
 
     // ── Armado de los VMs ────────────────────────────────────────────────────────────────────────────
 
@@ -287,11 +291,11 @@ public static class DatosReportes
         return EnShell(vm);
     }
 
-    private static ReporteTareasViewModel TareasVm(ReporteTareasDto reporte)
+    private static ReporteProyectosViewModel ProyectosVm(ReporteProyectosDto reporte)
     {
-        var servicio = new Mock<IReporteTareasService>();
-        servicio.Setup(s => s.ObtenerAsync(It.IsAny<FiltroReporteTareas>())).ReturnsAsync(reporte);
-        var vm = new ReporteTareasViewModel(servicio.Object, Mock.Of<IPdfExporter>(), Mock.Of<IServicioGuardadoArchivo>(),
+        var servicio = new Mock<IReporteProyectosService>();
+        servicio.Setup(s => s.ObtenerAsync(It.IsAny<FiltroReporteProyectos>())).ReturnsAsync(reporte);
+        var vm = new ReporteProyectosViewModel(servicio.Object, Mock.Of<IPdfExporter>(), Mock.Of<IServicioGuardadoArchivo>(),
             Mock.Of<IServicioAperturaArchivo>(), Mock.Of<IConfirmacionService>(), Sesion(DatosProductos.UsuarioAdmin).Object, Navegacion);
         // El constructor pone el año en curso: los datos fijos lo pisan antes de la carga.
         vm.FechaDesde = new DateTime(2026, 9, 1);
@@ -299,16 +303,16 @@ public static class DatosReportes
         return vm;
     }
 
-    public static ShellMainViewModel Tareas()
+    public static ShellMainViewModel Proyectos()
     {
-        var vm = TareasVm(ReporteZonas);
+        var vm = ProyectosVm(ReporteZonas);
         vm.CargarAsync().GetAwaiter().GetResult();
         return EnShell(vm);
     }
 
-    public static ShellMainViewModel TareasCierre()
+    public static ShellMainViewModel ProyectosCierre()
     {
-        var vm = TareasVm(ReporteZonasPorCierre);
+        var vm = ProyectosVm(ReporteZonasPorCierre);
         vm.CriterioOpcionSeleccionada = vm.CriteriosDisponibles[1];
         vm.CargarAsync().GetAwaiter().GetResult();
         return EnShell(vm);

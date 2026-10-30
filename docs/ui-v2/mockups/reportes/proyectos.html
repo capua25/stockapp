@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<title>Reportes: Estadística de tareas (UI v2)</title>
+<title>Reportes: Estadística de proyectos (UI v2)</title>
 <link rel="stylesheet" href="../_base/tokens.css">
 <link rel="stylesheet" href="../_base/base.css">
 <style>
@@ -21,14 +21,14 @@
   .celda-stock > .valor { margin-left: auto; width: calc-size(fit-content, round(up, size, 1px)); }
   /* Campos de la barra: una sola fila con 8 de separación (BarraFiltros sin buscador). */
   .campo-corto { width: 140px; }
-  /* Anchos medidos en headless (MedicionTemporal6), iguales a 1280 y a 1366: PENDIENTES, EN CURSO, TERMINADAS, CANCELADAS y TOTAL
-     miden su título (ColumnaAuto); CLASIFICADOR (*) se lleva el resto (428 a 1280, 514 a 1366). Suma 946 y 1032: entra sin scroll
+  /* Anchos medidos en headless (MedicionTemporal6), iguales a 1280 y a 1366: PENDIENTES, EN CURSO, TERMINADOS, CANCELADOS y TOTAL
+     miden su título (ColumnaAuto); CLASIFICADOR (*) se lleva el resto (426 a 1280, 512 a 1366). Suma 946 y 1032: entra sin scroll
      horizontal. */
   .col-clasif { flex: 1 1 0; min-width: 0; }
   .col-pend { flex: 0 0 111px; }
   .col-curso { flex: 0 0 98px; }
-  .col-term { flex: 0 0 115px; }
-  .col-canc { flex: 0 0 119px; }
+  .col-term { flex: 0 0 116px; }
+  .col-canc { flex: 0 0 120px; }
   .col-total { flex: 0 0 75px; }
   .campo-agrupar { width: 220px; }
   .campo-contar { width: 180px; }
@@ -38,7 +38,7 @@
 </style>
 </head>
 <body>
-<!-- Datos: DatosReportes.Tareas(): agrupado por Zona, contado por fecha de creación, del 01/09/2026 al 31/10/2026, cinco zonas y el total general. El sidebar está para aprobar la pantalla entera; la comparación lo oculta (tiene la suya). -->
+<!-- Datos: DatosReportes.Proyectos(): agrupado por Zona, contado por fecha de creación, del 01/09/2026 al 31/10/2026, cinco zonas y el total general. El sidebar está para aprobar la pantalla entera; la comparación lo oculta (tiene la suya). -->
 <div class="v2-ventana">
   <aside class="v2-sidebar">
     <div class="v2-marca">Gestión Municipal</div>
@@ -80,9 +80,9 @@
   <div class="contenido">
     <div class="pagina">
       <div class="v2-encabezado">
-        <div class="v2-breadcrumb"><span class="v2-breadcrumb-origen">Reportes</span><span> / </span><span>Estadística de tareas</span></div>
+        <div class="v2-breadcrumb"><span class="v2-breadcrumb-origen">Reportes</span><span> / </span><span>Estadística de proyectos</span></div>
         <div class="v2-encabezado-fila">
-          <div><div class="v2-titulo-pagina">Estadística de tareas</div></div>
+          <div><div class="v2-titulo-pagina">Estadística de proyectos</div></div>
           <div class="v2-acciones">
             <span class="v2-boton v2-boton--secundario">Exportar PDF</span>
           </div>
@@ -109,7 +109,7 @@
           <span class="v2-boton v2-boton--secundario">Buscar</span>
         </div>
         <div class="v2-grilla">
-          <div class="v2-grilla-header"><div class="v2-grilla-celda col-clasif">CLASIFICADOR</div><div class="v2-grilla-celda col-pend">PENDIENTES</div><div class="v2-grilla-celda col-curso">EN CURSO</div><div class="v2-grilla-celda col-term">TERMINADAS</div><div class="v2-grilla-celda col-canc">CANCELADAS</div><div class="v2-grilla-celda col-total">TOTAL</div></div>
+          <div class="v2-grilla-header"><div class="v2-grilla-celda col-clasif">CLASIFICADOR</div><div class="v2-grilla-celda col-pend">PENDIENTES</div><div class="v2-grilla-celda col-curso">EN CURSO</div><div class="v2-grilla-celda col-term">TERMINADOS</div><div class="v2-grilla-celda col-canc">CANCELADOS</div><div class="v2-grilla-celda col-total">TOTAL</div></div>
           <div class="filas">
           <div class="v2-grilla-fila"><div class="v2-grilla-celda col-clasif"><span class="v2-celda-cortada">Zona Centro</span></div><div class="v2-grilla-celda col-pend v2-num"><span>4</span></div><div class="v2-grilla-celda col-curso v2-num"><span>6</span></div><div class="v2-grilla-celda col-term v2-num"><span>12</span></div><div class="v2-grilla-celda col-canc v2-num"><span>1</span></div><div class="v2-grilla-celda col-total v2-num"><span>23</span></div></div>
           <div class="v2-grilla-fila"><div class="v2-grilla-celda col-clasif"><span class="v2-celda-cortada">Zona Norte</span></div><div class="v2-grilla-celda col-pend v2-num"><span>7</span></div><div class="v2-grilla-celda col-curso v2-num"><span>3</span></div><div class="v2-grilla-celda col-term v2-num"><span>9</span></div><div class="v2-grilla-celda col-canc v2-num"><span>2</span></div><div class="v2-grilla-celda col-total v2-num"><span>21</span></div></div>

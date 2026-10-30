@@ -342,7 +342,7 @@ public partial class ShellMainViewModel : ViewModelBase
         [typeof(HistorialPorProductoViewModel)] = "Reportes",
         [typeof(MasMovidosViewModel)] = "Reportes",
         [typeof(AuditoriaLogViewModel)] = "Reportes",
-        [typeof(ReporteTareasViewModel)] = "Reportes",
+        [typeof(ReporteProyectosViewModel)] = "Reportes",
         [typeof(CatalogosViewModel)] = "Catalogos",
         [typeof(UsuariosAdminViewModel)] = "Usuarios",
         [typeof(MantenimientoViewModel)] = "Mantenimiento",

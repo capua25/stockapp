@@ -55,5 +55,5 @@ public partial class ReportesViewModel : ViewModelBase
     private void AbrirAuditoria() => _navegacion.Navegar<AuditoriaLogViewModel>();
 
     [RelayCommand]
-    private void AbrirEstadisticaTareas() => _navegacion.Navegar<ReporteTareasViewModel>();
+    private void AbrirEstadisticaProyectos() => _navegacion.Navegar<ReporteProyectosViewModel>();
 }

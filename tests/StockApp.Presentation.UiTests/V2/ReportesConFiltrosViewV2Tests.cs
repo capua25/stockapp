@@ -19,7 +19,7 @@ using static StockApp.Presentation.UiTests.V2.DatosDeReportes;
 
 namespace StockApp.Presentation.UiTests.V2;
 
-/// <summary>Más movidos, Historial por producto, Log de auditoría y Estadística de tareas v2 con la View REAL: raíz, orden y anchos
+/// <summary>Más movidos, Historial por producto, Log de auditoría y Estadística de proyectos v2 con la View REAL: raíz, orden y anchos
 /// de los filtros, error de fechas, vacío sin producto, combo de usuarios, sin conexión al abrir y el criterio de cierre.</summary>
 public class ReportesConFiltrosViewV2Tests
 {
@@ -27,7 +27,7 @@ public class ReportesConFiltrosViewV2Tests
     private static bool Visible(Control c) => ArbolVisual.EsVisibleEnArbol(c);
 
     private static MasMovidoDto Mas(int id, string nombre) => new(id, $"P{id:000}", nombre, 10, 100m);
-    private static FilaReporteTareas Fila(string zona) => new(zona, 1, 2, 3, 4, 10);
+    private static FilaReporteProyectos Fila(string zona) => new(zona, 1, 2, 3, 4, 10);
     private static UsuarioDto Usuario(int id, string nombre) => new(id, nombre, null, RolUsuario.Operador, true, default);
 
     private static Control VistaDe(Type tipo) => tipo.Name switch
@@ -35,7 +35,7 @@ public class ReportesConFiltrosViewV2Tests
         nameof(MasMovidosView) => MontajeReportes.MasMovidos(new ReporteStockFake { MasMovidos = { Mas(1, "Cemento") } }).Vista,
         nameof(HistorialPorProductoView) => MontajeReportes.Historial(new ReporteStockFake { Historial = { Movimiento(1, 10m, 5m) } }).Vista,
         nameof(AuditoriaLogView) => MontajeReportes.Auditoria(new AuditoriaQueryFake(), new UsuariosListaFake { Lista = { Usuario(2, "mlopez") } }).Vista,
-        _ => MontajeReportes.Tareas(new ReporteTareasFake { Filas = { Fila("Zona Centro") } }).Vista,
+        _ => MontajeReportes.Proyectos(new ReporteProyectosFake { Filas = { Fila("Zona Centro") } }).Vista,
     };
 
     private static string TituloDe(Type tipo) => tipo.Name switch
@@ -43,14 +43,14 @@ public class ReportesConFiltrosViewV2Tests
         nameof(MasMovidosView) => "Productos más movidos",
         nameof(HistorialPorProductoView) => "Historial por producto",
         nameof(AuditoriaLogView) => "Log de auditoría",
-        _ => "Estadística de tareas",
+        _ => "Estadística de proyectos",
     };
 
     [AvaloniaTheory]
     [InlineData(typeof(MasMovidosView))]
     [InlineData(typeof(HistorialPorProductoView))]
     [InlineData(typeof(AuditoriaLogView))]
-    [InlineData(typeof(ReporteTareasView))]
+    [InlineData(typeof(ReporteProyectosView))]
     public void Raiz_TieneUi2_BreadcrumbReportes_BuscarEnLaBarra_ExportarEnElEncabezado_SinPrimario(Type tipo)
     {
         var vista = VistaDe(tipo);
@@ -99,9 +99,9 @@ public class ReportesConFiltrosViewV2Tests
     }
 
     [AvaloniaFact]
-    public void Filtros_Tareas_EnElOrdenAprobado_ConEtiquetaArriba()
+    public void Filtros_Proyectos_EnElOrdenAprobado_ConEtiquetaArriba()
     {
-        var vista = VistaDe(typeof(ReporteTareasView));
+        var vista = VistaDe(typeof(ReporteProyectosView));
 
         Assert.Equal([("Agrupar por", 220d), ("Contar por", 180d), ("Desde", 140d), ("Hasta", 140d)], Campos(vista));
     }
@@ -110,7 +110,7 @@ public class ReportesConFiltrosViewV2Tests
     [InlineData(typeof(MasMovidosView))]
     [InlineData(typeof(HistorialPorProductoView))]
     [InlineData(typeof(AuditoriaLogView))]
-    [InlineData(typeof(ReporteTareasView))]
+    [InlineData(typeof(ReporteProyectosView))]
     public void Buscar_EsSecundarioYEstaAlFinalDeLaBarra(Type tipo)
     {
         var vista = VistaDe(tipo);
@@ -226,9 +226,9 @@ public class ReportesConFiltrosViewV2Tests
     }
 
     [AvaloniaFact]
-    public void Tareas_ElegirFechaDeCierre_MuestraElAviso_YVolverACreacionLoOculta()
+    public void Proyectos_ElegirFechaDeCierre_MuestraElAviso_YVolverACreacionLoOculta()
     {
-        var m = MontajeReportes.Tareas(new ReporteTareasFake { Filas = { Fila("Zona Centro") } });
+        var m = MontajeReportes.Proyectos(new ReporteProyectosFake { Filas = { Fila("Zona Centro") } });
         var aviso = Parte<Alerta>(m.Vista, "AlertaCriterioCierre");
         var combo = Parte<ComboBox>(m.Vista, "ComboCriterio");
         Assert.False(Visible(aviso));
@@ -248,9 +248,9 @@ public class ReportesConFiltrosViewV2Tests
     }
 
     [AvaloniaFact]
-    public void Tareas_PieConTotalGeneral()
+    public void Proyectos_PieConTotalGeneral()
     {
-        var m = MontajeReportes.Tareas(new ReporteTareasFake { Filas = { Fila("Zona Centro"), Fila("Zona Norte") } });
+        var m = MontajeReportes.Proyectos(new ReporteProyectosFake { Filas = { Fila("Zona Centro"), Fila("Zona Norte") } });
 
         Assert.Equal("2 filas", Parte<TextBlock>(m.Vista, "PieConteo").Text);
         var total = Parte<StackPanel>(m.Vista, "PieTotalGeneral");
@@ -261,9 +261,9 @@ public class ReportesConFiltrosViewV2Tests
     }
 
     [AvaloniaFact]
-    public void Tareas_SinRadioButtons()
+    public void Proyectos_SinRadioButtons()
     {
-        var m = MontajeReportes.Tareas(new ReporteTareasFake { Filas = { Fila("Zona Centro") } });
+        var m = MontajeReportes.Proyectos(new ReporteProyectosFake { Filas = { Fila("Zona Centro") } });
 
         Assert.Empty(m.Vista.GetVisualDescendants().OfType<RadioButton>());
         Assert.NotEmpty(Parte<ComboBox>(m.Vista, "ComboAgrupador").Items);

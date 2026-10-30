@@ -34,9 +34,9 @@
             <v2:TarjetaAcceso x:Name="TarjetaAuditoria" Icono="mdi-shield-search" Titulo="Log de auditoría"
                               Descripcion="Quién hizo qué y cuándo en el sistema."
                               Command="{Binding AbrirAuditoriaCommand}" IsVisible="{Binding PuedeVerReportes}" />
-            <v2:TarjetaAcceso x:Name="TarjetaEstadisticaTareas" Icono="mdi-chart-bar" Titulo="Estadística de tareas"
-                              Descripcion="Tareas por estado, agrupadas por zona, tema u organismo."
-                              Command="{Binding AbrirEstadisticaTareasCommand}" IsVisible="{Binding PuedeVerReportes}" />
+            <v2:TarjetaAcceso x:Name="TarjetaEstadisticaProyectos" Icono="mdi-chart-bar" Titulo="Estadística de proyectos"
+                              Descripcion="Proyectos por estado, agrupados por zona, tema u organismo."
+                              Command="{Binding AbrirEstadisticaProyectosCommand}" IsVisible="{Binding PuedeVerReportes}" />
         </v2:GrillaUniformeV2>
     </StackPanel>
 </UserControl>

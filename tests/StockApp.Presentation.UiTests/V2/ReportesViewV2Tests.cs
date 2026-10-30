@@ -25,13 +25,13 @@ public class ReportesViewV2Tests
     private static readonly string[] Titulos =
     [
         "Valorización de inventario", "Stock por categoría", "Historial por producto",
-        "Productos más movidos", "Log de auditoría", "Estadística de tareas",
+        "Productos más movidos", "Log de auditoría", "Estadística de proyectos",
     ];
 
     private static readonly string[] Nombres =
     [
         "TarjetaValorizacion", "TarjetaStockCategoria", "TarjetaHistorialPorProducto",
-        "TarjetaMasMovidos", "TarjetaAuditoria", "TarjetaEstadisticaTareas",
+        "TarjetaMasMovidos", "TarjetaAuditoria", "TarjetaEstadisticaProyectos",
     ];
 
     private sealed record Montaje(Window Ventana, ShellMainViewModel Shell, ReportesViewModel Hub, ReportesView Vista, SesionFake Sesion, NavigationServiceFake Navegacion);

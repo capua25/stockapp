@@ -22,34 +22,34 @@ using Xunit;
 namespace StockApp.Presentation.UiTests;
 
 /// <summary>
-/// Guardián del aviso de <c>ReporteTareasView.axaml</c> (D16): con criterio "Fecha de cierre",
+/// Guardián del aviso de <c>ReporteProyectosView.axaml</c> (D16): con criterio "Fecha de cierre",
 /// el <c>TextBlock</c> explica que las columnas Pendientes/En curso dan cero A PROPÓSITO, no
 /// por falta de datos.
 ///
 /// Hallazgo de la revisión final del Plan C: el reviewer borró el bloque entero del XAML y la
 /// suite de UiTests siguió 533/533 verde -- ningún test montaba la View real con el criterio
 /// en Cierre. El test de ViewModel existente
-/// (<c>ReporteTareasViewModelTests.EsCriterioCierre_AlPonerloEnTrue_...</c>) prueba la
+/// (<c>ReporteProyectosViewModelTests.EsCriterioCierre_AlPonerloEnTrue_...</c>) prueba la
 /// propiedad, no lo que el XAML hace con ella -- mismo caso de "un test de VM no custodia un
 /// gate de UI" ya documentado en el proyecto.
 ///
 /// Verificado por mutación: sacando el <c>TextBlock</c> del aviso,
 /// <see cref="AvisoVisible_ConCriterioCierre"/> se pone rojo; se revirtió después de confirmar.
 /// </summary>
-public class ReporteTareasCriterioCierreAvisoTests
+public class ReporteProyectosCriterioCierreAvisoTests
 {
     private const string TextoAviso =
-        "Criterio 'Fecha de cierre': solo se cuentan tareas Terminadas o Canceladas. " +
+        "Criterio 'Fecha de cierre': solo se cuentan proyectos Terminados o Cancelados. " +
         "Las columnas 'Pendientes' y 'En curso' muestran 0 a propósito, no faltan datos.";
 
-    // Fake mínimo: no hay uno compartido para IReporteTareasService en este proyecto (a
+    // Fake mínimo: no hay uno compartido para IReporteProyectosService en este proyecto (a
     // diferencia de Presentation.Tests, que usa Moq -- UiTests no referencia Moq). El único
     // rol acá es dejar que DataContextChanged dispare CargarAsync sin explotar; el contenido
     // del reporte no importa para este gate de visibilidad.
-    private sealed class ReporteTareasServiceFake : IReporteTareasService
+    private sealed class ReporteProyectosServiceFake : IReporteProyectosService
     {
-        public Task<ReporteTareasDto> ObtenerAsync(FiltroReporteTareas filtro) =>
-            Task.FromResult(new ReporteTareasDto(new List<FilaReporteTareas> { new("Zona Centro", 0, 0, 3, 1, 4) }, 4));
+        public Task<ReporteProyectosDto> ObtenerAsync(FiltroReporteProyectos filtro) =>
+            Task.FromResult(new ReporteProyectosDto(new List<FilaReporteProyectos> { new("Zona Centro", 0, 0, 3, 1, 4) }, new("Total general", 0, 0, 3, 1, 4)));
     }
 
     // Fakes mínimos no-op para las 6 dependencias nuevas del constructor (spec 2026-09-18):
@@ -89,15 +89,15 @@ public class ReporteTareasCriterioCierreAvisoTests
         public void CerrarSesion() { }
     }
 
-    private static (Window Window, ReporteTareasViewModel Vm) Montar()
+    private static (Window Window, ReporteProyectosViewModel Vm) Montar()
     {
-        var vm = new ReporteTareasViewModel(
-            new ReporteTareasServiceFake(), new PdfExporterFake(),
+        var vm = new ReporteProyectosViewModel(
+            new ReporteProyectosServiceFake(), new PdfExporterFake(),
             new GuardadoFake(), new AperturaFake(), new ConfirmacionFake(), new SessionFake());
-        var vista = new ReporteTareasView();
+        var vista = new ReporteProyectosView();
         var window = new Window { Width = 1100, Height = 700, Content = vista };
 
-        window.DataContext = vm; // dispara CargarAsync vía DataContextChanged (ReporteTareasView.axaml.cs)
+        window.DataContext = vm; // dispara CargarAsync vía DataContextChanged (ReporteProyectosView.axaml.cs)
         window.Show();
         Dispatcher.UIThread.RunJobs();
         Dispatcher.UIThread.RunJobs();

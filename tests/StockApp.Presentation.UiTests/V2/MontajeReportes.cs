@@ -70,12 +70,12 @@ internal static class MontajeReportes
         return Mostrar(new AuditoriaLogView(), vm, nav, conf, ancho);
     }
 
-    public static Montaje<ReporteTareasView, ReporteTareasViewModel> Tareas(ReporteTareasFake servicio, double ancho = 1040)
+    public static Montaje<ReporteProyectosView, ReporteProyectosViewModel> Proyectos(ReporteProyectosFake servicio, double ancho = 1040)
     {
         var nav = new NavigationServiceFake();
         var conf = new ConfirmacionServiceFake();
-        var vm = new ReporteTareasViewModel(servicio, new PdfExporterSinUsoFake(), new GuardadoSinUsoFake(), new ServicioAperturaArchivoFake(), conf,
+        var vm = new ReporteProyectosViewModel(servicio, new PdfExporterSinUsoFake(), new GuardadoSinUsoFake(), new ServicioAperturaArchivoFake(), conf,
             new SesionFake(RolUsuario.Admin), nav);
-        return Mostrar(new ReporteTareasView(), vm, nav, conf, ancho);
+        return Mostrar(new ReporteProyectosView(), vm, nav, conf, ancho);
     }
 }

@@ -10,21 +10,21 @@ using Xunit;
 namespace StockApp.Infrastructure.Tests.Repositories;
 
 /// <summary>
-/// Tests de integración para ReporteTareasRepository.ObtenerAsync contra PostgreSQL real.
+/// Tests de integración para ReporteProyectosRepository.ObtenerAsync contra PostgreSQL real.
 /// </summary>
-public class ReporteTareasRepositoryTests : PostgresRepositoryTestBase
+public class ReporteProyectosRepositoryTests : PostgresRepositoryTestBase
 {
-    private readonly ReporteTareasRepository _repo;
+    private readonly ReporteProyectosRepository _repo;
 
-    public ReporteTareasRepositoryTests(PostgresFixture fixture) : base(fixture)
+    public ReporteProyectosRepositoryTests(PostgresFixture fixture) : base(fixture)
     {
-        _repo = new ReporteTareasRepository(Context);
+        _repo = new ReporteProyectosRepository(Context);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
     // Npgsql exige Kind=Utc para columnas timestamptz (a diferencia de SQLite): mismo
-    // criterio que TareaRepositoryTests.FechaLimite con DateTime.SpecifyKind. Se centraliza
+    // criterio que ProyectoRepositoryTests.FechaLimite con DateTime.SpecifyKind. Se centraliza
     // acá para no repetir SpecifyKind en cada literal de fecha del archivo.
     private static DateTime Utc(int anio, int mes, int dia) =>
         DateTime.SpecifyKind(new DateTime(anio, mes, dia), DateTimeKind.Utc);
@@ -52,27 +52,25 @@ public class ReporteTareasRepositoryTests : PostgresRepositoryTestBase
         return usuario.Id;
     }
 
-    private static Tarea NuevaTarea(
-        int creadaPorUsuarioId,
-        EstadoTarea estado,
+    private static Proyecto NuevoProyecto(
+        int creadoPorUsuarioId,
+        EstadoProyecto estado,
         DateTime fechaCreacion,
         DateTime? fechaFin = null,
         int? zonaId = null,
-        int? documentoAdministrativoId = null,
-        string titulo = "Tarea de prueba") => new()
+        string titulo = "Proyecto de prueba") => new()
     {
         Titulo = titulo,
-        CreadaPorUsuarioId = creadaPorUsuarioId,
+        CreadoPorUsuarioId = creadoPorUsuarioId,
         FechaCreacion = DateTime.SpecifyKind(fechaCreacion, DateTimeKind.Utc),
         Estado = estado,
         FechaFin = fechaFin is null ? null : DateTime.SpecifyKind(fechaFin.Value, DateTimeKind.Utc),
         ZonaId = zonaId,
-        DocumentoAdministrativoId = documentoAdministrativoId,
     };
 
-    private static FiltroReporteTareas Filtro(
-        AgrupadorTareas agrupador,
-        CriterioFechaTareas criterio = CriterioFechaTareas.Creacion,
+    private static FiltroReporteProyectos Filtro(
+        AgrupadorProyectos agrupador,
+        CriterioFechaProyectos criterio = CriterioFechaProyectos.Creacion,
         DateTime? desde = null,
         DateTime? hasta = null) =>
         new(agrupador, criterio, desde ?? Desde2026, hasta ?? Hasta2026);
@@ -80,41 +78,41 @@ public class ReporteTareasRepositoryTests : PostgresRepositoryTestBase
     // ── Tests ─────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task ObtenerAsync_AgrupaPorZona_ConSinAsignar_LasFilasSumanElTotal()
+    public async Task ObtenerAsync_PorZona_CuentaProyectosPorEstado()
     {
         var usuarioId = await SembrarUsuarioAsync();
         var centro = new Zona { Nombre = "Centro", Activo = true };
         Context.Add(centro);
         await Context.SaveChangesAsync();
 
-        Context.Tareas.AddRange(
-            NuevaTarea(usuarioId, EstadoTarea.Pendiente, Utc(2026, 3, 1), zonaId: centro.Id),
-            NuevaTarea(usuarioId, EstadoTarea.EnCurso, Utc(2026, 3, 2), zonaId: centro.Id),
-            NuevaTarea(usuarioId, EstadoTarea.Terminada, Utc(2026, 3, 3),
+        Context.Proyectos.AddRange(
+            NuevoProyecto(usuarioId, EstadoProyecto.Pendiente, Utc(2026, 3, 1), zonaId: centro.Id),
+            NuevoProyecto(usuarioId, EstadoProyecto.EnCurso, Utc(2026, 3, 2), zonaId: centro.Id),
+            NuevoProyecto(usuarioId, EstadoProyecto.Terminado, Utc(2026, 3, 3),
                 fechaFin: Utc(2026, 3, 10), zonaId: centro.Id),
             // sin zona: va a "(sin asignar)"
-            NuevaTarea(usuarioId, EstadoTarea.Cancelada, Utc(2026, 3, 4),
+            NuevoProyecto(usuarioId, EstadoProyecto.Cancelado, Utc(2026, 3, 4),
                 fechaFin: Utc(2026, 3, 11), zonaId: null));
         await Context.SaveChangesAsync();
         Context.ChangeTracker.Clear();
 
-        var filas = await _repo.ObtenerAsync(Filtro(AgrupadorTareas.Zona));
+        var filas = await _repo.ObtenerAsync(Filtro(AgrupadorProyectos.Zona));
 
         Assert.Equal(2, filas.Count);
 
         var fCentro = filas.Single(f => f.Clasificador == "Centro");
         Assert.Equal(1, fCentro.Pendientes);
         Assert.Equal(1, fCentro.EnCurso);
-        Assert.Equal(1, fCentro.Terminadas);
-        Assert.Equal(0, fCentro.Canceladas);
+        Assert.Equal(1, fCentro.Terminados);
+        Assert.Equal(0, fCentro.Cancelados);
         Assert.Equal(3, fCentro.Total);
-        Assert.Equal(fCentro.Pendientes + fCentro.EnCurso + fCentro.Terminadas + fCentro.Canceladas, fCentro.Total);
+        Assert.Equal(fCentro.Pendientes + fCentro.EnCurso + fCentro.Terminados + fCentro.Cancelados, fCentro.Total);
 
         var fSinAsignar = filas.Single(f => f.Clasificador == "(sin asignar)");
         Assert.Equal(0, fSinAsignar.Pendientes);
         Assert.Equal(0, fSinAsignar.EnCurso);
-        Assert.Equal(0, fSinAsignar.Terminadas);
-        Assert.Equal(1, fSinAsignar.Canceladas);
+        Assert.Equal(0, fSinAsignar.Terminados);
+        Assert.Equal(1, fSinAsignar.Cancelados);
         Assert.Equal(1, fSinAsignar.Total);
     }
 
@@ -128,15 +126,15 @@ public class ReporteTareasRepositoryTests : PostgresRepositoryTestBase
         Context.AddRange(oeste, centro, este);
         await Context.SaveChangesAsync();
 
-        Context.Tareas.AddRange(
-            NuevaTarea(usuarioId, EstadoTarea.Pendiente, Utc(2026, 3, 1), zonaId: oeste.Id),
-            NuevaTarea(usuarioId, EstadoTarea.Pendiente, Utc(2026, 3, 1), zonaId: centro.Id),
-            NuevaTarea(usuarioId, EstadoTarea.Pendiente, Utc(2026, 3, 1), zonaId: este.Id),
-            NuevaTarea(usuarioId, EstadoTarea.Pendiente, Utc(2026, 3, 1), zonaId: null));
+        Context.Proyectos.AddRange(
+            NuevoProyecto(usuarioId, EstadoProyecto.Pendiente, Utc(2026, 3, 1), zonaId: oeste.Id),
+            NuevoProyecto(usuarioId, EstadoProyecto.Pendiente, Utc(2026, 3, 1), zonaId: centro.Id),
+            NuevoProyecto(usuarioId, EstadoProyecto.Pendiente, Utc(2026, 3, 1), zonaId: este.Id),
+            NuevoProyecto(usuarioId, EstadoProyecto.Pendiente, Utc(2026, 3, 1), zonaId: null));
         await Context.SaveChangesAsync();
         Context.ChangeTracker.Clear();
 
-        var filas = await _repo.ObtenerAsync(Filtro(AgrupadorTareas.Zona));
+        var filas = await _repo.ObtenerAsync(Filtro(AgrupadorProyectos.Zona));
 
         Assert.Equal(
             new[] { "Centro", "Este", "Oeste", "(sin asignar)" },
@@ -151,84 +149,84 @@ public class ReporteTareasRepositoryTests : PostgresRepositoryTestBase
         Context.Add(zona);
         await Context.SaveChangesAsync();
 
-        Context.Tareas.AddRange(
-            NuevaTarea(usuarioId, EstadoTarea.Pendiente, Utc(2026, 5, 1), zonaId: zona.Id),
-            NuevaTarea(usuarioId, EstadoTarea.EnCurso, Utc(2026, 5, 2), zonaId: zona.Id),
-            NuevaTarea(usuarioId, EstadoTarea.Terminada, Utc(2026, 5, 3),
+        Context.Proyectos.AddRange(
+            NuevoProyecto(usuarioId, EstadoProyecto.Pendiente, Utc(2026, 5, 1), zonaId: zona.Id),
+            NuevoProyecto(usuarioId, EstadoProyecto.EnCurso, Utc(2026, 5, 2), zonaId: zona.Id),
+            NuevoProyecto(usuarioId, EstadoProyecto.Terminado, Utc(2026, 5, 3),
                 fechaFin: Utc(2026, 5, 10), zonaId: zona.Id),
-            NuevaTarea(usuarioId, EstadoTarea.Cancelada, Utc(2026, 5, 4),
+            NuevoProyecto(usuarioId, EstadoProyecto.Cancelado, Utc(2026, 5, 4),
                 fechaFin: Utc(2026, 5, 11), zonaId: zona.Id));
         await Context.SaveChangesAsync();
         Context.ChangeTracker.Clear();
 
-        var filas = await _repo.ObtenerAsync(Filtro(AgrupadorTareas.Zona, CriterioFechaTareas.Creacion));
+        var filas = await _repo.ObtenerAsync(Filtro(AgrupadorProyectos.Zona, CriterioFechaProyectos.Creacion));
 
         var fila = Assert.Single(filas);
         Assert.Equal(1, fila.Pendientes);
         Assert.Equal(1, fila.EnCurso);
-        Assert.Equal(1, fila.Terminadas);
-        Assert.Equal(1, fila.Canceladas);
+        Assert.Equal(1, fila.Terminados);
+        Assert.Equal(1, fila.Cancelados);
         Assert.Equal(4, fila.Total);
     }
 
     [Fact]
-    public async Task ObtenerAsync_CriterioCierre_SoloCuentaCerradas_PendientesYEnCursoEnCero()
+    public async Task ObtenerAsync_CriterioCierre_SoloCerrados()
     {
-        // D16: con criterio Cierre, FechaFin es null en Pendiente/EnCurso -- esas dos tareas
+        // D16: con criterio Cierre, FechaFin es null en Pendiente/EnCurso -- esas dos proyectos
         // quedan FUERA del universo filtrado, así que las columnas dan cero.
         var usuarioId = await SembrarUsuarioAsync();
         var zona = new Zona { Nombre = "Centro", Activo = true };
         Context.Add(zona);
         await Context.SaveChangesAsync();
 
-        Context.Tareas.AddRange(
-            NuevaTarea(usuarioId, EstadoTarea.Pendiente, Utc(2026, 5, 1), zonaId: zona.Id),
-            NuevaTarea(usuarioId, EstadoTarea.EnCurso, Utc(2026, 5, 2), zonaId: zona.Id),
-            NuevaTarea(usuarioId, EstadoTarea.Terminada, Utc(2026, 5, 3),
+        Context.Proyectos.AddRange(
+            NuevoProyecto(usuarioId, EstadoProyecto.Pendiente, Utc(2026, 5, 1), zonaId: zona.Id),
+            NuevoProyecto(usuarioId, EstadoProyecto.EnCurso, Utc(2026, 5, 2), zonaId: zona.Id),
+            NuevoProyecto(usuarioId, EstadoProyecto.Terminado, Utc(2026, 5, 3),
                 fechaFin: Utc(2026, 6, 1), zonaId: zona.Id),
-            NuevaTarea(usuarioId, EstadoTarea.Cancelada, Utc(2026, 5, 4),
+            NuevoProyecto(usuarioId, EstadoProyecto.Cancelado, Utc(2026, 5, 4),
                 fechaFin: Utc(2026, 6, 2), zonaId: zona.Id));
         await Context.SaveChangesAsync();
         Context.ChangeTracker.Clear();
 
-        var filas = await _repo.ObtenerAsync(Filtro(AgrupadorTareas.Zona, CriterioFechaTareas.Cierre));
+        var filas = await _repo.ObtenerAsync(Filtro(AgrupadorProyectos.Zona, CriterioFechaProyectos.Cierre));
 
         var fila = Assert.Single(filas);
         Assert.Equal(0, fila.Pendientes);
         Assert.Equal(0, fila.EnCurso);
-        Assert.Equal(1, fila.Terminadas);
-        Assert.Equal(1, fila.Canceladas);
+        Assert.Equal(1, fila.Terminados);
+        Assert.Equal(1, fila.Cancelados);
         Assert.Equal(2, fila.Total);
     }
 
     [Fact]
-    public async Task ObtenerAsync_RangoDeFechas_ExcluyeTareasFueraDelRango()
+    public async Task ObtenerAsync_RangoDeFechas_ExcluyeProyectosFueraDelRango()
     {
         var usuarioId = await SembrarUsuarioAsync();
         var zona = new Zona { Nombre = "Centro", Activo = true };
         Context.Add(zona);
         await Context.SaveChangesAsync();
 
-        Context.Tareas.AddRange(
-            NuevaTarea(usuarioId, EstadoTarea.Pendiente, Utc(2026, 6, 15), zonaId: zona.Id),
+        Context.Proyectos.AddRange(
+            NuevoProyecto(usuarioId, EstadoProyecto.Pendiente, Utc(2026, 6, 15), zonaId: zona.Id),
             // fuera del rango 2026: no debe contarse
-            NuevaTarea(usuarioId, EstadoTarea.Pendiente, Utc(2025, 12, 31), zonaId: zona.Id));
+            NuevoProyecto(usuarioId, EstadoProyecto.Pendiente, Utc(2025, 12, 31), zonaId: zona.Id));
         await Context.SaveChangesAsync();
         Context.ChangeTracker.Clear();
 
-        var filas = await _repo.ObtenerAsync(Filtro(AgrupadorTareas.Zona));
+        var filas = await _repo.ObtenerAsync(Filtro(AgrupadorProyectos.Zona));
 
         var fila = Assert.Single(filas);
         Assert.Equal(1, fila.Total);
     }
 
     [Fact]
-    public async Task ObtenerAsync_HastaConOffsetUtc_IncluyeTareaCreadaEnLasUltimas3HorasDelDiaLocal()
+    public async Task ObtenerAsync_HastaConOffsetUtc_IncluyeProyectoCreadaEnLasUltimas3HorasDelDiaLocal()
     {
         // El ViewModel manda Desde/Hasta como INSTANTES UTC ya convertidos desde medianoche
         // local (Uruguay UTC-3): medianoche local del 31/12 es 2026-12-31T03:00:00Z. Si el
         // repo trunca con Hasta.Date antes de sumar el día, pierde esas 3hs y el fin de rango
-        // queda en 2026-12-31T23:59:59.9999999Z UTC == 2026-12-31T20:59:59 local -- una tarea
+        // queda en 2026-12-31T23:59:59.9999999Z UTC == 2026-12-31T20:59:59 local -- una proyecto
         // creada a las 22:00 local del 31/12 (2027-01-01T01:00:00Z) queda afuera por error.
         var usuarioId = await SembrarUsuarioAsync();
         var zona = new Zona { Nombre = "Centro", Activo = true };
@@ -239,48 +237,16 @@ public class ReporteTareasRepositoryTests : PostgresRepositoryTestBase
         var hastaConOffset = Utc(2026, 12, 31, 3, 0, 0);  // medianoche local 31/12 -> UTC
         var creadaUltimasHorasDelDia = Utc(2027, 1, 1, 1, 0, 0); // 22:00 local del 31/12
 
-        Context.Tareas.Add(
-            NuevaTarea(usuarioId, EstadoTarea.Pendiente, creadaUltimasHorasDelDia, zonaId: zona.Id));
+        Context.Proyectos.Add(
+            NuevoProyecto(usuarioId, EstadoProyecto.Pendiente, creadaUltimasHorasDelDia, zonaId: zona.Id));
         await Context.SaveChangesAsync();
         Context.ChangeTracker.Clear();
 
         var filas = await _repo.ObtenerAsync(
-            Filtro(AgrupadorTareas.Zona, desde: desdeConOffset, hasta: hastaConOffset));
+            Filtro(AgrupadorProyectos.Zona, desde: desdeConOffset, hasta: hastaConOffset));
 
         var fila = Assert.Single(filas);
         Assert.Equal(1, fila.Total);
-    }
-
-    [Fact]
-    public async Task ObtenerAsync_AgrupaPorExpediente_EtiquetaNumeroBarraAnio()
-    {
-        var usuarioId = await SembrarUsuarioAsync();
-        var documento = new DocumentoAdministrativo
-        {
-            Numero = "0087",
-            Anio = 2026,
-            Tipo = TipoDocumento.Expediente,
-            FechaEmision = Utc(2026, 1, 15),
-            Descripcion = "Expediente de prueba",
-            RegistradoPorUsuarioId = usuarioId,
-            FechaRegistro = DateTime.UtcNow,
-        };
-        Context.Add(documento);
-        await Context.SaveChangesAsync();
-
-        Context.Tareas.AddRange(
-            NuevaTarea(usuarioId, EstadoTarea.Pendiente, Utc(2026, 4, 1),
-                documentoAdministrativoId: documento.Id),
-            // sin expediente: "(sin asignar)"
-            NuevaTarea(usuarioId, EstadoTarea.Pendiente, Utc(2026, 4, 2)));
-        await Context.SaveChangesAsync();
-        Context.ChangeTracker.Clear();
-
-        var filas = await _repo.ObtenerAsync(Filtro(AgrupadorTareas.Expediente));
-
-        Assert.Equal(2, filas.Count);
-        Assert.Contains(filas, f => f.Clasificador == "0087/2026" && f.Total == 1);
-        Assert.Contains(filas, f => f.Clasificador == "(sin asignar)" && f.Total == 1);
     }
 
     [Fact]
@@ -291,18 +257,18 @@ public class ReporteTareasRepositoryTests : PostgresRepositoryTestBase
         Context.Add(dimension);
         await Context.SaveChangesAsync();
 
-        var tarea = new Tarea
+        var proyecto = new Proyecto
         {
             Titulo = "Bacheo",
-            CreadaPorUsuarioId = usuarioId,
+            CreadoPorUsuarioId = usuarioId,
             FechaCreacion = Utc(2026, 4, 1),
             DimensionTematicaId = dimension.Id,
         };
-        Context.Tareas.Add(tarea);
+        Context.Proyectos.Add(proyecto);
         await Context.SaveChangesAsync();
         Context.ChangeTracker.Clear();
 
-        var filas = await _repo.ObtenerAsync(Filtro(AgrupadorTareas.DimensionTematica));
+        var filas = await _repo.ObtenerAsync(Filtro(AgrupadorProyectos.DimensionTematica));
 
         var fila = Assert.Single(filas);
         Assert.Equal("Infraestructura", fila.Clasificador);
@@ -317,18 +283,18 @@ public class ReporteTareasRepositoryTests : PostgresRepositoryTestBase
         Context.Add(organismo);
         await Context.SaveChangesAsync();
 
-        var tarea = new Tarea
+        var proyecto = new Proyecto
         {
             Titulo = "Poda",
-            CreadaPorUsuarioId = usuarioId,
+            CreadoPorUsuarioId = usuarioId,
             FechaCreacion = Utc(2026, 4, 1),
             OrganismoResponsableId = organismo.Id,
         };
-        Context.Tareas.Add(tarea);
+        Context.Proyectos.Add(proyecto);
         await Context.SaveChangesAsync();
         Context.ChangeTracker.Clear();
 
-        var filas = await _repo.ObtenerAsync(Filtro(AgrupadorTareas.OrganismoResponsable));
+        var filas = await _repo.ObtenerAsync(Filtro(AgrupadorProyectos.OrganismoResponsable));
 
         var fila = Assert.Single(filas);
         Assert.Equal("Intendencia", fila.Clasificador);
@@ -343,18 +309,18 @@ public class ReporteTareasRepositoryTests : PostgresRepositoryTestBase
         Context.Add(origen);
         await Context.SaveChangesAsync();
 
-        var tarea = new Tarea
+        var proyecto = new Proyecto
         {
             Titulo = "Iluminación",
-            CreadaPorUsuarioId = usuarioId,
+            CreadoPorUsuarioId = usuarioId,
             FechaCreacion = Utc(2026, 4, 1),
             OrigenFinanciamientoId = origen.Id,
         };
-        Context.Tareas.Add(tarea);
+        Context.Proyectos.Add(proyecto);
         await Context.SaveChangesAsync();
         Context.ChangeTracker.Clear();
 
-        var filas = await _repo.ObtenerAsync(Filtro(AgrupadorTareas.OrigenFinanciamiento));
+        var filas = await _repo.ObtenerAsync(Filtro(AgrupadorProyectos.OrigenFinanciamiento));
 
         var fila = Assert.Single(filas);
         Assert.Equal("Fondo nacional", fila.Clasificador);

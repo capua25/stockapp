@@ -755,7 +755,7 @@ public class PlantillaTabularTests
     /// <summary>
     /// Guardián del resumen de totales: Valorización, Libro Caja y Reporte de tareas necesitan
     /// imprimir un cierre después de la tabla principal (antes solo existía el parche de fabricar
-    /// una fila sintética del mismo DTO -- ver <c>ReporteTareasViewModel</c>). Se afirma sobre el
+    /// una fila sintética del mismo DTO -- ver <c>ReporteProyectosViewModel</c>). Se afirma sobre el
     /// PDF generado de verdad (PdfPig), no sobre la llamada al método: un test que solo comprueba
     /// que <c>Generar</c> no explota no prueba que el texto del total aparezca impreso.
     /// </summary>

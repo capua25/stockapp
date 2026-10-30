@@ -16,21 +16,21 @@ namespace StockApp.Presentation.ViewModels.Reportes;
 
 /// <summary>Opción del combo de agrupador (mismo patrón que OpcionTipoDocumento en
 /// DocumentoListViewModel: un Nombre legible junto al valor real del enum).</summary>
-public sealed record OpcionAgrupador(string Nombre, AgrupadorTareas Valor);
+public sealed record OpcionAgrupador(string Nombre, AgrupadorProyectos Valor);
 
 /// <summary>Opción del combo "Contar por" (criterio de fecha): un Nombre legible junto al valor real del enum.</summary>
-public sealed record OpcionCriterio(string Nombre, CriterioFechaTareas Valor);
+public sealed record OpcionCriterio(string Nombre, CriterioFechaProyectos Valor);
 
 /// <summary>
-/// ViewModel del reporte-matriz de Tareas (spec 2026-09-08). Consulta
-/// <see cref="IReporteTareasService"/> con el agrupador/criterio/rango elegidos.
+/// ViewModel del reporte-matriz de Proyectos (spec 2026-09-08). Consulta
+/// <see cref="IReporteProyectosService"/> con el agrupador/criterio/rango elegidos.
 ///
 /// D23: este ViewModel NO calcula nada -- ni totales, ni porcentajes, ni conteos. Solo asigna
 /// <see cref="Items"/>/<see cref="TotalGeneral"/> con lo que devuelve el servicio, tal cual.
 /// </summary>
-public partial class ReporteTareasViewModel : ViewModelBase
+public partial class ReporteProyectosViewModel : ViewModelBase
 {
-    private readonly IReporteTareasService _servicio;
+    private readonly IReporteProyectosService _servicio;
     private readonly IPdfExporter _pdfExporter;
     private readonly IServicioGuardadoArchivo _guardado;
     private readonly IServicioAperturaArchivo _apertura;
@@ -39,17 +39,16 @@ public partial class ReporteTareasViewModel : ViewModelBase
 
     public IReadOnlyList<OpcionAgrupador> AgrupadoresDisponibles { get; } = new[]
     {
-        new OpcionAgrupador("Zona", AgrupadorTareas.Zona),
-        new OpcionAgrupador("Dimensión temática", AgrupadorTareas.DimensionTematica),
-        new OpcionAgrupador("Organismo responsable", AgrupadorTareas.OrganismoResponsable),
-        new OpcionAgrupador("Origen de financiamiento", AgrupadorTareas.OrigenFinanciamiento),
-        new OpcionAgrupador("Expediente", AgrupadorTareas.Expediente),
+        new OpcionAgrupador("Zona", AgrupadorProyectos.Zona),
+        new OpcionAgrupador("Dimensión temática", AgrupadorProyectos.DimensionTematica),
+        new OpcionAgrupador("Organismo responsable", AgrupadorProyectos.OrganismoResponsable),
+        new OpcionAgrupador("Origen de financiamiento", AgrupadorProyectos.OrigenFinanciamiento),
     };
 
     public IReadOnlyList<OpcionCriterio> CriteriosDisponibles { get; } = new[]
     {
-        new OpcionCriterio("Fecha de creación", CriterioFechaTareas.Creacion),
-        new OpcionCriterio("Fecha de cierre", CriterioFechaTareas.Cierre),
+        new OpcionCriterio("Fecha de creación", CriterioFechaProyectos.Creacion),
+        new OpcionCriterio("Fecha de cierre", CriterioFechaProyectos.Cierre),
     };
 
     [ObservableProperty]
@@ -60,7 +59,7 @@ public partial class ReporteTareasViewModel : ViewModelBase
     private OpcionCriterio _criterioOpcionSeleccionada;
 
     [ObservableProperty]
-    private CriterioFechaTareas _criterioSeleccionado;
+    private CriterioFechaProyectos _criterioSeleccionado;
 
     // DateTime? (no DateTime): CalendarDatePicker.SelectedDate es Nullable<DateTime> con binding
     // TwoWay -- mismo tipo que MasMovidosViewModel.FechaDesde/FechaHasta. El rango sigue siendo
@@ -72,7 +71,7 @@ public partial class ReporteTareasViewModel : ViewModelBase
     private DateTime? _fechaHasta;
 
     [ObservableProperty]
-    private IReadOnlyList<FilaReporteTareas> _items = new List<FilaReporteTareas>();
+    private IReadOnlyList<FilaReporteProyectos> _items = new List<FilaReporteProyectos>();
 
     [ObservableProperty]
     private int _totalGeneral;
@@ -85,18 +84,18 @@ public partial class ReporteTareasViewModel : ViewModelBase
     /// backing field propio.</summary>
     public bool EsCriterioCreacion
     {
-        get => CriterioSeleccionado == CriterioFechaTareas.Creacion;
-        set { if (value) CriterioSeleccionado = CriterioFechaTareas.Creacion; }
+        get => CriterioSeleccionado == CriterioFechaProyectos.Creacion;
+        set { if (value) CriterioSeleccionado = CriterioFechaProyectos.Creacion; }
     }
 
     public bool EsCriterioCierre
     {
-        get => CriterioSeleccionado == CriterioFechaTareas.Cierre;
-        set { if (value) CriterioSeleccionado = CriterioFechaTareas.Cierre; }
+        get => CriterioSeleccionado == CriterioFechaProyectos.Cierre;
+        set { if (value) CriterioSeleccionado = CriterioFechaProyectos.Cierre; }
     }
 
-    public ReporteTareasViewModel(
-        IReporteTareasService servicio,
+    public ReporteProyectosViewModel(
+        IReporteProyectosService servicio,
         IPdfExporter pdfExporter,
         IServicioGuardadoArchivo guardado,
         IServicioAperturaArchivo apertura,
@@ -112,7 +111,7 @@ public partial class ReporteTareasViewModel : ViewModelBase
         _session = session;
         _navegacion = navegacion;
         _agrupadorSeleccionado = AgrupadoresDisponibles[0];
-        _criterioSeleccionado = CriterioFechaTareas.Creacion;
+        _criterioSeleccionado = CriterioFechaProyectos.Creacion;
         _criterioOpcionSeleccionada = CriteriosDisponibles[0];
 
         // D18: default del año en curso -- el rango sigue siendo obligatorio y se revalida
@@ -122,7 +121,7 @@ public partial class ReporteTareasViewModel : ViewModelBase
         _fechaHasta = new DateTime(anioActual, 12, 31);
     }
 
-    partial void OnCriterioSeleccionadoChanged(CriterioFechaTareas value)
+    partial void OnCriterioSeleccionadoChanged(CriterioFechaProyectos value)
     {
         OnPropertyChanged(nameof(EsCriterioCreacion));
         OnPropertyChanged(nameof(EsCriterioCierre));
@@ -147,7 +146,7 @@ public partial class ReporteTareasViewModel : ViewModelBase
     public IRelayCommand VolverCommand => field ??= new RelayCommand(
         () => _navegacion?.Navegar<ReportesViewModel>(), () => _navegacion is not null);
 
-    public string TituloVacio => "No hay tareas en el período";
+    public string TituloVacio => "No hay proyectos en el período";
 
     public string MensajeVacio => "Probá con otro período o criterio.";
 
@@ -156,7 +155,7 @@ public partial class ReporteTareasViewModel : ViewModelBase
     /// <summary>Sin servidor la grilla queda vacía: el reintento no puede mostrar las filas de la consulta anterior.</summary>
     protected override void AlPerderConexion()
     {
-        Items = new List<FilaReporteTareas>();
+        Items = new List<FilaReporteProyectos>();
         TotalGeneral = 0;
         _descripcionCargada = null;
     }
@@ -170,7 +169,7 @@ public partial class ReporteTareasViewModel : ViewModelBase
     /// </summary>
     public bool PuedeExportar => Items.Count > 0 && !SinPermiso && !SinConexion && !Cargando;
 
-    partial void OnItemsChanged(IReadOnlyList<FilaReporteTareas> value)
+    partial void OnItemsChanged(IReadOnlyList<FilaReporteProyectos> value)
     {
         OnPropertyChanged(nameof(PuedeExportar));
         ExportarPdfCommand.NotifyCanExecuteChanged();
@@ -193,13 +192,13 @@ public partial class ReporteTareasViewModel : ViewModelBase
 
     /// <summary>
     /// Público para poder engancharse desde el auto-load de la vista (<c>DataContextChanged</c>
-    /// en <c>ReporteTareasView.axaml.cs</c>), además de desde <see cref="BuscarCommand"/>.
+    /// en <c>ReporteProyectosView.axaml.cs</c>), además de desde <see cref="BuscarCommand"/>.
     /// </summary>
     public async Task CargarAsync()
     {
         // D18: el rango es obligatorio. FechaDesde/FechaHasta son DateTime? (el usuario puede
         // borrar el CalendarDatePicker) -- rechazar ACÁ con un mensaje claro, nunca mandar null
-        // a FiltroReporteTareas (Desde/Hasta siguen siendo DateTime no nullable en Application).
+        // a FiltroReporteProyectos (Desde/Hasta siguen siendo DateTime no nullable en Application).
         if (FechaDesde is null || FechaHasta is null)
         {
             MensajeError = "El rango de fechas es obligatorio.";
@@ -214,7 +213,7 @@ public partial class ReporteTareasViewModel : ViewModelBase
 
         MensajeError = null;
         var turno = _consultas.Empezar();
-        var filtro = new FiltroReporteTareas(
+        var filtro = new FiltroReporteProyectos(
             AgrupadorSeleccionado.Valor,
             CriterioSeleccionado,
             ALocalAUtc(FechaDesde.Value),
@@ -228,9 +227,9 @@ public partial class ReporteTareasViewModel : ViewModelBase
 
             // D23: passthrough exacto -- ni Sum, ni Count, ni Select acá.
             Items = reporte.Filas;
-            TotalGeneral = reporte.TotalGeneral;
+            TotalGeneral = reporte.TotalGeneral.Total;
             _descripcionCargada = descripcion;
-        }, "No tenés permiso para ver el reporte de tareas.", turno);
+        }, "No tenés permiso para ver el reporte de proyectos.", turno);
     }
 
     /// <summary>Convierte una fecha LOCAL (la que produce el CalendarDatePicker bindeado a
@@ -250,16 +249,16 @@ public partial class ReporteTareasViewModel : ViewModelBase
     /// </summary>
     public static readonly IReadOnlyList<ColumnaPdf> ColumnasPdf = new[]
     {
-        new ColumnaPdf(nameof(FilaReporteTareas.Clasificador), "Clasificador"),
-        new ColumnaPdf(nameof(FilaReporteTareas.Pendientes), "Pendientes"),
-        new ColumnaPdf(nameof(FilaReporteTareas.EnCurso), "En curso"),
-        new ColumnaPdf(nameof(FilaReporteTareas.Terminadas), "Terminadas"),
-        new ColumnaPdf(nameof(FilaReporteTareas.Canceladas), "Canceladas"),
-        new ColumnaPdf(nameof(FilaReporteTareas.Total), "Total"),
+        new ColumnaPdf(nameof(FilaReporteProyectos.Clasificador), "Clasificador"),
+        new ColumnaPdf(nameof(FilaReporteProyectos.Pendientes), "Pendientes"),
+        new ColumnaPdf(nameof(FilaReporteProyectos.EnCurso), "En curso"),
+        new ColumnaPdf(nameof(FilaReporteProyectos.Terminados), "Terminados"),
+        new ColumnaPdf(nameof(FilaReporteProyectos.Cancelados), "Cancelados"),
+        new ColumnaPdf(nameof(FilaReporteProyectos.Total), "Total"),
     };
 
     /// <summary>
-    /// El mismo reporte agrupado por Zona o por Expediente son documentos completamente
+    /// El mismo reporte agrupado por Zona o por Organismo son documentos completamente
     /// distintos (spec 2026-09-18): sin esto, dos PDFs idénticos en apariencia podrían
     /// significar cosas opuestas. Dice agrupador, criterio de fecha (creación/cierre) y el
     /// rango -- las fechas son obligatorias en esta pantalla (D18), así que siempre hay valor.
@@ -281,7 +280,7 @@ public partial class ReporteTareasViewModel : ViewModelBase
         await ExportacionPdf.EjecutarAsync(async () =>
         {
             var metadatos = new MetadatosDocumento(
-                Titulo: "Estadística de tareas",
+                Titulo: "Estadística de proyectos",
                 DescripcionFiltros: _descripcionCargada ?? ConstruirDescripcionFiltros(),
                 UsuarioEmisor: _session.UsuarioActual?.NombreCompleto ?? _session.UsuarioActual?.NombreUsuario ?? "Sistema");
 
@@ -290,9 +289,9 @@ public partial class ReporteTareasViewModel : ViewModelBase
             var pdf = _pdfExporter.Exportar(Items, ColumnasPdf, metadatos, resumen);
             using var stream = new MemoryStream(pdf);
             var guardado = await _guardado.GuardarBytesAsync(
-                stream, "reporte-tareas.pdf", extension: "pdf", tipoMime: "application/pdf");
+                stream, "reporte-proyectos.pdf", extension: "pdf", tipoMime: "application/pdf");
 
-            await ExportacionPdf.OfrecerAbrirAsync(guardado, pdf, "reporte-tareas.pdf", _confirmacion, _apertura);
+            await ExportacionPdf.OfrecerAbrirAsync(guardado, pdf, "reporte-proyectos.pdf", _confirmacion, _apertura);
         }, _confirmacion);
     }
 }

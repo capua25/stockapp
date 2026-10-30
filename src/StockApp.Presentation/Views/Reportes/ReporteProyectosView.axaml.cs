@@ -3,9 +3,9 @@ using StockApp.Presentation.ViewModels.Reportes;
 
 namespace StockApp.Presentation.Views.Reportes;
 
-public partial class ReporteTareasView : UserControl
+public partial class ReporteProyectosView : UserControl
 {
-    public ReporteTareasView()
+    public ReporteProyectosView()
     {
         InitializeComponent();
 
@@ -13,7 +13,7 @@ public partial class ReporteTareasView : UserControl
         // (bug recurrente del proyecto): se cablea acá, igual que StockCategoriaView.
         DataContextChanged += async (_, _) =>
         {
-            if (DataContext is ReporteTareasViewModel vm)
+            if (DataContext is ReporteProyectosViewModel vm)
                 await vm.CargarAsync();
         };
     }

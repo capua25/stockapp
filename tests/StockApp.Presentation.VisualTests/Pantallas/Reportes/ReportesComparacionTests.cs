@@ -54,8 +54,8 @@ public class ReportesComparacionTests
     [AvaloniaFact] public void MasMovidosErrorFechas_IgualAlMockup_1366x768() => Comparar(DatosReportes.MasMovidosErrorFechas(), "reportes/mas-movidos-error-fechas.html", TamanoLienzo.Municipio);
     [AvaloniaFact] public void Auditoria_IgualAlMockup() => Comparar(DatosReportes.Auditoria(), "reportes/auditoria.html", recortesPermitidos: DetalleCortado);
     [AvaloniaFact] public void Auditoria_IgualAlMockup_1366x768() => Comparar(DatosReportes.Auditoria(), "reportes/auditoria.html", TamanoLienzo.Municipio, DetalleCortado);
-    [AvaloniaFact] public void Tareas_IgualAlMockup() => Comparar(DatosReportes.Tareas(), "reportes/tareas.html");
-    [AvaloniaFact] public void Tareas_IgualAlMockup_1366x768() => Comparar(DatosReportes.Tareas(), "reportes/tareas.html", TamanoLienzo.Municipio);
-    [AvaloniaFact] public void TareasCierre_IgualAlMockup() => Comparar(DatosReportes.TareasCierre(), "reportes/tareas-cierre.html");
-    [AvaloniaFact] public void TareasCierre_IgualAlMockup_1366x768() => Comparar(DatosReportes.TareasCierre(), "reportes/tareas-cierre.html", TamanoLienzo.Municipio);
+    [AvaloniaFact] public void Proyectos_IgualAlMockup() => Comparar(DatosReportes.Proyectos(), "reportes/proyectos.html");
+    [AvaloniaFact] public void Proyectos_IgualAlMockup_1366x768() => Comparar(DatosReportes.Proyectos(), "reportes/proyectos.html", TamanoLienzo.Municipio);
+    [AvaloniaFact] public void ProyectosCierre_IgualAlMockup() => Comparar(DatosReportes.ProyectosCierre(), "reportes/proyectos-cierre.html");
+    [AvaloniaFact] public void ProyectosCierre_IgualAlMockup_1366x768() => Comparar(DatosReportes.ProyectosCierre(), "reportes/proyectos-cierre.html", TamanoLienzo.Municipio);
 }

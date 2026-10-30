@@ -106,10 +106,10 @@ public class ColumnasPdfContraDtosRealesTests
                 "PrecioCosto: 45,50 -> 48,00"));
 
     [Fact]
-    public void ReporteTareas_ColumnasPdf_ResuelvenContraElDtoRealYGeneranPdf() =>
+    public void ReporteProyectos_ColumnasPdf_ResuelvenContraElDtoRealYGeneranPdf() =>
         VerificarPantalla(
-            ReporteTareasViewModel.ColumnasPdf,
-            new FilaReporteTareas("Centro", 1, 0, 2, 0, 3));
+            ReporteProyectosViewModel.ColumnasPdf,
+            new FilaReporteProyectos("Centro", 1, 0, 2, 0, 3));
 
     private static PagoGasto PagoAutomaticoDeRentasGenerales()
     {

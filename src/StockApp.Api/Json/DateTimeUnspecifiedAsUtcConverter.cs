@@ -38,7 +38,7 @@ public sealed class DateTimeUnspecifiedAsUtcConverter : JsonConverter<DateTime>
 {
     /// <summary>
     /// Mismo criterio de normalización que <see cref="Read"/>, extraído para reusar fuera del
-    /// pipeline JSON -- ver ReportesEndpoints.MapReportesEndpoints (GET /reportes/tareas), que
+    /// pipeline JSON -- ver ReportesEndpoints.MapReportesEndpoints (GET /reportes/proyectos), que
     /// lo aplica a desde/hasta bindeados por query string. Medido empíricamente (repro mínimo,
     /// mismo TFM/SDK que este proyecto): ese binder ya entrega Kind=Utc, correctamente
     /// convertido, para un valor con offset o "Z", y Kind=Unspecified para uno sin offset --

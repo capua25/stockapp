@@ -73,14 +73,14 @@ public class ReportesViewModelTests
         vm.AbrirHistorialPorProductoCommand.Execute(null);
         vm.AbrirMasMovidosCommand.Execute(null);
         vm.AbrirAuditoriaCommand.Execute(null);
-        vm.AbrirEstadisticaTareasCommand.Execute(null);
+        vm.AbrirEstadisticaProyectosCommand.Execute(null);
 
         nav.Verify(n => n.Navegar<ValorizacionViewModel>(), Times.Once);
         nav.Verify(n => n.Navegar<StockCategoriaViewModel>(), Times.Once);
         nav.Verify(n => n.Navegar<HistorialPorProductoViewModel>(), Times.Once);
         nav.Verify(n => n.Navegar<MasMovidosViewModel>(), Times.Once);
         nav.Verify(n => n.Navegar<AuditoriaLogViewModel>(), Times.Once);
-        nav.Verify(n => n.Navegar<ReporteTareasViewModel>(), Times.Once);
+        nav.Verify(n => n.Navegar<ReporteProyectosViewModel>(), Times.Once);
     }
 
     [Fact]

@@ -233,7 +233,7 @@ public partial class App : AvaloniaApp
         services.AddTransient<IOrigenFinanciamientoService, OrigenFinanciamientoApiClient>();
         services.AddTransient<IMovimientoStockService, MovimientoStockApiClient>();
         services.AddTransient<IReporteStockService, ReporteStockApiClient>();
-        services.AddTransient<IReporteTareasService, ReporteTareasApiClient>();
+        services.AddTransient<IReporteProyectosService, ReporteProyectosApiClient>();
         services.AddTransient<IAuditoriaQueryService, AuditoriaQueryApiClient>();
 
         // ── Módulo Finanzas — Fase 1: maestros ────────────────────────────────
@@ -336,7 +336,7 @@ public partial class App : AvaloniaApp
         services.AddTransient<ReportesViewModel>();
         services.AddTransient<ValorizacionViewModel>();
         services.AddTransient<StockCategoriaViewModel>();
-        services.AddTransient<ReporteTareasViewModel>();
+        services.AddTransient<ReporteProyectosViewModel>();
         services.AddTransient<HistorialPorProductoViewModel>();
         services.AddTransient<MasMovidosViewModel>();
         services.AddTransient<AuditoriaLogViewModel>();

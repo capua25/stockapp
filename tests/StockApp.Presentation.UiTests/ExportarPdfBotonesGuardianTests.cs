@@ -31,13 +31,13 @@ namespace StockApp.Presentation.UiTests;
 /// Tarea 21 (agregada fuera del plan original): las Tareas 12-20 sumaron 9 botones "Exportar
 /// PDF" a 9 vistas .axaml, y NINGUNO tenía un solo
 /// test que lo custodiara. Antecedente ya documentado en el proyecto (ver
-/// <c>ReporteTareasCriterioCierreAvisoTests</c> y el hallazgo de "un test de VM no custodia un
+/// <c>ReporteProyectosCriterioCierreAvisoTests</c> y el hallazgo de "un test de VM no custodia un
 /// gate de UI"): un test de ViewModel prueba la propiedad/comando, no lo que el XAML hace con
 /// ella. Si alguien borra el <c>&lt;Button&gt;</c> o le rompe el <c>Command="{Binding ...}"</c>,
 /// los tests de ViewModel siguen 100% verdes.
 ///
 /// Cada test monta la View REAL (mismo patrón que GastosViewTests/LibroCajaViewTests/
-/// ReporteTareasCriterioCierreAvisoTests: VM real + fakes escritos a mano, sin Moq porque este
+/// ReporteProyectosCriterioCierreAvisoTests: VM real + fakes escritos a mano, sin Moq porque este
 /// proyecto no lo referencia) y afirma DOS cosas, no una:
 ///   1. El botón existe y está visible en el árbol visual montado.
 ///   2. Su <c>Command</c> es, por REFERENCIA, el comando correcto del ViewModel
@@ -282,22 +282,22 @@ public class ExportarPdfBotonesGuardianTests
         Assert.Same(vm.ExportarPdfCommand, boton.Command);
     }
 
-    // ---- ReporteTareasView ----
+    // ---- ReporteProyectosView ----
 
-    private sealed class ReporteTareasServiceFake : IReporteTareasService
+    private sealed class ReporteProyectosServiceFake : IReporteProyectosService
     {
-        public Task<ReporteTareasDto> ObtenerAsync(FiltroReporteTareas filtro)
-            => Task.FromResult(new ReporteTareasDto(new List<FilaReporteTareas>(), 0));
+        public Task<ReporteProyectosDto> ObtenerAsync(FiltroReporteProyectos filtro)
+            => Task.FromResult(new ReporteProyectosDto(new List<FilaReporteProyectos>(), new FilaReporteProyectos("Total general", 0, 0, 0, 0, 0)));
     }
 
-    private static (Window Window, ReporteTareasViewModel Vm) MontarReporteTareas()
+    private static (Window Window, ReporteProyectosViewModel Vm) MontarReporteProyectos()
     {
-        var vm = new ReporteTareasViewModel(
-            new ReporteTareasServiceFake(), new PdfExporterNoOpFake(),
+        var vm = new ReporteProyectosViewModel(
+            new ReporteProyectosServiceFake(), new PdfExporterNoOpFake(),
             new GuardadoFake(), new ServicioAperturaArchivoFake(), new ConfirmacionServiceFake(),
             new SesionFake(RolUsuario.Admin));
 
-        var vista = new ReporteTareasView();
+        var vista = new ReporteProyectosView();
         var window = new Window { Width = 1100, Height = 700, Content = vista };
         window.DataContext = vm;
         window.Show();
@@ -308,9 +308,9 @@ public class ExportarPdfBotonesGuardianTests
     }
 
     [AvaloniaFact]
-    public void Montar_ReporteTareasView_BotonExportarPdf_ExisteYEstaBindeadoAlComando()
+    public void Montar_ReporteProyectosView_BotonExportarPdf_ExisteYEstaBindeadoAlComando()
     {
-        var (window, vm) = MontarReporteTareas();
+        var (window, vm) = MontarReporteProyectos();
 
         var boton = BuscarBotonExportarPorTexto(window, "Exportar PDF");
 

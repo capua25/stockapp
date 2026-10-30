@@ -69,7 +69,7 @@ public class ShellMainSeccionActivaTests
         { typeof(HistorialPorProductoViewModel), "Reportes" },
         { typeof(MasMovidosViewModel), "Reportes" },
         { typeof(AuditoriaLogViewModel), "Reportes" },
-        { typeof(ReporteTareasViewModel), "Reportes" },
+        { typeof(ReporteProyectosViewModel), "Reportes" },
         { typeof(CalendarioPagosViewModel), "CalendarioPagos" },
         { typeof(TareaListViewModel), "Tareas" },
         { typeof(TareaFormViewModel), "Tareas" },

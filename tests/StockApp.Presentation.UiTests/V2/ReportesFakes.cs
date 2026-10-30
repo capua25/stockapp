@@ -63,17 +63,17 @@ internal sealed class ReporteStockFake : IReporteStockService
     }
 }
 
-internal sealed class ReporteTareasFake : IReporteTareasService
+internal sealed class ReporteProyectosFake : IReporteProyectosService
 {
-    public List<FilaReporteTareas> Filas { get; set; } = new();
+    public List<FilaReporteProyectos> Filas { get; set; } = new();
     public Exception? Falla { get; set; }
-    public List<FiltroReporteTareas> Consultas { get; } = new();
+    public List<FiltroReporteProyectos> Consultas { get; } = new();
 
-    public Task<ReporteTareasDto> ObtenerAsync(FiltroReporteTareas filtro)
+    public Task<ReporteProyectosDto> ObtenerAsync(FiltroReporteProyectos filtro)
     {
         Consultas.Add(filtro);
-        return Falla is not null ? Task.FromException<ReporteTareasDto>(Falla)
-            : Task.FromResult(new ReporteTareasDto(Filas.ToList(), Filas.Sum(f => f.Total)));
+        return Falla is not null ? Task.FromException<ReporteProyectosDto>(Falla)
+            : Task.FromResult(new ReporteProyectosDto(Filas.ToList(), new FilaReporteProyectos("Total general", Filas.Sum(f => f.Pendientes), Filas.Sum(f => f.EnCurso), Filas.Sum(f => f.Terminados), Filas.Sum(f => f.Cancelados), Filas.Sum(f => f.Total))));
     }
 }
 

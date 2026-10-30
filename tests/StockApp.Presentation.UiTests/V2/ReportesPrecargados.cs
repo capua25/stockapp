@@ -72,10 +72,10 @@ internal static class ReportesPrecargados
         return Cargada(new AuditoriaLogView(), vm);
     }
 
-    public static ReporteTareasView Tareas(IEnumerable<FilaReporteTareas> filas)
+    public static ReporteProyectosView Proyectos(IEnumerable<FilaReporteProyectos> filas)
     {
-        var vm = new ReporteTareasViewModel(new ReporteTareasFake { Filas = filas.ToList() }, new PdfExporterSinUsoFake(), new GuardadoSinUsoFake(),
+        var vm = new ReporteProyectosViewModel(new ReporteProyectosFake { Filas = filas.ToList() }, new PdfExporterSinUsoFake(), new GuardadoSinUsoFake(),
             new ServicioAperturaArchivoFake(), new ConfirmacionServiceFake(), new SesionFake(RolUsuario.Admin), new NavigationServiceFake());
-        return Cargada(new ReporteTareasView(), vm);
+        return Cargada(new ReporteProyectosView(), vm);
     }
 }

@@ -18,24 +18,24 @@ using Xunit;
 
 namespace StockApp.Presentation.Tests.ViewModels.Reportes;
 
-public class ReporteTareasViewModelTests
+public class ReporteProyectosViewModelTests
 {
     // ── helpers ──────────────────────────────────────────────────────────────
 
     private static (
-        ReporteTareasViewModel vm,
-        Mock<IReporteTareasService> servicioMock,
+        ReporteProyectosViewModel vm,
+        Mock<IReporteProyectosService> servicioMock,
         Mock<IPdfExporter> pdfExporterMock,
         Mock<IServicioGuardadoArchivo> guardadoMock,
         Mock<IServicioAperturaArchivo> aperturaMock,
         Mock<IConfirmacionService> confirmMock,
         Mock<ICurrentSession> sessionMock)
-        Crear(ReporteTareasDto? respuesta = null)
+        Crear(ReporteProyectosDto? respuesta = null)
     {
-        var servicioMock = new Mock<IReporteTareasService>();
+        var servicioMock = new Mock<IReporteProyectosService>();
         servicioMock
-            .Setup(s => s.ObtenerAsync(It.IsAny<FiltroReporteTareas>()))
-            .ReturnsAsync(respuesta ?? new ReporteTareasDto(new List<FilaReporteTareas>(), 0));
+            .Setup(s => s.ObtenerAsync(It.IsAny<FiltroReporteProyectos>()))
+            .ReturnsAsync(respuesta ?? new ReporteProyectosDto(new List<FilaReporteProyectos>(), Total(0)));
 
         var pdfExporterMock = new Mock<IPdfExporter>();
         var guardadoMock = new Mock<IServicioGuardadoArchivo>();
@@ -45,7 +45,7 @@ public class ReporteTareasViewModelTests
         confirmMock.Setup(c => c.InformarAsync(It.IsAny<string>())).Returns(Task.CompletedTask);
         sessionMock.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "admin", RolUsuario.Admin, null));
 
-        var vm = new ReporteTareasViewModel(
+        var vm = new ReporteProyectosViewModel(
             servicioMock.Object, pdfExporterMock.Object,
             guardadoMock.Object, aperturaMock.Object, confirmMock.Object, sessionMock.Object);
         return (vm, servicioMock, pdfExporterMock, guardadoMock, aperturaMock, confirmMock, sessionMock);
@@ -67,7 +67,7 @@ public class ReporteTareasViewModelTests
     {
         var (vm, _, _, _, _, _, _) = Crear();
 
-        Assert.Equal(AgrupadorTareas.Zona, vm.AgrupadorSeleccionado.Valor);
+        Assert.Equal(AgrupadorProyectos.Zona, vm.AgrupadorSeleccionado.Valor);
         Assert.True(vm.EsCriterioCreacion);
         Assert.False(vm.EsCriterioCierre);
     }
@@ -79,7 +79,7 @@ public class ReporteTareasViewModelTests
 
         vm.EsCriterioCierre = true;
 
-        Assert.Equal(CriterioFechaTareas.Cierre, vm.CriterioSeleccionado);
+        Assert.Equal(CriterioFechaProyectos.Cierre, vm.CriterioSeleccionado);
         Assert.True(vm.EsCriterioCierre);
         Assert.False(vm.EsCriterioCreacion);
     }
@@ -88,12 +88,12 @@ public class ReporteTareasViewModelTests
     public async Task CargarAsync_PasaTalCualLasFilasYElTotalGeneral_SinCalcularNada()
     {
         // D23: el ViewModel no calcula nada -- verifica passthrough exacto (misma instancia).
-        var filas = new List<FilaReporteTareas>
+        var filas = new List<FilaReporteProyectos>
         {
             new("Centro", 1, 0, 2, 0, 3),
             new("(sin asignar)", 0, 0, 0, 1, 1),
         };
-        var dto = new ReporteTareasDto(filas, 4);
+        var dto = new ReporteProyectosDto(filas, Total(4));
         var (vm, _, _, _, _, _, _) = Crear(dto);
 
         await vm.CargarAsync();
@@ -115,7 +115,7 @@ public class ReporteTareasViewModelTests
 
         var offsetDesde = TimeZoneInfo.Local.GetUtcOffset(desde);
         var offsetHasta = TimeZoneInfo.Local.GetUtcOffset(hasta);
-        servicioMock.Verify(s => s.ObtenerAsync(It.Is<FiltroReporteTareas>(f =>
+        servicioMock.Verify(s => s.ObtenerAsync(It.Is<FiltroReporteProyectos>(f =>
             f.Desde == desde - offsetDesde && f.Hasta == hasta - offsetHasta)), Times.Once);
     }
 
@@ -128,7 +128,7 @@ public class ReporteTareasViewModelTests
 
         await vm.BuscarCommand.ExecuteAsync(null);
 
-        servicioMock.Verify(s => s.ObtenerAsync(It.IsAny<FiltroReporteTareas>()), Times.Never);
+        servicioMock.Verify(s => s.ObtenerAsync(It.IsAny<FiltroReporteProyectos>()), Times.Never);
         Assert.False(string.IsNullOrEmpty(vm.MensajeError));
     }
 
@@ -142,7 +142,7 @@ public class ReporteTareasViewModelTests
 
         await vm.BuscarCommand.ExecuteAsync(null);
 
-        servicioMock.Verify(s => s.ObtenerAsync(It.IsAny<FiltroReporteTareas>()), Times.Never);
+        servicioMock.Verify(s => s.ObtenerAsync(It.IsAny<FiltroReporteProyectos>()), Times.Never);
         Assert.False(string.IsNullOrEmpty(vm.MensajeError));
     }
 
@@ -154,7 +154,7 @@ public class ReporteTareasViewModelTests
 
         await vm.BuscarCommand.ExecuteAsync(null);
 
-        servicioMock.Verify(s => s.ObtenerAsync(It.IsAny<FiltroReporteTareas>()), Times.Never);
+        servicioMock.Verify(s => s.ObtenerAsync(It.IsAny<FiltroReporteProyectos>()), Times.Never);
         Assert.False(string.IsNullOrEmpty(vm.MensajeError));
     }
 
@@ -164,7 +164,7 @@ public class ReporteTareasViewModelTests
         // bugfix "pantalla muda ante un 403": mismo criterio que el resto de los reportes.
         var (vm, servicioMock, _, _, _, _, _) = Crear();
         servicioMock
-            .Setup(s => s.ObtenerAsync(It.IsAny<FiltroReporteTareas>()))
+            .Setup(s => s.ObtenerAsync(It.IsAny<FiltroReporteProyectos>()))
             .ThrowsAsync(new UnauthorizedAccessException());
 
         var ex = await Record.ExceptionAsync(() => vm.CargarAsync());
@@ -178,28 +178,30 @@ public class ReporteTareasViewModelTests
     public async Task CargarAsync_UsaElAgrupadorYCriterioSeleccionados()
     {
         var (vm, servicioMock, _, _, _, _, _) = Crear();
-        vm.AgrupadorSeleccionado = vm.AgrupadoresDisponibles.Single(o => o.Valor == AgrupadorTareas.Expediente);
+        vm.AgrupadorSeleccionado = vm.AgrupadoresDisponibles.Single(o => o.Valor == AgrupadorProyectos.OrganismoResponsable);
         vm.EsCriterioCierre = true;
 
         await vm.CargarAsync();
 
-        servicioMock.Verify(s => s.ObtenerAsync(It.Is<FiltroReporteTareas>(f =>
-            f.Agrupador == AgrupadorTareas.Expediente && f.Criterio == CriterioFechaTareas.Cierre)), Times.Once);
+        servicioMock.Verify(s => s.ObtenerAsync(It.Is<FiltroReporteProyectos>(f =>
+            f.Agrupador == AgrupadorProyectos.OrganismoResponsable && f.Criterio == CriterioFechaProyectos.Cierre)), Times.Once);
     }
 
     // ── Export PDF (spec 2026-09-18): única pantalla del alcance sin ninguna exportación
     // previa. Columnas FIJAS: el agrupador cambia filas y contenido, nunca columnas. ──────────
 
-    private static FilaReporteTareas Fila(string clasificador) => new(clasificador, 1, 0, 2, 0, 3);
+    private static FilaReporteProyectos Total(int total) => new("Total general", 0, 0, 0, 0, total);
+
+    private static FilaReporteProyectos Fila(string clasificador) => new(clasificador, 1, 0, 2, 0, 3);
 
     [Fact]
     public async Task ExportarPdfCommand_UsaLasSeisColumnasFijasDeLaMatriz()
     {
-        var dto = new ReporteTareasDto(new List<FilaReporteTareas> { Fila("Centro") }, 3);
+        var dto = new ReporteProyectosDto(new List<FilaReporteProyectos> { Fila("Centro") }, Total(3));
         var (vm, _, pdfExporterMock, guardadoMock, _, _, _) = Crear(dto);
         await vm.CargarAsync();
         pdfExporterMock
-            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteProyectos>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
@@ -212,12 +214,12 @@ public class ReporteTareasViewModelTests
             new ColumnaPdf("Clasificador", "Clasificador"),
             new ColumnaPdf("Pendientes", "Pendientes"),
             new ColumnaPdf("EnCurso", "En curso"),
-            new ColumnaPdf("Terminadas", "Terminadas"),
-            new ColumnaPdf("Canceladas", "Canceladas"),
+            new ColumnaPdf("Terminados", "Terminados"),
+            new ColumnaPdf("Cancelados", "Cancelados"),
             new ColumnaPdf("Total", "Total"),
         };
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<FilaReporteTareas>>(),
+            It.IsAny<IEnumerable<FilaReporteProyectos>>(),
             It.Is<IReadOnlyList<ColumnaPdf>>(cols => cols.SequenceEqual(esperado) && cols.Count == 6),
             It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()), Times.Once);
     }
@@ -229,14 +231,14 @@ public class ReporteTareasViewModelTests
         // asi que ningun test ejercitaba la rama principal del fallback
         // (_session.UsuarioActual?.NombreCompleto ?? ... ?? "Sistema") -- ni siquiera la de
         // "admin" (NombreUsuario), este VM no tenia ningun test de UsuarioEmisor.
-        var dto = new ReporteTareasDto(new List<FilaReporteTareas> { Fila("Centro") }, 3);
+        var dto = new ReporteProyectosDto(new List<FilaReporteProyectos> { Fila("Centro") }, Total(3));
         var (vm, _, pdfExporterMock, guardadoMock, _, _, sessionMock) = Crear(dto);
         sessionMock.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "admin", RolUsuario.Admin, "Ana Pérez"));
         await vm.CargarAsync();
         MetadatosDocumento? metadatosCapturados = null;
         pdfExporterMock
-            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
-            .Callback<IEnumerable<FilaReporteTareas>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento, ResumenPdf?>((_, _, m, _) => metadatosCapturados = m)
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteProyectos>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
+            .Callback<IEnumerable<FilaReporteProyectos>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento, ResumenPdf?>((_, _, m, _) => metadatosCapturados = m)
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
@@ -255,7 +257,7 @@ public class ReporteTareasViewModelTests
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()),
+            It.IsAny<IEnumerable<FilaReporteProyectos>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()),
             Times.Never);
     }
 
@@ -269,7 +271,7 @@ public class ReporteTareasViewModelTests
     public async Task ExportarPdfCommand_ConMuchasFilas_PreguntaAntesDeExportar()
     {
         var filas = Enumerable.Range(1, 600).Select(i => Fila($"Zona {i}")).ToList();
-        var dto = new ReporteTareasDto(filas, filas.Count * 3);
+        var dto = new ReporteProyectosDto(filas, Total(filas.Count * 3));
         var (vm, _, pdfExporterMock, _, _, confirmMock, _) = Crear(dto);
         await vm.CargarAsync();
         confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(false);
@@ -278,19 +280,19 @@ public class ReporteTareasViewModelTests
 
         confirmMock.Verify(c => c.PreguntarAsync(It.IsAny<string>()), Times.Once);
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()),
+            It.IsAny<IEnumerable<FilaReporteProyectos>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()),
             Times.Never);
     }
 
     [Fact]
     public async Task ExportarPdfCommand_SiFallaGuardarBytesAsync_InformaYNoPropagaLaExcepcion()
     {
-        var dto = new ReporteTareasDto(new List<FilaReporteTareas> { Fila("Centro") }, 3);
+        var dto = new ReporteProyectosDto(new List<FilaReporteProyectos> { Fila("Centro") }, Total(3));
         var (vm, _, pdfExporterMock, guardadoMock, _, confirmMock, _) = Crear(dto);
         await vm.CargarAsync();
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
+                It.IsAny<IEnumerable<FilaReporteProyectos>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
@@ -305,39 +307,39 @@ public class ReporteTareasViewModelTests
     [Fact]
     public async Task ExportarPdfCommand_GuardadoExitoso_OfreceAbrirElArchivo()
     {
-        var dto = new ReporteTareasDto(new List<FilaReporteTareas> { Fila("Centro") }, 3);
+        var dto = new ReporteProyectosDto(new List<FilaReporteProyectos> { Fila("Centro") }, Total(3));
         var (vm, _, pdfExporterMock, guardadoMock, aperturaMock, confirmMock, _) = Crear(dto);
         await vm.CargarAsync();
         var pdfBytes = new byte[] { 9, 9 };
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
+                It.IsAny<IEnumerable<FilaReporteProyectos>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(pdfBytes);
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
-                It.IsAny<Stream>(), "reporte-tareas.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+                It.IsAny<Stream>(), "reporte-proyectos.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
             .ReturnsAsync(true);
         confirmMock.Setup(c => c.PreguntarAsync(It.IsAny<string>())).ReturnsAsync(true);
 
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
         confirmMock.Verify(c => c.PreguntarAsync("PDF guardado. ¿Desea abrirlo ahora?"), Times.Once);
-        aperturaMock.Verify(a => a.AbrirAsync("reporte-tareas.pdf", pdfBytes), Times.Once);
+        aperturaMock.Verify(a => a.AbrirAsync("reporte-proyectos.pdf", pdfBytes), Times.Once);
     }
 
     [Fact]
     public async Task ExportarPdfCommand_GuardadoCancelado_NoOfreceAbrir()
     {
-        var dto = new ReporteTareasDto(new List<FilaReporteTareas> { Fila("Centro") }, 3);
+        var dto = new ReporteProyectosDto(new List<FilaReporteProyectos> { Fila("Centro") }, Total(3));
         var (vm, _, pdfExporterMock, guardadoMock, aperturaMock, confirmMock, _) = Crear(dto);
         await vm.CargarAsync();
         pdfExporterMock
             .Setup(e => e.Exportar(
-                It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
+                It.IsAny<IEnumerable<FilaReporteProyectos>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
             .Returns(new byte[] { 9, 9 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(
-                It.IsAny<Stream>(), "reporte-tareas.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+                It.IsAny<Stream>(), "reporte-proyectos.pdf", It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
             .ReturnsAsync(false);
 
         await vm.ExportarPdfCommand.ExecuteAsync(null);
@@ -357,18 +359,18 @@ public class ReporteTareasViewModelTests
     [Fact]
     public async Task ExportarPdfCommand_PasaLosItemsSinFilaSinteticaYElTotalGeneralEnElResumen()
     {
-        var filas = new List<FilaReporteTareas>
+        var filas = new List<FilaReporteProyectos>
         {
             new("Centro", 1, 0, 2, 0, 3),
             new("(sin asignar)", 2, 1, 0, 1, 4),
         };
-        var dto = new ReporteTareasDto(filas, 7);
+        var dto = new ReporteProyectosDto(filas, Total(7));
         var (vm, _, pdfExporterMock, guardadoMock, _, _, _) = Crear(dto);
         await vm.CargarAsync();
-        IEnumerable<FilaReporteTareas>? itemsCapturados = null;
+        IEnumerable<FilaReporteProyectos>? itemsCapturados = null;
         pdfExporterMock
-            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
-            .Callback<IEnumerable<FilaReporteTareas>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento, ResumenPdf?>((items, _, _, _) => itemsCapturados = items)
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteProyectos>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
+            .Callback<IEnumerable<FilaReporteProyectos>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento, ResumenPdf?>((items, _, _, _) => itemsCapturados = items)
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
@@ -386,7 +388,7 @@ public class ReporteTareasViewModelTests
 
         // El total general va en el resumen, con el ARGUMENTO REAL (no It.IsAny<ResumenPdf>()).
         pdfExporterMock.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<FilaReporteTareas>>(),
+            It.IsAny<IEnumerable<FilaReporteProyectos>>(),
             It.IsAny<IReadOnlyList<ColumnaPdf>>(),
             It.IsAny<MetadatosDocumento>(),
             It.Is<ResumenPdf>(r =>
@@ -398,19 +400,54 @@ public class ReporteTareasViewModelTests
     }
 
     [Fact]
+    public void AgrupadoresDisponibles_SinExpediente()
+    {
+        var (vm, _, _, _, _, _, _) = Crear();
+
+        Assert.Equal(
+            new[]
+            {
+                AgrupadorProyectos.Zona, AgrupadorProyectos.DimensionTematica,
+                AgrupadorProyectos.OrganismoResponsable, AgrupadorProyectos.OrigenFinanciamiento,
+            },
+            vm.AgrupadoresDisponibles.Select(o => o.Valor).ToArray());
+        Assert.Equal(4, vm.AgrupadoresDisponibles.Count);
+    }
+
+    [Fact]
+    public async Task ExportarPdf_TituloEstadisticaDeProyectos()
+    {
+        var dto = new ReporteProyectosDto(new List<FilaReporteProyectos> { Fila("Centro") }, Total(3));
+        var (vm, _, pdfExporterMock, guardadoMock, _, _, _) = Crear(dto);
+        await vm.CargarAsync();
+        MetadatosDocumento? capturados = null;
+        pdfExporterMock
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteProyectos>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
+            .Callback<IEnumerable<FilaReporteProyectos>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento, ResumenPdf?>((_, _, m, _) => capturados = m)
+            .Returns(new byte[] { 1 });
+        guardadoMock
+            .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
+            .ReturnsAsync(true);
+
+        await vm.ExportarPdfCommand.ExecuteAsync(null);
+
+        Assert.Equal("Estadística de proyectos", capturados!.Titulo);
+    }
+
+    [Fact]
     public async Task ExportarPdfCommand_LaDescripcionDeFiltrosDiceAgrupadorCriterioYRango()
     {
-        var dto = new ReporteTareasDto(new List<FilaReporteTareas> { Fila("Centro") }, 3);
+        var dto = new ReporteProyectosDto(new List<FilaReporteProyectos> { Fila("Centro") }, Total(3));
         var (vm, _, pdfExporterMock, guardadoMock, _, _, _) = Crear(dto);
-        vm.AgrupadorSeleccionado = vm.AgrupadoresDisponibles.Single(o => o.Valor == AgrupadorTareas.Expediente);
+        vm.AgrupadorSeleccionado = vm.AgrupadoresDisponibles.Single(o => o.Valor == AgrupadorProyectos.OrganismoResponsable);
         vm.EsCriterioCierre = true;
         vm.FechaDesde = new DateTime(2026, 1, 1);
         vm.FechaHasta = new DateTime(2026, 12, 31);
         await vm.CargarAsync();
         MetadatosDocumento? metadatosCapturados = null;
         pdfExporterMock
-            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
-            .Callback<IEnumerable<FilaReporteTareas>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento, ResumenPdf?>((_, _, m, _) => metadatosCapturados = m)
+            .Setup(e => e.Exportar(It.IsAny<IEnumerable<FilaReporteProyectos>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(), It.IsAny<MetadatosDocumento>(), It.IsAny<ResumenPdf>()))
+            .Callback<IEnumerable<FilaReporteProyectos>, IReadOnlyList<ColumnaPdf>, MetadatosDocumento, ResumenPdf?>((_, _, m, _) => metadatosCapturados = m)
             .Returns(new byte[] { 1 });
         guardadoMock
             .Setup(g => g.GuardarBytesAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>(), "pdf", "application/pdf"))
@@ -419,8 +456,8 @@ public class ReporteTareasViewModelTests
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
         Assert.NotNull(metadatosCapturados);
-        Assert.Equal("Estadística de tareas", metadatosCapturados!.Titulo);
-        Assert.Contains("Expediente", metadatosCapturados.DescripcionFiltros);
+        Assert.Equal("Estadística de proyectos", metadatosCapturados!.Titulo);
+        Assert.Contains("Organismo responsable", metadatosCapturados.DescripcionFiltros);
         Assert.Contains("cierre", metadatosCapturados.DescripcionFiltros, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("01/01/2026", metadatosCapturados.DescripcionFiltros);
         Assert.Contains("31/12/2026", metadatosCapturados.DescripcionFiltros);
@@ -428,27 +465,27 @@ public class ReporteTareasViewModelTests
 
     // ── Fase 6: estados v2, consulta vigente, PDF de lo cargado, vuelta al hub y criterio como combo ──
 
-    private static FilaReporteTareas CrearFila(string clasificador = "Zona Norte")
-        => new FilaReporteTareas(clasificador, 1, 2, 3, 4, 10);
+    private static FilaReporteProyectos CrearFila(string clasificador = "Zona Norte")
+        => new FilaReporteProyectos(clasificador, 1, 2, 3, 4, 10);
 
-    private static (ReporteTareasViewModel vm, Mock<IReporteTareasService> servicio, Mock<IPdfExporter> pdf, Mock<INavigationService> nav)
+    private static (ReporteProyectosViewModel vm, Mock<IReporteProyectosService> servicio, Mock<IPdfExporter> pdf, Mock<INavigationService> nav)
         Armar(bool conNavegacion = true)
     {
-        var servicio = new Mock<IReporteTareasService>();
+        var servicio = new Mock<IReporteProyectosService>();
         var pdf = new Mock<IPdfExporter>();
         var nav = new Mock<INavigationService>();
         var session = new Mock<ICurrentSession>();
         session.Setup(s => s.UsuarioActual).Returns(new UsuarioSesion(1, "admin", RolUsuario.Admin, null));
-        servicio.Setup(s => s.ObtenerAsync(It.IsAny<FiltroReporteTareas>()))
-            .ReturnsAsync(new ReporteTareasDto(new List<FilaReporteTareas> { CrearFila() }, 10));
-        var vm = new ReporteTareasViewModel(
+        servicio.Setup(s => s.ObtenerAsync(It.IsAny<FiltroReporteProyectos>()))
+            .ReturnsAsync(new ReporteProyectosDto(new List<FilaReporteProyectos> { CrearFila() }, Total(10)));
+        var vm = new ReporteProyectosViewModel(
             servicio.Object, pdf.Object, Mock.Of<IServicioGuardadoArchivo>(), Mock.Of<IServicioAperturaArchivo>(),
             Mock.Of<IConfirmacionService>(), session.Object, conNavegacion ? nav.Object : null);
         return (vm, servicio, pdf, nav);
     }
 
-    private static void PonerFalla(Mock<IReporteTareasService> servicio, Exception ex)
-        => servicio.Setup(s => s.ObtenerAsync(It.IsAny<FiltroReporteTareas>())).ThrowsAsync(ex);
+    private static void PonerFalla(Mock<IReporteProyectosService> servicio, Exception ex)
+        => servicio.Setup(s => s.ObtenerAsync(It.IsAny<FiltroReporteProyectos>())).ThrowsAsync(ex);
 
     [Fact]
     public async Task SinConexion_MarcaSinConexion_VaciaLasFilas_YNoPropaga()
@@ -485,7 +522,7 @@ public class ReporteTareasViewModelTests
 
         Assert.False(vm.ExportarPdfCommand.CanExecute(null));
         await vm.CargarAsync();
-        vm.Items = new List<FilaReporteTareas>();
+        vm.Items = new List<FilaReporteProyectos>();
         Assert.False(vm.ExportarPdfCommand.CanExecute(null));
     }
 
@@ -537,7 +574,7 @@ public class ReporteTareasViewModelTests
     {
         var (vm, _, _, _) = Armar();
 
-        Assert.Equal("No hay tareas en el período", vm.TituloVacio);
+        Assert.Equal("No hay proyectos en el período", vm.TituloVacio);
         Assert.Equal("Probá con otro período o criterio.", vm.MensajeVacio);
     }
 
@@ -545,16 +582,16 @@ public class ReporteTareasViewModelTests
     public async Task DosBusquedas_LaPrimeraTerminaTarde_NoPisaLaSegunda()
     {
         var (vm, servicio, _, _) = Armar();
-        var primera = new TaskCompletionSource<ReporteTareasDto>();
-        var segunda = new TaskCompletionSource<ReporteTareasDto>();
-        servicio.SetupSequence(s => s.ObtenerAsync(It.IsAny<FiltroReporteTareas>())).Returns(primera.Task).Returns(segunda.Task);
+        var primera = new TaskCompletionSource<ReporteProyectosDto>();
+        var segunda = new TaskCompletionSource<ReporteProyectosDto>();
+        servicio.SetupSequence(s => s.ObtenerAsync(It.IsAny<FiltroReporteProyectos>())).Returns(primera.Task).Returns(segunda.Task);
 
         var vieja = vm.CargarAsync();
         var nueva = vm.CargarAsync();
-        var filasNuevas = new List<FilaReporteTareas> { CrearFila("Zona Sur") };
-        segunda.SetResult(new ReporteTareasDto(filasNuevas, 5));
+        var filasNuevas = new List<FilaReporteProyectos> { CrearFila("Zona Sur") };
+        segunda.SetResult(new ReporteProyectosDto(filasNuevas, Total(5)));
         await nueva;
-        primera.SetResult(new ReporteTareasDto(new List<FilaReporteTareas> { CrearFila() }, 99));
+        primera.SetResult(new ReporteProyectosDto(new List<FilaReporteProyectos> { CrearFila() }, Total(99)));
         await vieja;
 
         Assert.Same(filasNuevas, vm.Items);
@@ -573,7 +610,7 @@ public class ReporteTareasViewModelTests
         await vm.ExportarPdfCommand.ExecuteAsync(null);
 
         pdf.Verify(e => e.Exportar(
-            It.IsAny<IEnumerable<FilaReporteTareas>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
+            It.IsAny<IEnumerable<FilaReporteProyectos>>(), It.IsAny<IReadOnlyList<ColumnaPdf>>(),
             It.Is<MetadatosDocumento>(m => m.DescripcionFiltros.Contains("01/09/2026") && !m.DescripcionFiltros.Contains("01/08/2026")),
             It.IsAny<ResumenPdf?>()), Times.Once);
     }
@@ -585,14 +622,14 @@ public class ReporteTareasViewModelTests
         PonerFalla(servicio, new ServidorNoDisponibleException());
         await vm.CargarAsync();
         Assert.True(vm.SinConexion);
-        servicio.Setup(s => s.ObtenerAsync(It.IsAny<FiltroReporteTareas>()))
-            .ReturnsAsync(new ReporteTareasDto(new List<FilaReporteTareas> { CrearFila() }, 10));
+        servicio.Setup(s => s.ObtenerAsync(It.IsAny<FiltroReporteProyectos>()))
+            .ReturnsAsync(new ReporteProyectosDto(new List<FilaReporteProyectos> { CrearFila() }, Total(10)));
         vm.CriterioOpcionSeleccionada = vm.CriteriosDisponibles[1];
 
         await vm.ReintentarCargaCommand.ExecuteAsync(null);
 
         Assert.False(vm.SinConexion);
-        servicio.Verify(s => s.ObtenerAsync(It.Is<FiltroReporteTareas>(f => f.Criterio == CriterioFechaTareas.Cierre)), Times.Once);
+        servicio.Verify(s => s.ObtenerAsync(It.Is<FiltroReporteProyectos>(f => f.Criterio == CriterioFechaProyectos.Cierre)), Times.Once);
     }
 
     [Fact]
@@ -601,9 +638,9 @@ public class ReporteTareasViewModelTests
         var (vm, _, _, _) = Armar();
 
         Assert.Equal(
-            new[] { ("Fecha de creación", CriterioFechaTareas.Creacion), ("Fecha de cierre", CriterioFechaTareas.Cierre) },
+            new[] { ("Fecha de creación", CriterioFechaProyectos.Creacion), ("Fecha de cierre", CriterioFechaProyectos.Cierre) },
             vm.CriteriosDisponibles.Select(o => (o.Nombre, o.Valor)));
-        Assert.Equal(CriterioFechaTareas.Creacion, vm.CriterioOpcionSeleccionada.Valor);
+        Assert.Equal(CriterioFechaProyectos.Creacion, vm.CriterioOpcionSeleccionada.Valor);
     }
 
     [Fact]
@@ -613,7 +650,7 @@ public class ReporteTareasViewModelTests
 
         vm.CriterioOpcionSeleccionada = vm.CriteriosDisponibles[1];
 
-        Assert.Equal(CriterioFechaTareas.Cierre, vm.CriterioSeleccionado);
+        Assert.Equal(CriterioFechaProyectos.Cierre, vm.CriterioSeleccionado);
         Assert.True(vm.EsCriterioCierre);
         Assert.False(vm.EsCriterioCreacion);
     }
@@ -623,9 +660,9 @@ public class ReporteTareasViewModelTests
     {
         var (vm, _, _, _) = Armar();
 
-        vm.CriterioSeleccionado = CriterioFechaTareas.Cierre;
+        vm.CriterioSeleccionado = CriterioFechaProyectos.Cierre;
 
-        Assert.Equal(CriterioFechaTareas.Cierre, vm.CriterioOpcionSeleccionada.Valor);
+        Assert.Equal(CriterioFechaProyectos.Cierre, vm.CriterioOpcionSeleccionada.Valor);
     }
 
     [Fact]
@@ -636,7 +673,7 @@ public class ReporteTareasViewModelTests
         vm.ExportarPdfCommand.CanExecuteChanged += (_, _) => avisos++;
         Assert.False(vm.ExportarPdfCommand.CanExecute(null));
 
-        vm.Items = new List<FilaReporteTareas> { CrearFila() };
+        vm.Items = new List<FilaReporteProyectos> { CrearFila() };
 
         Assert.True(vm.ExportarPdfCommand.CanExecute(null));
         Assert.True(avisos > 0);

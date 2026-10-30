@@ -95,8 +95,8 @@ public class GrillasSinRecorteBarridoTests
         new AuditoriaItemDto(new DateTime(2026, 9, 30, 15, 0, 0, DateTimeKind.Utc), "Operador de Depósito Central",
             i % 2 == 0 ? AccionAuditada.CambioPrecio : AccionAuditada.AltaProducto, "Producto", 1234567 + i, "detalle"));
 
-    private static IEnumerable<FilaReporteTareas> FilasReporteTareas() => Muchos(i =>
-        new FilaReporteTareas("Dirección de Obras y Servicios Públicos", 12345, 12345, 12345, 12345, 49380));
+    private static IEnumerable<FilaReporteProyectos> FilasReporteProyectos() => Muchos(i =>
+        new FilaReporteProyectos("Dirección de Obras y Servicios Públicos", 12345, 12345, 12345, 12345, 49380));
 
     internal static readonly Escenario[] Escenarios =
     {
@@ -106,7 +106,7 @@ public class GrillasSinRecorteBarridoTests
         new("Stock por categoría", () => ReportesPrecargados.StockCategoria(FilasStockCategoria()), _ => FilasStockCategoria().Cast<object>()),
         new("Más movidos", () => ReportesPrecargados.MasMovidos(FilasMasMovidos()), _ => FilasMasMovidos().Cast<object>()),
         new("Auditoría", () => ReportesPrecargados.Auditoria(FilasAuditoria()), _ => FilasAuditoria().Cast<object>()),
-        new("Reporte de tareas", () => ReportesPrecargados.Tareas(FilasReporteTareas()), _ => FilasReporteTareas().Cast<object>()),
+        new("Reporte de proyectos", () => ReportesPrecargados.Proyectos(FilasReporteProyectos()), _ => FilasReporteProyectos().Cast<object>()),
         new("Productos", () => new ProductoListView(), _ => Muchos<object>(i => Producto(i, i == 0 ? -99999.5m : 10 + i))),
         // Una unidad más larga que el espacio de su columna: se corta con elipsis y tooltip a propósito (no es recorte).
         new("Productos (unidad que pasa el tope)", () => new ProductoListView(), _ => Muchos<object>(i =>

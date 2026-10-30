@@ -4,25 +4,25 @@ using StockApp.Application.Interfaces;
 namespace StockApp.Application.Reportes;
 
 /// <summary>
-/// Servicio del reporte-matriz de tareas. Patrón: auth fail-closed → validación de rango de
+/// Servicio del reporte-matriz de proyectos. Patrón: auth fail-closed → validación de rango de
 /// fechas → repo (agregación completa en SQL) → total general. SIN CACHE (decisión 14) --
 /// no copiar el patrón de <c>ReporteStockServiceCacheado</c> acá.
 /// </summary>
-public class ReporteTareasService : IReporteTareasService
+public class ReporteProyectosService : IReporteProyectosService
 {
-    private readonly IReporteTareasRepository _repo;
+    private readonly IReporteProyectosRepository _repo;
     private readonly ICurrentSession _session;
     private readonly IAuthorizationService _auth;
 
-    public ReporteTareasService(
-        IReporteTareasRepository repo, ICurrentSession session, IAuthorizationService auth)
+    public ReporteProyectosService(
+        IReporteProyectosRepository repo, ICurrentSession session, IAuthorizationService auth)
     {
         _repo = repo;
         _session = session;
         _auth = auth;
     }
 
-    public async Task<ReporteTareasDto> ObtenerAsync(FiltroReporteTareas filtro)
+    public async Task<ReporteProyectosDto> ObtenerAsync(FiltroReporteProyectos filtro)
     {
         // Autorización fail-closed: PRIMERO, antes de tocar el repo.
         _auth.Verificar(_session, Permisos.VerReportes);
@@ -31,7 +31,7 @@ public class ReporteTareasService : IReporteTareasService
         // criterio que DocumentoAdministrativoService.ListarHistorialAsync con el año.
         if (filtro.Desde == default || filtro.Hasta == default)
             throw new ArgumentException(
-                "El rango de fechas es obligatorio para el reporte de tareas.", nameof(filtro));
+                "El rango de fechas es obligatorio para el reporte de proyectos.", nameof(filtro));
         if (filtro.Desde > filtro.Hasta)
             throw new ArgumentException(
                 "La fecha 'Desde' no puede ser posterior a 'Hasta'.", nameof(filtro));
@@ -41,8 +41,14 @@ public class ReporteTareasService : IReporteTareasService
         // D23: el ViewModel no calcula nada -- este total se calcula ACÁ, sumando una lista
         // ya agregada por el repo (mismo criterio que ReporteStockService.ObtenerValorizacionAsync
         // con TotalValorCosto). No es un cálculo por-entidad: Filas ya viene agregada por SQL.
-        var totalGeneral = filas.Sum(f => f.Total);
+        var totalGeneral = new FilaReporteProyectos(
+            "Total general",
+            filas.Sum(f => f.Pendientes),
+            filas.Sum(f => f.EnCurso),
+            filas.Sum(f => f.Terminados),
+            filas.Sum(f => f.Cancelados),
+            filas.Sum(f => f.Total));
 
-        return new ReporteTareasDto(filas, totalGeneral);
+        return new ReporteProyectosDto(filas, totalGeneral);
     }
 }

@@ -24,9 +24,9 @@ public static class ReportesEndpoints
             int productoId, DateTime? fechaDesde, DateTime? fechaHasta, IReporteStockService reportes) =>
             Results.Ok(await reportes.ObtenerHistorialPorProductoAsync(productoId, fechaDesde, fechaHasta)));
 
-        group.MapGet("/tareas", async (
-            IReporteTareasService reportes,
-            AgrupadorTareas agrupador, CriterioFechaTareas criterio, DateTime desde, DateTime hasta) =>
+        group.MapGet("/proyectos", async (
+            IReporteProyectosService reportes,
+            AgrupadorProyectos agrupador, CriterioFechaProyectos criterio, DateTime desde, DateTime hasta) =>
         {
             // Medido empíricamente (repro mínimo, mismo TFM net10.0 / SDK 10.0.300 que este
             // proyecto): el binder de query string de Minimal API entrega Kind=Utc, ya
@@ -43,7 +43,7 @@ public static class ReportesEndpoints
             var hastaUtc = DateTimeUnspecifiedAsUtcConverter.NormalizarAUtc(hasta);
 
             return Results.Ok(await reportes.ObtenerAsync(
-                new FiltroReporteTareas(agrupador, criterio, desdeUtc, hastaUtc)));
+                new FiltroReporteProyectos(agrupador, criterio, desdeUtc, hastaUtc)));
         });
 
         return app;
