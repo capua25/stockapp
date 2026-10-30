@@ -1619,4 +1619,20 @@ public class GastoFormViewModelTests
         svc.Verify(s => s.ModificarAsync(It.Is<Gasto>(g => g.Id == 9 && g.ProyectoId == null),
             It.IsAny<PagoContadoDto?>()), Times.Once);
     }
+
+    [Fact]
+    public async Task Editar_ProyectoCerrado_GuardarSinTocarElCombo_ConservaElProyectoId()
+    {
+        var (vm, svc, _, _) = Crear(proyectosAbiertos: ProyectosAbiertos);
+        var gasto = GastoExistente();
+        gasto.ProyectoId = 99;
+        gasto.Proyecto = new Proyecto { Id = 99, Titulo = "Obra vieja", Estado = EstadoProyecto.Terminado };
+        vm.CargarParaEditar(gasto);
+        await vm.InicializarAsync();
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.ModificarAsync(It.Is<Gasto>(g => g.Id == 9 && g.ProyectoId == 99),
+            It.IsAny<PagoContadoDto?>()), Times.Once);
+    }
 }
