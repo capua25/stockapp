@@ -84,6 +84,10 @@ public static class TextoAccionAuditada
         [AccionAuditada.BajaOrigenFinanciamiento] = "Baja de origen de financiamiento",
         [AccionAuditada.ModificacionOrigenFinanciamiento] = "Modificación de origen de financiamiento",
         [AccionAuditada.ReclasificacionTarea] = "Reclasificación de tarea",
+        [AccionAuditada.AltaProyecto] = "Alta de proyecto",
+        [AccionAuditada.ModificacionProyecto] = "Modificación de proyecto",
+        [AccionAuditada.CambioEstadoProyecto] = "Cambio de estado de proyecto",
+        [AccionAuditada.AltaNotaProyecto] = "Nota en proyecto",
     };
 
     /// <summary>El texto de <paramref name="accion"/>; un valor que esta versión no conoce (la base puede traer acciones

@@ -103,4 +103,10 @@ public enum AccionAuditada
     // ── Tareas — Clasificadores (append-only a partir de 72, después del bloque
     // 60–71 del plan de catálogos) ────────────────────────────────────────────
     ReclasificacionTarea = 72,
+
+    // ── Proyectos (append-only a partir de 73) ───────────────────────────────
+    AltaProyecto = 73,
+    ModificacionProyecto = 74,
+    CambioEstadoProyecto = 75,
+    AltaNotaProyecto = 76,
 }

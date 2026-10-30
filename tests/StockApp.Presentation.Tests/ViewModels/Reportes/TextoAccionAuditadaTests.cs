@@ -45,6 +45,10 @@ public class TextoAccionAuditadaTests
     [InlineData(AccionAuditada.CambioPrecio, "Cambio de precio")]
     [InlineData(AccionAuditada.CambioContrasena, "Cambio de contraseña")]
     [InlineData(AccionAuditada.RecalculoStock, "Recálculo de stock")]
+    [InlineData(AccionAuditada.AltaProyecto, "Alta de proyecto")]
+    [InlineData(AccionAuditada.ModificacionProyecto, "Modificación de proyecto")]
+    [InlineData(AccionAuditada.CambioEstadoProyecto, "Cambio de estado de proyecto")]
+    [InlineData(AccionAuditada.AltaNotaProyecto, "Nota en proyecto")]
     public void TextosAprobados(AccionAuditada accion, string esperado) =>
         Assert.Equal(esperado, TextoAccionAuditada.De(accion));
 

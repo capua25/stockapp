@@ -25,6 +25,9 @@ public class Gasto
     public RubroGasto? RubroGasto { get; set; }
     public int? LineaPoaId { get; set; }
     public LineaPoa? LineaPoa { get; set; }
+    /// <summary>Proyecto al que se imputa el gasto (spec 2026-10-30); null = sin proyecto.</summary>
+    public int? ProyectoId { get; set; }
+    public Proyecto? Proyecto { get; set; }
     public CondicionPago CondicionPago { get; set; }
     public DateTime? FechaVencimiento { get; set; }       // obligatoria si crédito
     public bool Activo { get; set; } = true;              // false = anulado

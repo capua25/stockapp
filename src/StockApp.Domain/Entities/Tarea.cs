@@ -57,6 +57,10 @@ public class Tarea
     public int? DocumentoAdministrativoId { get; set; }
     public DocumentoAdministrativo? DocumentoAdministrativo { get; set; }
 
+    /// <summary>Proyecto al que pertenece la tarea (spec 2026-10-30); null = tarea suelta.</summary>
+    public int? ProyectoId { get; set; }
+    public Proyecto? Proyecto { get; set; }
+
     public List<NotaTarea> Notas { get; set; } = new();
 
     private static readonly Dictionary<EstadoTarea, EstadoTarea[]> TransicionesValidas = new()
