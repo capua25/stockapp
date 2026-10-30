@@ -30,7 +30,7 @@ public class AuthEndpointPermisosTests : ApiTestBase
     }
 
     [Fact]
-    public async Task GetPermisos_Admin_DevuelveLos12Configurables()
+    public async Task GetPermisos_Admin_DevuelveLos14Configurables()
     {
         var client = Factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", TokenAdmin());
@@ -39,7 +39,7 @@ public class AuthEndpointPermisosTests : ApiTestBase
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<PermisosPropiosResponseTest>();
-        Assert.Equal(12, body!.Permisos.Count);
+        Assert.Equal(14, body!.Permisos.Count);
         Assert.Contains(Permisos.VerFinanzas, body.Permisos);
         Assert.DoesNotContain(Permisos.GestionarUsuarios, body.Permisos);
     }

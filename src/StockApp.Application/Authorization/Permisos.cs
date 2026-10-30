@@ -42,6 +42,11 @@ public static class Permisos
     /// <summary>Anular, reabrir y quitar adjuntos: decide sobre el cierre/apertura de un trámite y sobre evidencia documental ya cargada — solo Admin.</summary>
     public const string AdministrarDocumentos = "documentos.administrar";
 
+    // Proyectos (spec 2026-10-30) — módulo independiente. Ambos configurables (no estructurales
+    // Admin): VerProyectos habilita la pantalla; GestionarProyectos requiere VerProyectos.
+    public const string VerProyectos = "proyectos.ver";
+    public const string GestionarProyectos = "proyectos.gestionar";
+
     /// <summary>
     /// Lista explícita de todos los permisos del sistema (sin reflection). Consumida por
     /// StockApp.Api/Program.cs (Fase 2b, D1) para derivar las políticas de autorización
@@ -65,5 +70,7 @@ public static class Permisos
         AdministrarTareas,
         GestionarDocumentos,
         AdministrarDocumentos,
+        VerProyectos,
+        GestionarProyectos,
     ];
 }

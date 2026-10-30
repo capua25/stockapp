@@ -57,5 +57,9 @@ public static class CatalogoPermisosPanel
 
         // ── Documentos ───────────────────────────────────────────────────────
         new(Permisos.GestionarDocumentos, "Documentos administrativos", "Documentos"),
+
+        // ── Proyectos ────────────────────────────────────────────────────────
+        new(Permisos.VerProyectos, "Ver proyectos", "Proyectos"),
+        new(Permisos.GestionarProyectos, "Gestionar proyectos", "Proyectos"),
     ];
 }

@@ -6,7 +6,7 @@ namespace StockApp.Application.Authorization;
 /// <summary>
 /// Implementación de <see cref="IAuthorizationService"/>. Admin tiene acceso a todo. Para
 /// Operador, cinco permisos son estructuralmente Admin-only (nunca se resuelven contra
-/// PermisoUsuario) y los 12 restantes se resuelven contra ICurrentSession.PermisosActuales,
+/// PermisoUsuario) y los 14 restantes se resuelven contra ICurrentSession.PermisosActuales,
 /// ya poblado por el middleware de la Task 8 antes de que cualquier servicio de Application
 /// se ejecute (spec 2026-08-10).
 /// </summary>
@@ -54,6 +54,8 @@ public class AuthorizationService : IAuthorizationService
         Permisos.RegistrarIngresos,
         Permisos.GestionarTareas,
         Permisos.GestionarDocumentos,
+        Permisos.VerProyectos,
+        Permisos.GestionarProyectos,
     ];
 
     public void Verificar(ICurrentSession sesion, string accion)

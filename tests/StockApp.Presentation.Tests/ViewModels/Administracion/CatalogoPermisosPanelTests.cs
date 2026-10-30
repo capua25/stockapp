@@ -32,6 +32,17 @@ public class CatalogoPermisosPanelTests
     }
 
     [Fact]
+    public void Entradas_IncluyeVerYGestionarProyectosEnElGrupoProyectos()
+    {
+        var ver = Assert.Single(CatalogoPermisosPanel.Entradas, e => e.Permiso == Permisos.VerProyectos);
+        Assert.Equal("Ver proyectos", ver.Etiqueta);
+        Assert.Equal("Proyectos", ver.Grupo);
+        var gestionar = Assert.Single(CatalogoPermisosPanel.Entradas, e => e.Permiso == Permisos.GestionarProyectos);
+        Assert.Equal("Gestionar proyectos", gestionar.Etiqueta);
+        Assert.Equal("Proyectos", gestionar.Grupo);
+    }
+
+    [Fact]
     public void Entradas_NoTieneClavesDuplicadas()
     {
         var duplicadas = CatalogoPermisosPanel.Entradas

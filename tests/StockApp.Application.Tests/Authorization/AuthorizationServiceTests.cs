@@ -115,16 +115,25 @@ public class AuthorizationServiceTests
     }
 
     [Fact]
-    public void PermisosConfigurables_TieneLos12RestantesYNoIntersecaConLosEstructurales()
+    public void PermisosConfigurables_TieneLos14RestantesYNoIntersecaConLosEstructurales()
     {
-        Assert.Equal(12, AuthorizationService.PermisosConfigurables.Count);
+        Assert.Equal(14, AuthorizationService.PermisosConfigurables.Count);
+        Assert.Contains(Permisos.VerProyectos, AuthorizationService.PermisosConfigurables);
+        Assert.Contains(Permisos.GestionarProyectos, AuthorizationService.PermisosConfigurables);
         Assert.Contains(Permisos.GestionarDocumentos, AuthorizationService.PermisosConfigurables);
         foreach (var permiso in AuthorizationService.PermisosConfigurables)
             Assert.DoesNotContain(permiso, AuthorizationService.PermisosEstructuralesAdmin);
     }
 
     [Fact]
-    public void PermisosInicialesOperador_TieneExactamenteLos10DeAccionesOperadorEnOrden()
+    public void PermisosInicialesOperador_IncluyeVerYGestionarProyectos()
+    {
+        Assert.Contains(Permisos.VerProyectos, AuthorizationService.PermisosInicialesOperador);
+        Assert.Contains(Permisos.GestionarProyectos, AuthorizationService.PermisosInicialesOperador);
+    }
+
+    [Fact]
+    public void PermisosInicialesOperador_TieneExactamenteLos12DeAccionesOperadorEnOrden()
     {
         Assert.Equal(new[]
         {
@@ -138,6 +147,8 @@ public class AuthorizationServiceTests
             Permisos.RegistrarIngresos,
             Permisos.GestionarTareas,
             Permisos.GestionarDocumentos,
+            Permisos.VerProyectos,
+            Permisos.GestionarProyectos,
         }, AuthorizationService.PermisosInicialesOperador);
     }
 }

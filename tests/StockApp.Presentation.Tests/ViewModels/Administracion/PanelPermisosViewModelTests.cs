@@ -113,13 +113,13 @@ public class PanelPermisosViewModelTests
     [Fact]
     public void Grupos_RespetanElOrdenDeDeclaracionDelCatalogo_NoOrdenAlfabetico()
     {
-        // "Documentos" va último en el catálogo (Tarea/Reportes lo precede) pero alfabéticamente
-        // caería 2do (Catálogo, Documentos, Finanzas, Tareas y reportes) -- si Grupos usara
-        // OrderBy alfabético este test lo detecta.
+        // "Proyectos" va último en el catálogo pero alfabéticamente caería 4to (Catálogo,
+        // Documentos, Finanzas, Proyectos, Tareas y reportes) -- si Grupos usara OrderBy
+        // alfabético este test lo detecta.
         var (panel, _, _) = Crear();
 
         Assert.Equal(
-            new[] { "Catálogo", "Finanzas", "Tareas y reportes", "Documentos" },
+            new[] { "Catálogo", "Finanzas", "Tareas y reportes", "Documentos", "Proyectos" },
             panel.Grupos.Select(g => g.Nombre));
     }
 

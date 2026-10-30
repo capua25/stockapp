@@ -6,7 +6,7 @@ namespace StockApp.Application.Tests.Authorization;
 public class PermisosTests
 {
     [Fact]
-    public void Todos_ContieneLasDieciseisConstantesExactas()
+    public void Todos_ContieneLasDieciochoConstantesExactas()
     {
         var esperados = new[]
         {
@@ -26,6 +26,8 @@ public class PermisosTests
             Permisos.AdministrarTareas,
             Permisos.GestionarDocumentos,
             Permisos.AdministrarDocumentos,
+            Permisos.VerProyectos,
+            Permisos.GestionarProyectos,
         };
 
         Assert.Equal(esperados.Length, Permisos.Todos.Count);

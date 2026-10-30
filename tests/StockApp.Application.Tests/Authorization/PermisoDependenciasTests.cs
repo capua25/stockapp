@@ -16,6 +16,12 @@ public class PermisoDependenciasTests
     }
 
     [Fact]
+    public void Requisitos_GestionarProyectos_RequiereVerProyectos()
+    {
+        Assert.Equal(Permisos.VerProyectos, PermisoDependencias.Requisitos[Permisos.GestionarProyectos]);
+    }
+
+    [Fact]
     public void Recomendados_TodasLasClavesYValores_EstanEnPermisosConfigurables()
     {
         foreach (var (clave, recomendacion) in PermisoDependencias.Recomendados)

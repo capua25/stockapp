@@ -39,6 +39,9 @@ public static class PermisoDependencias
         // (MovimientoHistorialView.axaml:80-81), gateado por PuedeRegistrarMovimientos
         // (ShellMainView.axaml:129): sin RegistrarMovimientos, no hay forma de llegar al botón.
         [Permisos.RecalcularStock] = Permisos.RegistrarMovimientos,
+
+        // Sin VerProyectos no hay pantalla de Proyectos desde la que gestionar nada.
+        [Permisos.GestionarProyectos] = Permisos.VerProyectos,
     };
 
     /// <summary>
