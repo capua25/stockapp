@@ -57,7 +57,7 @@ public class GastoService : IGastoService
 
         var linea = await ValidarAsync(gasto, esAlta: true, original: null);
         await ValidarCajaYLiteralAsync(gasto, pagoContado, original: null);
-        await ValidarProyectoAsync(gasto.ProyectoId);
+        await ImputacionProyectoGasto.ValidarAsync(_proyectos, gasto.ProyectoId);
         await ValidarFacturaUnicaAsync(gasto);
         var advertencia = await AdvertirSobregiroAsync(
             gasto, linea, pagoContado?.FuenteFinanciamientoId, excluyendoGastoId: null);
@@ -107,8 +107,7 @@ public class GastoService : IGastoService
 
         var linea = await ValidarAsync(gasto, esAlta: false, original);
         await ValidarCajaYLiteralAsync(gasto, pagoContado, original);
-        if (gasto.ProyectoId != original.ProyectoId)
-            await ValidarProyectoAsync(gasto.ProyectoId);
+        await ImputacionProyectoGasto.ValidarAsync(_proyectos, gasto.ProyectoId, original.ProyectoId);
 
         if (gasto.MontoTotal < original.TotalPagado)
             throw new ReglaDeNegocioException(
@@ -376,22 +375,6 @@ public class GastoService : IGastoService
     }
 
     // ── Validaciones privadas ────────────────────────────────────────────────
-
-    /// <summary>
-    /// Un gasto solo se imputa a un proyecto pendiente o en curso. Se valida únicamente cuando
-    /// el valor es nuevo o cambia (y no es null): un gasto ya imputado a un proyecto que después
-    /// terminó sigue siendo válido aunque esté cerrado.
-    /// </summary>
-    private async Task ValidarProyectoAsync(int? proyectoId)
-    {
-        if (proyectoId is not int pid)
-            return;
-
-        var proyecto = await _proyectos.ObtenerPorIdAsync(pid)
-            ?? throw new EntidadNoEncontradaException($"Proyecto {pid} no encontrado.");
-        if (proyecto.EsCerrado)
-            throw new ReglaDeNegocioException("Solo se pueden imputar proyectos pendientes o en curso.");
-    }
 
     /// <summary>
     /// Valida input + existencia/actividad de los maestros. Devuelve la LineaPoa cargada

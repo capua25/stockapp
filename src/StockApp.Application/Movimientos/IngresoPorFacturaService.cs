@@ -59,22 +59,6 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
         _audit       = audit;
     }
 
-    /// <summary>
-    /// Un gasto solo se imputa a un proyecto pendiente o en curso. Se valida únicamente cuando
-    /// el valor es nuevo o cambia (y no es null): un gasto ya imputado a un proyecto que después
-    /// terminó sigue siendo válido aunque esté cerrado.
-    /// </summary>
-    private async Task ValidarProyectoAsync(int? proyectoId)
-    {
-        if (proyectoId is not int pid)
-            return;
-
-        var proyecto = await _proyectos.ObtenerPorIdAsync(pid)
-            ?? throw new EntidadNoEncontradaException($"Proyecto {pid} no encontrado.");
-        if (proyecto.EsCerrado)
-            throw new ReglaDeNegocioException("Solo se pueden imputar proyectos pendientes o en curso.");
-    }
-
     public async Task<IngresoPorFacturaResultadoDto> RegistrarAsync(IngresoPorFacturaDto dto)
     {
         _auth.Verificar(_session, Permisos.RegistrarMovimientos);
@@ -192,7 +176,7 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
             }
         }
 
-        await ValidarProyectoAsync(dto.ProyectoId);
+        await ImputacionProyectoGasto.ValidarAsync(_proyectos, dto.ProyectoId);
 
         var gasto = new Gasto
         {

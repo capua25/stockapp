@@ -601,6 +601,43 @@ public class GastosEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task Put_ConProyectoId_PersisteYDevuelveTituloEnGet()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        int proyectoId;
+        await using (var ctx = Factory.CrearContexto())
+        {
+            var admin = await ctx.Usuarios.FirstAsync();
+            var proyecto = new Proyecto
+            {
+                Titulo = "Plaza PUT", Estado = EstadoProyecto.Pendiente,
+                CreadoPorUsuarioId = admin.Id, FechaCreacion = DateTime.UtcNow,
+            };
+            ctx.Proyectos.Add(proyecto);
+            await ctx.SaveChangesAsync();
+            proyectoId = proyecto.Id;
+        }
+        var client = ClienteAutenticado(TokenAdmin());
+        var creado = await (await client.PostAsJsonAsync("/finanzas/gastos",
+                RequestValido(proveedorId, fuenteId, rubroId, CondicionPago.Credito)))
+            .Content.ReadFromJsonAsync<GastoGuardadoResponse>();
+
+        var response = await client.PutAsJsonAsync($"/finanzas/gastos/{creado!.Id}",
+            new ModificarGastoRequest(
+                ProveedorId: proveedorId, NumeroFactura: null, NumeroOrden: null,
+                Detalle: "Gasto vía API", Destino: null, Fecha: DateTime.UtcNow, MontoTotal: 1500m,
+                Caja: null, FuenteFinanciamientoId: null, RubroGastoId: rubroId, LineaPoaId: null,
+                CondicionPago: CondicionPago.Credito, FechaVencimiento: DateTime.UtcNow.AddDays(30),
+                ProyectoId: proyectoId));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var dto = await (await client.GetAsync($"/finanzas/gastos/{creado.Id}"))
+            .Content.ReadFromJsonAsync<GastoDto>();
+        Assert.Equal(proyectoId, dto!.ProyectoId);
+        Assert.Equal("Plaza PUT", dto.ProyectoTitulo);
+    }
+
+    [Fact]
     public async Task Post_ConProyectoTerminado_Devuelve409()
     {
         var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();

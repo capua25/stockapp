@@ -42,6 +42,22 @@ public class IngresoPorFacturaApiClientTests
         Assert.Equal(2, resultado.MovimientoIds.Count);
     }
 
+    [Theory]
+    [InlineData(7, "\"proyectoId\":7")]
+    [InlineData(null, "\"proyectoId\":null")]
+    public async Task Registrar_EnviaProyectoId(int? proyectoId, string esperado)
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(new
+        {
+            gastoId = 42, movimientoIds = new[] { 1 }, sumaRenglones = 500.0, diferenciaConTotal = 0.0,
+        }, HttpStatusCode.Created));
+        var client = new IngresoPorFacturaApiClient(TestHttp.CrearCliente(fake));
+
+        await client.RegistrarAsync(DtoValido() with { ProyectoId = proyectoId });
+
+        Assert.Contains(esperado, fake.UltimoBody);
+    }
+
     [Fact]
     public async Task Registrar_ContadoEnviaCajaYFuenteComoNumero()
     {

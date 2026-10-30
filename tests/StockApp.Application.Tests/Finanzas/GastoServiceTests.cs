@@ -206,6 +206,26 @@ public class GastoServiceTests
     }
 
     [Fact]
+    public async Task ModificarAsync_CambiaAProyectoCerrado_Lanza()
+    {
+        var m = Crear();
+        m.Proyectos.Setup(p => p.ObtenerPorIdAsync(6)).ReturnsAsync(UnProyecto(6, EstadoProyecto.Terminado));
+        var original = GastoValido();
+        original.Id = 1;
+        original.ProyectoId = 5;
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        var editado = GastoValido();
+        editado.Id = 1;
+        editado.ProyectoId = 6;
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.ModificarAsync(editado, null));
+
+        Assert.Equal("Solo se pueden imputar proyectos pendientes o en curso.", ex.Message);
+        Assert.Equal(5, original.ProyectoId);
+        m.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Gasto>()), Times.Never);
+    }
+
+    [Fact]
     public async Task ModificarAsync_MismoProyectoYaTerminado_GuardaSinError()
     {
         var m = Crear();
