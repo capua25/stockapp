@@ -87,6 +87,10 @@ Se crea la entidad **Proyecto**, y la Tarea vuelve a su simplicidad inicial. El 
 
 ## Deuda conocida (cierre, 2026-10-30)
 
-- `VerificadorConvencionesTests.MockupsDelRepo_RespetanLaConvencion` (UiV2.Herramientas.Tests) falla: en `gestion/proyectos.html` (encabezado PRESUPUESTO) y `gestion/proyecto-detalle.html` (encabezado MONTO) hay celdas `v2-num` sin su `<span>` único.
 - Tres comparaciones visuales esperan la decisión de umbral de Martin: `TareaDetalle_IgualAlMockup` (32 teselas, máximo 31), `TareaDetalleOperador_IgualAlMockup_1366x768` (22, máximo 11) y `ProyectoDetalleSinFinanzas_IgualAlMockup` (16, máximo 11).
 - Crear una tarea desde la ficha del proyecto la deja vinculada, pero al guardar vuelve a la lista de Tareas y no a la ficha.
+
+## Despliegue
+
+- La versión del desktop debe subirse y su release Velopack publicarse JUNTO con el despliegue de la API (la API migra al arrancar). Con el desktop 0.6.0 contra la API nueva: editar un gasto le quita su proyecto en silencio (`ModificarGastoRequest.ProyectoId` por defecto es null), reclasificar una tarea le quita su proyecto, y la pantalla "Estadística de tareas" recibe 404 (se eliminó `/reportes/tareas`). No existe chequeo de versión mínima de cliente.
+- La migración `QuitaClasificadoresDeTarea` borra datos: desplegar solo con `deploy/deploy-vps.sh` y su backup de la base (nunca `--sin-backup`), y verificar el dump antes de reiniciar. El camino manual de `install.sh` descrito en `deploy/DEPLOY.md` NO hace dump de la base, así que no debe usarse para este release sin un `pg_dump` manual previo.
