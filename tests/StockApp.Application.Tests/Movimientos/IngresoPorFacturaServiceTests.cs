@@ -25,8 +25,9 @@ public class IngresoPorFacturaServiceTests
                     Mock<ICurrentSession> session,
                     Mock<IAuthSvc> auth,
                     Mock<IAuditLogger> audit)
-        Crear(RolUsuario rol = RolUsuario.Admin, int idSesion = 1)
+        Crear(RolUsuario rol = RolUsuario.Admin, int idSesion = 1, Mock<IProyectoRepository>? proyectos = null)
     {
+        proyectos ??= new Mock<IProyectoRepository>();
         var movRepo    = new Mock<IMovimientoStockRepository>();
         var gastoRepo  = new Mock<IGastoRepository>();
         var proveedores = new Mock<IProveedorRepository>();
@@ -56,7 +57,7 @@ public class IngresoPorFacturaServiceTests
 
         var svc = new IngresoPorFacturaService(
             movRepo.Object, gastoRepo.Object, proveedores.Object, fuentes.Object, rubros.Object,
-            lineasPoa.Object, productos.Object, unidades.Object, session.Object, auth.Object,
+            lineasPoa.Object, productos.Object, proyectos.Object, unidades.Object, session.Object, auth.Object,
             Mock.Of<StockApp.Application.Reportes.IVersionReportes>(), audit.Object);
 
         return (svc, movRepo, gastoRepo, proveedores, fuentes, rubros, lineasPoa, productos, unidades, session, auth, audit);
@@ -222,6 +223,41 @@ public class IngresoPorFacturaServiceTests
         Assert.Equal(1, resultado.GastoId);
         movRepo.Verify(r => r.RegistrarIngresoPorFacturaAtomicoAsync(
             It.Is<IngresoPorFacturaArgs>(a => a.Renglones.Count == 2)), Times.Once);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_FacturaConProyecto_GastoImputado()
+    {
+        var proyectos = new Mock<IProyectoRepository>();
+        proyectos.Setup(p => p.ObtenerPorIdAsync(5))
+            .ReturnsAsync(new Proyecto { Id = 5, Titulo = "Plaza", Estado = EstadoProyecto.EnCurso });
+        var (svc, movRepo, _, _, _, _, _, _, _, _, _, _) = Crear(proyectos: proyectos);
+        movRepo.Setup(r => r.ObtenerProductoAsync(1))
+            .ReturnsAsync(new Producto { Id = 1, Codigo = "SKU1", Activo = true, StockActual = 10m, PrecioCosto = 5m });
+        movRepo.Setup(r => r.RegistrarIngresoPorFacturaAtomicoAsync(It.IsAny<IngresoPorFacturaArgs>()))
+            .ReturnsAsync(new ResultadoIngresoPorFactura(7, new List<int> { 100 }));
+
+        await svc.RegistrarAsync(DtoValido() with { ProyectoId = 5 });
+
+        movRepo.Verify(r => r.RegistrarIngresoPorFacturaAtomicoAsync(
+            It.Is<IngresoPorFacturaArgs>(a => a.Gasto.ProyectoId == 5)), Times.Once);
+    }
+
+    [Fact]
+    public async Task RegistrarAsync_FacturaConProyectoCerrado_LanzaSinTocarElRepo()
+    {
+        var proyectos = new Mock<IProyectoRepository>();
+        proyectos.Setup(p => p.ObtenerPorIdAsync(5))
+            .ReturnsAsync(new Proyecto { Id = 5, Titulo = "Plaza", Estado = EstadoProyecto.Terminado });
+        var (svc, movRepo, _, _, _, _, _, _, _, _, _, _) = Crear(proyectos: proyectos);
+        movRepo.Setup(r => r.ObtenerProductoAsync(1))
+            .ReturnsAsync(new Producto { Id = 1, Codigo = "SKU1", Activo = true, StockActual = 10m, PrecioCosto = 5m });
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(
+            () => svc.RegistrarAsync(DtoValido() with { ProyectoId = 5 }));
+
+        Assert.Equal("Solo se pueden imputar proyectos pendientes o en curso.", ex.Message);
+        movRepo.Verify(r => r.RegistrarIngresoPorFacturaAtomicoAsync(It.IsAny<IngresoPorFacturaArgs>()), Times.Never);
     }
 
     // ── Camino feliz: totales y delegación ────────────────────────────────────

@@ -18,6 +18,7 @@ public record GastoDto(
     DateTime Fecha, decimal MontoTotal,
     int RubroGastoId, string? RubroNombre,
     int? LineaPoaId, string? LineaPoaNombre,
+    int? ProyectoId, string? ProyectoTitulo,
     CondicionPago CondicionPago, DateTime? FechaVencimiento,
     bool Activo,
     decimal TotalPagado,
@@ -32,13 +33,15 @@ public record CrearGastoRequest(
     string Detalle, string? Destino, DateTime Fecha, decimal MontoTotal,
     Caja? Caja, int? FuenteFinanciamientoId, int RubroGastoId, int? LineaPoaId,
     CondicionPago CondicionPago, DateTime? FechaVencimiento,
-    List<int>? MovimientoIds);
+    List<int>? MovimientoIds,
+    int? ProyectoId = null);
 
 public record ModificarGastoRequest(
     int ProveedorId, string? NumeroFactura, string? NumeroOrden,
     string Detalle, string? Destino, DateTime Fecha, decimal MontoTotal,
     Caja? Caja, int? FuenteFinanciamientoId, int RubroGastoId, int? LineaPoaId,
-    CondicionPago CondicionPago, DateTime? FechaVencimiento);
+    CondicionPago CondicionPago, DateTime? FechaVencimiento,
+    int? ProyectoId = null);
 
 public record GastoGuardadoResponse(int Id, string? AdvertenciaSobregiro);
 public record RegistrarPagoRequest(DateTime Fecha, decimal Monto, string? Nota, int? FuenteFinanciamientoId);
@@ -93,7 +96,7 @@ public static class GastosEndpoints
                 request.ProveedorId, request.NumeroFactura, request.NumeroOrden,
                 request.Detalle, request.Destino, request.Fecha, request.MontoTotal,
                 request.Caja, request.FuenteFinanciamientoId, request.RubroGastoId, request.LineaPoaId,
-                request.CondicionPago, request.FechaVencimiento, null));
+                request.CondicionPago, request.FechaVencimiento, null, request.ProyectoId));
             gasto.Id = id;
             var resultado = await gastos.ModificarAsync(
                 gasto, PagoContadoDe(request.CondicionPago, request.Caja, request.FuenteFinanciamientoId));
@@ -169,6 +172,7 @@ public static class GastosEndpoints
         LineaPoaId = r.LineaPoaId,
         CondicionPago = r.CondicionPago,
         FechaVencimiento = r.FechaVencimiento,
+        ProyectoId = r.ProyectoId,
     };
 
     private static GastoDto ADto(Gasto g) => new(
@@ -179,6 +183,7 @@ public static class GastosEndpoints
         g.Fecha, g.MontoTotal,
         g.RubroGastoId, g.RubroGasto?.Nombre,
         g.LineaPoaId, g.LineaPoa?.Nombre,
+        g.ProyectoId, g.Proyecto?.Titulo,
         g.CondicionPago, g.FechaVencimiento,
         g.Activo,
         g.TotalPagado,

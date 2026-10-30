@@ -16,6 +16,7 @@ public class GastoService : IGastoService
     private readonly IRubroGastoRepository           _rubros;
     private readonly ILineaPoaRepository             _lineasPoa;
     private readonly IMovimientoStockRepository      _movRepo;
+    private readonly IProyectoRepository             _proyectos;
     private readonly ICurrentSession                 _session;
     private readonly IAuthorizationService           _auth;
     private readonly IAuditLogger                    _audit;
@@ -28,6 +29,7 @@ public class GastoService : IGastoService
         IRubroGastoRepository rubros,
         ILineaPoaRepository lineasPoa,
         IMovimientoStockRepository movRepo,
+        IProyectoRepository proyectos,
         ICurrentSession session,
         IAuthorizationService auth,
         IAuditLogger audit,
@@ -39,6 +41,7 @@ public class GastoService : IGastoService
         _rubros      = rubros;
         _lineasPoa   = lineasPoa;
         _movRepo     = movRepo;
+        _proyectos   = proyectos;
         _session     = session;
         _auth        = auth;
         _audit       = audit;
@@ -54,6 +57,7 @@ public class GastoService : IGastoService
 
         var linea = await ValidarAsync(gasto, esAlta: true, original: null);
         await ValidarCajaYLiteralAsync(gasto, pagoContado, original: null);
+        await ValidarProyectoAsync(gasto.ProyectoId);
         await ValidarFacturaUnicaAsync(gasto);
         var advertencia = await AdvertirSobregiroAsync(
             gasto, linea, pagoContado?.FuenteFinanciamientoId, excluyendoGastoId: null);
@@ -103,6 +107,8 @@ public class GastoService : IGastoService
 
         var linea = await ValidarAsync(gasto, esAlta: false, original);
         await ValidarCajaYLiteralAsync(gasto, pagoContado, original);
+        if (gasto.ProyectoId != original.ProyectoId)
+            await ValidarProyectoAsync(gasto.ProyectoId);
 
         if (gasto.MontoTotal < original.TotalPagado)
             throw new ReglaDeNegocioException(
@@ -138,6 +144,7 @@ public class GastoService : IGastoService
         Comparar("Rubro", original.RubroGastoId, gasto.RubroGastoId);
         Comparar("Línea POA", original.LineaPoaId, gasto.LineaPoaId);
         Comparar("Vencimiento", original.FechaVencimiento, gasto.FechaVencimiento);
+        Comparar("Proyecto", original.ProyectoId, gasto.ProyectoId);
 
         // La caja y el literal de un gasto de contado viven en su pago automático (ya validado arriba).
         var automatico = pagoContado is null ? null : original.PagoAutomatico;
@@ -163,6 +170,7 @@ public class GastoService : IGastoService
         original.RubroGastoId           = gasto.RubroGastoId;
         original.LineaPoaId             = gasto.LineaPoaId;
         original.FechaVencimiento       = gasto.FechaVencimiento;
+        original.ProyectoId             = gasto.ProyectoId;
 
         // Solo la FK y la caja, nunca la nav del pago (mismo criterio que arriba).
         if (automatico is not null)
@@ -368,6 +376,22 @@ public class GastoService : IGastoService
     }
 
     // ── Validaciones privadas ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Un gasto solo se imputa a un proyecto pendiente o en curso. Se valida únicamente cuando
+    /// el valor es nuevo o cambia (y no es null): un gasto ya imputado a un proyecto que después
+    /// terminó sigue siendo válido aunque esté cerrado.
+    /// </summary>
+    private async Task ValidarProyectoAsync(int? proyectoId)
+    {
+        if (proyectoId is not int pid)
+            return;
+
+        var proyecto = await _proyectos.ObtenerPorIdAsync(pid)
+            ?? throw new EntidadNoEncontradaException($"Proyecto {pid} no encontrado.");
+        if (proyecto.EsCerrado)
+            throw new ReglaDeNegocioException("Solo se pueden imputar proyectos pendientes o en curso.");
+    }
 
     /// <summary>
     /// Valida input + existencia/actividad de los maestros. Devuelve la LineaPoa cargada

@@ -571,6 +571,61 @@ public class GastosEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task Post_ConProyectoId_DevuelveProyectoTituloEnGet()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        int proyectoId;
+        await using (var ctx = Factory.CrearContexto())
+        {
+            var admin = await ctx.Usuarios.FirstAsync();
+            var proyecto = new Proyecto
+            {
+                Titulo = "Plaza nueva", Estado = EstadoProyecto.EnCurso,
+                CreadoPorUsuarioId = admin.Id, FechaCreacion = DateTime.UtcNow,
+            };
+            ctx.Proyectos.Add(proyecto);
+            await ctx.SaveChangesAsync();
+            proyectoId = proyecto.Id;
+        }
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsJsonAsync("/finanzas/gastos",
+            RequestValido(proveedorId, fuenteId, rubroId) with { ProyectoId = proyectoId });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var creado = await response.Content.ReadFromJsonAsync<GastoGuardadoResponse>();
+        var dto = await (await client.GetAsync($"/finanzas/gastos/{creado!.Id}"))
+            .Content.ReadFromJsonAsync<GastoDto>();
+        Assert.Equal(proyectoId, dto!.ProyectoId);
+        Assert.Equal("Plaza nueva", dto.ProyectoTitulo);
+    }
+
+    [Fact]
+    public async Task Post_ConProyectoTerminado_Devuelve409()
+    {
+        var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();
+        int proyectoId;
+        await using (var ctx = Factory.CrearContexto())
+        {
+            var admin = await ctx.Usuarios.FirstAsync();
+            var proyecto = new Proyecto
+            {
+                Titulo = "Cerrado", Estado = EstadoProyecto.Terminado,
+                CreadoPorUsuarioId = admin.Id, FechaCreacion = DateTime.UtcNow,
+            };
+            ctx.Proyectos.Add(proyecto);
+            await ctx.SaveChangesAsync();
+            proyectoId = proyecto.Id;
+        }
+        var client = ClienteAutenticado(TokenAdmin());
+
+        var response = await client.PostAsJsonAsync("/finanzas/gastos",
+            RequestValido(proveedorId, fuenteId, rubroId) with { ProyectoId = proyectoId });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Post_ContadoPoaConLiteralB_Devuelve201_YElPagoAutomaticoEsPoa()
     {
         var (proveedorId, fuenteId, rubroId) = await SeedMaestrosAsync();

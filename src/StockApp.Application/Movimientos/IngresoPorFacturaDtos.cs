@@ -20,7 +20,8 @@ public record IngresoPorFacturaDto(
     int? LineaPoaId,
     CondicionPago CondicionPago,
     DateTime? FechaVencimiento,
-    IReadOnlyList<RenglonFacturaDto> Renglones);
+    IReadOnlyList<RenglonFacturaDto> Renglones,
+    int? ProyectoId = null);
 
 /// <summary>Renglón de artículo. Exactamente uno de ProductoId/ProductoNuevo debe venir seteado.</summary>
 public record RenglonFacturaDto(

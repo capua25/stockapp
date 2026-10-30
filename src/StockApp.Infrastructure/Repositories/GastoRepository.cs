@@ -21,6 +21,7 @@ public class GastoRepository : IGastoRepository
             .Include(g => g.Proveedor)
             .Include(g => g.RubroGasto)
             .Include(g => g.LineaPoa)
+            .Include(g => g.Proyecto)
             .Include(g => g.Pagos).ThenInclude(p => p.FuenteFinanciamiento);
 
     /// <summary>

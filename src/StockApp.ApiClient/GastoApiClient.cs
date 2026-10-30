@@ -19,6 +19,7 @@ internal sealed record GastoWire(
     DateTime Fecha, decimal MontoTotal,
     int RubroGastoId, string? RubroNombre,
     int? LineaPoaId, string? LineaPoaNombre,
+    int? ProyectoId, string? ProyectoTitulo,
     CondicionPago CondicionPago, DateTime? FechaVencimiento,
     bool Activo, decimal TotalPagado, string Estado,
     bool TieneMovimientosDeStock,
@@ -29,7 +30,8 @@ internal sealed record GastoBody(
     string Detalle, string? Destino, DateTime Fecha, decimal MontoTotal,
     Caja? Caja, int? FuenteFinanciamientoId, int RubroGastoId, int? LineaPoaId,
     CondicionPago CondicionPago, DateTime? FechaVencimiento,
-    List<int>? MovimientoIds);
+    List<int>? MovimientoIds,
+    int? ProyectoId = null);
 
 internal sealed record GastoGuardadoWire(int Id, string? AdvertenciaSobregiro);
 internal sealed record RegistrarPagoBody(DateTime Fecha, decimal Monto, string? Nota, int FuenteFinanciamientoId);
@@ -156,7 +158,8 @@ public sealed class GastoApiClient : IGastoService
         gasto.Detalle, gasto.Destino, gasto.Fecha, gasto.MontoTotal,
         pagoContado?.Caja, pagoContado?.FuenteFinanciamientoId, gasto.RubroGastoId, gasto.LineaPoaId,
         gasto.CondicionPago, gasto.FechaVencimiento,
-        movimientoIds?.ToList());
+        movimientoIds?.ToList(),
+        gasto.ProyectoId);
 
     private static Gasto AEntidad(GastoWire dto) => new()
     {
@@ -176,6 +179,9 @@ public sealed class GastoApiClient : IGastoService
         LineaPoaId = dto.LineaPoaId,
         LineaPoa = dto.LineaPoaId is null || dto.LineaPoaNombre is null
             ? null : new LineaPoa { Id = dto.LineaPoaId.Value, Nombre = dto.LineaPoaNombre },
+        ProyectoId = dto.ProyectoId,
+        Proyecto = dto.ProyectoId is null || dto.ProyectoTitulo is null
+            ? null : new Proyecto { Id = dto.ProyectoId.Value, Titulo = dto.ProyectoTitulo },
         CondicionPago = dto.CondicionPago,
         FechaVencimiento = dto.FechaVencimiento,
         Activo = dto.Activo,

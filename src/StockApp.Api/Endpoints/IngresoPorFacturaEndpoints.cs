@@ -19,7 +19,8 @@ public record IngresoPorFacturaRequest(
     DateTime Fecha, string Detalle, string? Destino, decimal MontoTotal,
     Caja? Caja, int? FuenteFinanciamientoId, int RubroGastoId, int? LineaPoaId,
     CondicionPago CondicionPago, DateTime? FechaVencimiento,
-    List<RenglonFacturaRequest> Lineas);
+    List<RenglonFacturaRequest> Lineas,
+    int? ProyectoId = null);
 
 public static class IngresoPorFacturaEndpoints
 {
@@ -40,7 +41,8 @@ public static class IngresoPorFacturaEndpoints
                     l.ProductoNuevo is null ? null : new ProductoNuevoDto(
                         l.ProductoNuevo.Codigo, l.ProductoNuevo.Nombre, l.ProductoNuevo.CategoriaId,
                         l.ProductoNuevo.UnidadMedidaId),
-                    l.Cantidad, l.PrecioUnitario, l.ActualizarPrecioCosto)).ToList());
+                    l.Cantidad, l.PrecioUnitario, l.ActualizarPrecioCosto)).ToList(),
+                request.ProyectoId);
 
             var resultado = await service.RegistrarAsync(dto);
             // Sin Location: mismo criterio que /movimientos y /finanzas/gastos (no hay

@@ -22,6 +22,7 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
     private readonly IRubroGastoRepository              _rubros;
     private readonly ILineaPoaRepository                _lineasPoa;
     private readonly IProductoRepository                _productos;
+    private readonly IProyectoRepository                _proyectos;
     private readonly IUnidadMedidaRepository            _unidades;
     private readonly ICurrentSession                    _session;
     private readonly IAuthorizationService              _auth;
@@ -36,6 +37,7 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
         IRubroGastoRepository rubros,
         ILineaPoaRepository lineasPoa,
         IProductoRepository productos,
+        IProyectoRepository proyectos,
         IUnidadMedidaRepository unidades,
         ICurrentSession session,
         IAuthorizationService auth,
@@ -49,11 +51,28 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
         _rubros      = rubros;
         _lineasPoa   = lineasPoa;
         _productos   = productos;
+        _proyectos   = proyectos;
         _unidades    = unidades;
         _session     = session;
         _auth        = auth;
         _version     = version;
         _audit       = audit;
+    }
+
+    /// <summary>
+    /// Un gasto solo se imputa a un proyecto pendiente o en curso. Se valida únicamente cuando
+    /// el valor es nuevo o cambia (y no es null): un gasto ya imputado a un proyecto que después
+    /// terminó sigue siendo válido aunque esté cerrado.
+    /// </summary>
+    private async Task ValidarProyectoAsync(int? proyectoId)
+    {
+        if (proyectoId is not int pid)
+            return;
+
+        var proyecto = await _proyectos.ObtenerPorIdAsync(pid)
+            ?? throw new EntidadNoEncontradaException($"Proyecto {pid} no encontrado.");
+        if (proyecto.EsCerrado)
+            throw new ReglaDeNegocioException("Solo se pueden imputar proyectos pendientes o en curso.");
     }
 
     public async Task<IngresoPorFacturaResultadoDto> RegistrarAsync(IngresoPorFacturaDto dto)
@@ -173,6 +192,8 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
             }
         }
 
+        await ValidarProyectoAsync(dto.ProyectoId);
+
         var gasto = new Gasto
         {
             ProveedorId            = dto.ProveedorId,
@@ -186,6 +207,7 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
             LineaPoaId             = dto.LineaPoaId,
             CondicionPago          = dto.CondicionPago,
             FechaVencimiento       = dto.FechaVencimiento,
+            ProyectoId             = dto.ProyectoId,
         };
 
         // Contado ⇒ pago automático por el total en la fecha del gasto (spec §4) — misma regla

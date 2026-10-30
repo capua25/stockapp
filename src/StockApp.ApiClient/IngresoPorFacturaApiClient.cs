@@ -16,7 +16,8 @@ internal sealed record IngresoPorFacturaBody(
     DateTime Fecha, string Detalle, string? Destino, decimal MontoTotal,
     Caja? Caja, int? FuenteFinanciamientoId, int RubroGastoId, int? LineaPoaId,
     CondicionPago CondicionPago, DateTime? FechaVencimiento,
-    List<RenglonFacturaBody> Lineas);
+    List<RenglonFacturaBody> Lineas,
+    int? ProyectoId = null);
 
 /// <summary>IIngresoPorFacturaService contra /movimientos/ingreso-factura.</summary>
 public sealed class IngresoPorFacturaApiClient : IIngresoPorFacturaService
@@ -37,7 +38,8 @@ public sealed class IngresoPorFacturaApiClient : IIngresoPorFacturaService
                 r.ProductoNuevo is null ? null : new ProductoNuevoBody(
                     r.ProductoNuevo.Codigo, r.ProductoNuevo.Nombre, r.ProductoNuevo.CategoriaId,
                     r.ProductoNuevo.UnidadMedidaId),
-                r.Cantidad, r.PrecioUnitario, r.ActualizarPrecioCosto)).ToList());
+                r.Cantidad, r.PrecioUnitario, r.ActualizarPrecioCosto)).ToList(),
+            dto.ProyectoId);
 
         var response = await ApiErrores.EnviarAsync(() =>
             _http.PostAsJsonAsync("movimientos/ingreso-factura", body));

@@ -385,6 +385,35 @@ public class GastoApiClientTests
     }
 
     [Fact]
+    public async Task Alta_EnviaProyectoId_YElGetLoDevuelveConTitulo()
+    {
+        var fake = new FakeHttpHandler(_ => TestHttp.Json(
+            new { id = 7, advertenciaSobregiro = (string?)null }, HttpStatusCode.Created));
+        var gasto = GastoEntidad();
+        gasto.ProyectoId = 5;
+
+        await new GastoApiClient(TestHttp.CrearCliente(fake)).AltaAsync(gasto, null);
+
+        Assert.Contains("\"proyectoId\":5", fake.UltimoBody);
+
+        var json = new
+        {
+            id = 7, proveedorId = 3, proveedorNombre = "Barraca X", numeroFactura = "A-0001",
+            numeroOrden = (string?)null, detalle = "Materiales", destino = (string?)null, fecha = Hoy,
+            montoTotal = 1000m, rubroGastoId = 4, rubroNombre = "Materiales",
+            lineaPoaId = (int?)null, lineaPoaNombre = (string?)null,
+            proyectoId = 5, proyectoTitulo = "Plaza nueva",
+            condicionPago = 1, fechaVencimiento = Hoy.AddDays(30), activo = true, totalPagado = 0m,
+            estado = "Pendiente", tieneMovimientosDeStock = false, pagos = Array.Empty<object>(),
+        };
+        var leido = await new GastoApiClient(TestHttp.CrearCliente(new FakeHttpHandler(_ => TestHttp.Json(json))))
+            .ObtenerPorIdAsync(7);
+
+        Assert.Equal(5, leido.ProyectoId);
+        Assert.Equal("Plaza nueva", leido.Proyecto!.Titulo);
+    }
+
+    [Fact]
     public async Task Alta_ContadoEnviaCajaYFuenteComoNumero()
     {
         var fake = new FakeHttpHandler(_ => TestHttp.Json(

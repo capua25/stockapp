@@ -90,6 +90,35 @@ public class IngresoPorFacturaEndpointTests : ApiTestBase
     }
 
     [Fact]
+    public async Task PostIngresoFactura_ConProyectoId_ImputaElGasto()
+    {
+        var (proveedorId, fuenteId, rubroId, productoId) = await SeedMaestrosAsync();
+        int proyectoId;
+        await using (var ctx = Factory.CrearContexto())
+        {
+            var admin = await ctx.Usuarios.FirstAsync();
+            var proyecto = new Proyecto
+            {
+                Titulo = "Plaza nueva", Estado = EstadoProyecto.EnCurso,
+                CreadoPorUsuarioId = admin.Id, FechaCreacion = DateTime.UtcNow,
+            };
+            ctx.Proyectos.Add(proyecto);
+            await ctx.SaveChangesAsync();
+            proyectoId = proyecto.Id;
+        }
+        var client = ClienteAutenticado(TokenOperador());
+
+        var response = await client.PostAsJsonAsync("/movimientos/ingreso-factura",
+            RequestValido(proveedorId, fuenteId, rubroId, productoId, factura: "IPF-API-PRY") with { ProyectoId = proyectoId });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var resultado = await response.Content.ReadFromJsonAsync<IngresoPorFacturaResultadoDto>();
+        await using var verificacion = Factory.CrearContexto();
+        var gasto = await verificacion.Gastos.SingleAsync(g => g.Id == resultado!.GastoId);
+        Assert.Equal(proyectoId, gasto.ProyectoId);
+    }
+
+    [Fact]
     public async Task PostIngresoFactura_ConTokenOperador_Crea201ConElResultado()
     {
         // Spec decisión 5: RegistrarMovimientos + RegistrarGastos + GestionarProductos los tiene

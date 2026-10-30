@@ -23,7 +23,8 @@ public class GastoServiceTests
         Mock<ILineaPoaRepository> LineasPoa,
         Mock<IMovimientoStockRepository> MovRepo,
         Mock<IAuditLogger> Audit,
-        Mock<IVersionReportes> Version);
+        Mock<IVersionReportes> Version,
+        Mock<IProyectoRepository> Proyectos);
 
     private static Mocks Crear(RolUsuario rol = RolUsuario.Admin)
     {
@@ -33,6 +34,7 @@ public class GastoServiceTests
         var rubros     = new Mock<IRubroGastoRepository>();
         var lineasPoa  = new Mock<ILineaPoaRepository>();
         var movRepo    = new Mock<IMovimientoStockRepository>();
+        var proyectos  = new Mock<IProyectoRepository>();
         var session    = new Mock<ICurrentSession>();
         var auth       = new Mock<IAuthSvc>();
         var audit      = new Mock<IAuditLogger>();
@@ -56,8 +58,8 @@ public class GastoServiceTests
 
         var svc = new GastoService(
             repo.Object, proveedores.Object, fuentes.Object, rubros.Object, lineasPoa.Object,
-            movRepo.Object, session.Object, auth.Object, audit.Object, version.Object);
-        return new Mocks(svc, repo, proveedores, fuentes, rubros, lineasPoa, movRepo, audit, version);
+            movRepo.Object, proyectos.Object, session.Object, auth.Object, audit.Object, version.Object);
+        return new Mocks(svc, repo, proveedores, fuentes, rubros, lineasPoa, movRepo, audit, version, proyectos);
     }
 
     private static Gasto GastoValido(CondicionPago condicion = CondicionPago.Credito) => new()
@@ -135,6 +137,114 @@ public class GastoServiceTests
         gasto.FechaVencimiento = Hoy.AddDays(10);
 
         await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.AltaAsync(gasto, ContadoLocal()));
+    }
+
+    private static Proyecto UnProyecto(int id, EstadoProyecto estado) =>
+        new() { Id = id, Titulo = "Plaza", Estado = estado };
+
+    [Fact]
+    public async Task AltaAsync_ConProyectoEnCurso_Imputa()
+    {
+        var m = Crear();
+        m.Proyectos.Setup(p => p.ObtenerPorIdAsync(5)).ReturnsAsync(UnProyecto(5, EstadoProyecto.EnCurso));
+        m.Repo.Setup(r => r.AgregarAsync(It.IsAny<Gasto>())).ReturnsAsync(7);
+        var gasto = GastoValido();
+        gasto.ProyectoId = 5;
+
+        await m.Svc.AltaAsync(gasto, null);
+
+        m.Repo.Verify(r => r.AgregarAsync(It.Is<Gasto>(g => g.ProyectoId == 5)), Times.Once);
+    }
+
+    [Fact]
+    public async Task AltaAsync_ConProyectoCancelado_Lanza()
+    {
+        var m = Crear();
+        m.Proyectos.Setup(p => p.ObtenerPorIdAsync(5)).ReturnsAsync(UnProyecto(5, EstadoProyecto.Cancelado));
+        var gasto = GastoValido();
+        gasto.ProyectoId = 5;
+
+        var ex = await Assert.ThrowsAsync<ReglaDeNegocioException>(() => m.Svc.AltaAsync(gasto, null));
+
+        Assert.Equal("Solo se pueden imputar proyectos pendientes o en curso.", ex.Message);
+        m.Repo.Verify(r => r.AgregarAsync(It.IsAny<Gasto>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AltaAsync_ConProyectoInexistente_Lanza()
+    {
+        var m = Crear();
+        m.Proyectos.Setup(p => p.ObtenerPorIdAsync(9)).ReturnsAsync((Proyecto?)null);
+        var gasto = GastoValido();
+        gasto.ProyectoId = 9;
+
+        var ex = await Assert.ThrowsAsync<EntidadNoEncontradaException>(() => m.Svc.AltaAsync(gasto, null));
+
+        Assert.Equal("Proyecto 9 no encontrado.", ex.Message);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_CambiaProyecto_AuditaDiff()
+    {
+        var m = Crear();
+        m.Proyectos.Setup(p => p.ObtenerPorIdAsync(6)).ReturnsAsync(UnProyecto(6, EstadoProyecto.Pendiente));
+        var original = GastoValido();
+        original.Id = 1;
+        original.ProyectoId = 5;
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        var editado = GastoValido();
+        editado.Id = 1;
+        editado.ProyectoId = 6;
+
+        await m.Svc.ModificarAsync(editado, null);
+
+        Assert.Equal(6, original.ProyectoId);
+        m.Repo.Verify(r => r.ActualizarAsync(original), Times.Once);
+        m.Audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.ModificacionGasto, "Gasto", 1,
+            It.Is<string>(d => d.Contains("Proyecto: 5 → 6"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_MismoProyectoYaTerminado_GuardaSinError()
+    {
+        var m = Crear();
+        m.Proyectos.Setup(p => p.ObtenerPorIdAsync(5)).ReturnsAsync(UnProyecto(5, EstadoProyecto.Terminado));
+        var original = GastoValido();
+        original.Id = 1;
+        original.ProyectoId = 5;
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        var editado = GastoValido();
+        editado.Id = 1;
+        editado.ProyectoId = 5;
+        editado.Detalle = "Otro detalle";
+
+        await m.Svc.ModificarAsync(editado, null);
+
+        Assert.Equal("Otro detalle", original.Detalle);
+        m.Repo.Verify(r => r.ActualizarAsync(original), Times.Once);
+        m.Proyectos.Verify(p => p.ObtenerPorIdAsync(It.IsAny<int>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_QuitarProyecto_DejaNull()
+    {
+        var m = Crear();
+        var original = GastoValido();
+        original.Id = 1;
+        original.ProyectoId = 5;
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        var editado = GastoValido();
+        editado.Id = 1;
+        editado.ProyectoId = null;
+
+        await m.Svc.ModificarAsync(editado, null);
+
+        Assert.Null(original.ProyectoId);
+        m.Repo.Verify(r => r.ActualizarAsync(original), Times.Once);
+        m.Audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.ModificacionGasto, "Gasto", 1,
+            It.Is<string>(d => d.Contains("Proyecto: 5 → "))), Times.Once);
     }
 
     [Fact]
