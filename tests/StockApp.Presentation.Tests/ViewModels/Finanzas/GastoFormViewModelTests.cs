@@ -13,6 +13,8 @@ using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
 using StockApp.Presentation.Helpers;
+using StockApp.Application.Proyectos;
+using StockApp.Presentation.Tests.Helpers;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Finanzas;
@@ -29,7 +31,8 @@ public class GastoFormViewModelTests
                     Mock<IConfirmacionService> confirmMock)
         Crear(RolUsuario rol = RolUsuario.Admin, IEnumerable<string>? permisos = null,
                Func<Task<IReadOnlyList<Proveedor>>>? proveedoresActivos = null,
-               List<FuenteFinanciamiento>? fuentesActivas = null)
+               List<FuenteFinanciamiento>? fuentesActivas = null,
+               OpcionProyectoDto[]? proyectosAbiertos = null)
     {
         var svc = new Mock<IGastoService>();
         svc.Setup(s => s.AltaAsync(It.IsAny<Gasto>(), It.IsAny<PagoContadoDto?>(), It.IsAny<IReadOnlyList<int>?>()))
@@ -84,7 +87,7 @@ public class GastoFormViewModelTests
             session.Object);
 
         var vm = new GastoFormViewModel(
-            svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
+            svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object, ProyectosDeTest.Servicio(proyectosAbiertos ?? Array.Empty<OpcionProyectoDto>()),
             nav.Object, confirm.Object, adjuntosPanel);
         return (vm, svc, nav, confirm);
     }
@@ -153,7 +156,7 @@ public class GastoFormViewModelTests
             session.Object);
 
         var vm = new GastoFormViewModel(
-            svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
+            svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object, ProyectosDeTest.Servicio(),
             nav.Object, confirm.Object, adjuntosPanel);
 
         await vm.InicializarAsync();
@@ -194,7 +197,7 @@ public class GastoFormViewModelTests
             session.Object);
 
         var vm = new GastoFormViewModel(
-            svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
+            svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object, ProyectosDeTest.Servicio(),
             nav.Object, confirm.Object, adjuntosPanel);
 
         var excepcion = await Record.ExceptionAsync(() => vm.InicializarAsync());
@@ -483,7 +486,7 @@ public class GastoFormViewModelTests
             session.Object);
 
         var vm = new GastoFormViewModel(
-            svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
+            svc.Object, session.Object, proveedores.Object, fuentes.Object, rubros.Object, lineas.Object, ProyectosDeTest.Servicio(),
             nav.Object, confirm.Object, adjuntosPanel);
 
         var gasto = new Gasto
@@ -1511,5 +1514,109 @@ public class GastoFormViewModelTests
         vm.CargarParaEditar(gasto);
 
         Assert.Contains(nameof(GastoFormViewModel.PuedeCambiarCondicionPago), avisos);
+    }
+
+    // ── Proyecto (spec 2026-10-30): combo opcional "Sin proyecto" alimentado por ListarOpcionesAsync ────────
+
+    private static readonly OpcionProyectoDto[] ProyectosAbiertos =
+    {
+        new(10, "Rambla Sur", EstadoProyecto.EnCurso),
+        new(11, "Plaza Nueva", EstadoProyecto.Pendiente),
+    };
+
+    [Fact]
+    public async Task InicializarAsync_CargaProyectosDesdeListarOpciones()
+    {
+        var (vm, _, _, _) = Crear(proyectosAbiertos: ProyectosAbiertos);
+
+        await vm.InicializarAsync();
+
+        Assert.Equal(new int?[] { null, 10, 11 }, vm.ProyectosDisponibles.Select(o => o.Id).ToArray());
+        Assert.Equal("Sin proyecto", vm.ProyectosDisponibles[0].Nombre);
+        Assert.Equal("Rambla Sur", vm.ProyectosDisponibles[1].Nombre);
+    }
+
+    [Fact]
+    public async Task InicializarAsync_Alta_ArrancaEnSinProyecto()
+    {
+        var (vm, _, _, _) = Crear(proyectosAbiertos: ProyectosAbiertos);
+
+        await vm.InicializarAsync();
+
+        Assert.NotNull(vm.ProyectoSeleccionado);
+        Assert.Null(vm.ProyectoSeleccionado!.Id);
+    }
+
+    [Fact]
+    public async Task CargarParaEditar_ProyectoAbierto_ApareceSeleccionado()
+    {
+        var (vm, _, _, _) = Crear(proyectosAbiertos: ProyectosAbiertos);
+        var gasto = GastoExistente();
+        gasto.ProyectoId = 11;
+        vm.CargarParaEditar(gasto);
+
+        await vm.InicializarAsync();
+
+        Assert.Equal(11, vm.ProyectoSeleccionado?.Id);
+        Assert.Equal(3, vm.ProyectosDisponibles.Count);
+    }
+
+    [Fact]
+    public async Task CargarParaEditar_ProyectoTerminado_ApareceSeleccionado()
+    {
+        // El proyecto del gasto ya no está entre los abiertos (Terminado/Cancelado): se agrega desde la nav para no perder
+        // el dato histórico, igual que un rubro o una línea dados de baja.
+        var (vm, _, _, _) = Crear(proyectosAbiertos: ProyectosAbiertos);
+        var gasto = GastoExistente();
+        gasto.ProyectoId = 99;
+        gasto.Proyecto = new Proyecto { Id = 99, Titulo = "Obra vieja", Estado = EstadoProyecto.Terminado };
+        vm.CargarParaEditar(gasto);
+
+        await vm.InicializarAsync();
+
+        Assert.Equal(99, vm.ProyectoSeleccionado?.Id);
+        Assert.Equal("Obra vieja", vm.ProyectoSeleccionado?.Nombre);
+        Assert.Contains(vm.ProyectosDisponibles, o => o.Id == 99);
+    }
+
+    [Fact]
+    public async Task Guardar_EnviaProyectoId()
+    {
+        var (vm, svc, _, _) = Crear(proyectosAbiertos: ProyectosAbiertos);
+        await CompletarFormularioValidoAsync(vm);
+        vm.ProyectoSeleccionado = vm.ProyectosDisponibles.Single(o => o.Id == 10);
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.AltaAsync(It.Is<Gasto>(g => g.ProyectoId == 10),
+            It.IsAny<PagoContadoDto?>(), It.IsAny<IReadOnlyList<int>?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Guardar_SinProyecto_EnviaNull()
+    {
+        var (vm, svc, _, _) = Crear(proyectosAbiertos: ProyectosAbiertos);
+        await CompletarFormularioValidoAsync(vm);
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.AltaAsync(It.Is<Gasto>(g => g.ProyectoId == null),
+            It.IsAny<PagoContadoDto?>(), It.IsAny<IReadOnlyList<int>?>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task Editar_QuitarElProyecto_EnviaNull()
+    {
+        var (vm, svc, _, _) = Crear(proyectosAbiertos: ProyectosAbiertos);
+        var gasto = GastoExistente();
+        gasto.ProyectoId = 10;
+        vm.CargarParaEditar(gasto);
+        await vm.InicializarAsync();
+        vm.ProyectoSeleccionado = vm.ProyectosDisponibles[0];
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.ModificarAsync(It.Is<Gasto>(g => g.Id == 9 && g.ProyectoId == null),
+            It.IsAny<PagoContadoDto?>()), Times.Once);
     }
 }

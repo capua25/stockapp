@@ -75,7 +75,7 @@ public class IngresoPorFacturaViewV2Tests
             new FuenteFinanciamientoServiceFake(fuentes ?? new[] { Rentas, PoaObras }),
             new RubroGastoServiceFake(new[] { new RubroGasto { Id = 1, Codigo = 231, Nombre = "Materiales", Activo = true } }),
             new LineaPoaServiceFake(new[] { new LineaPoa { Id = 5, Nombre = "PRENSA", Programa = "Com", Ejercicio = 2026, Activo = true } }),
-            nav, confirmacion, adjuntos, alta, precios);
+            new ProyectoServiceFake(new List<Proyecto> { new() { Id = 10, Titulo = "Rambla Sur", Estado = EstadoProyecto.EnCurso } }), nav, confirmacion, adjuntos, alta, precios);
         return (vm, servicio, alta, precios, nav);
     }
 
@@ -277,6 +277,26 @@ public class IngresoPorFacturaViewV2Tests
 
         var dto = Assert.Single(m.Servicio.Registrados);
         Assert.Equal(new PagoContadoDto(Caja.Poa, 4), dto.PagoContado);
+    }
+
+    [AvaloniaFact]
+    public void Proyecto_ComboExisteEsEditableYGuardaElProyecto()
+    {
+        var m = Montar();
+        CompletarCabecera(m.Vm, "480,00");
+        Renglones(m.Vm, 1);
+        var combo = N<ComboBox>(m, "ComboProyecto");
+
+        Assert.True(ArbolVisual.EsVisibleEnArbol(N<CampoFormulario>(m, "CampoProyecto")));
+        Assert.True(combo.IsEffectivelyEnabled);
+        Assert.Equal(new[] { "Sin proyecto", "Rambla Sur" },
+            m.Vm.ProyectosDisponibles.Select(o => o.Nombre));
+
+        combo.SelectedItem = m.Vm.ProyectosDisponibles.Single(o => o.Id == 10);
+        Dispatcher.UIThread.RunJobs();
+        Clickear(m, N<Button>(m, "BotonGuardar"));
+
+        Assert.Equal(10, Assert.Single(m.Servicio.Registrados).ProyectoId);
     }
 
     [AvaloniaFact]

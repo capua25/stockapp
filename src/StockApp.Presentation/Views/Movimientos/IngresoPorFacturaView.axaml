@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Movimientos"
+             xmlns:pry="using:StockApp.Presentation.ViewModels.Proyectos"
              xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:conv="using:StockApp.Presentation.Converters"
              xmlns:cat="using:StockApp.Application.Catalogo"
@@ -36,7 +37,7 @@
                         <!-- Tres por fila, por afinidad: identificación, fecha y destino, imputación presupuestal. El 16
                              entre filas va en el Margin superior de cada campo: el vencimiento aparece y desaparece sin
                              dejar hueco. -->
-                        <Grid ColumnDefinitions="*,16,*,16,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                        <Grid ColumnDefinitions="*,16,*,16,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto">
                             <v2:CampoFormulario x:Name="CampoProveedor" Grid.Row="0" Grid.Column="0" Etiqueta="Proveedor" Requerido="True">
                                 <ComboBox ItemsSource="{Binding ProveedoresDisponibles}" SelectedItem="{Binding ProveedorSeleccionado}"
                                           PlaceholderText="Elegí el proveedor" HorizontalAlignment="Stretch">
@@ -110,6 +111,16 @@
                                 <CalendarDatePicker SelectedDate="{Binding FechaVencimientoSeleccionada}" HorizontalAlignment="Stretch"
                                                     PlaceholderText="dd/mm/aaaa" SelectedDateFormat="Custom" CustomDateFormatString="dd/MM/yyyy"
                                                     beh:CalendarDatePickerFechaBehavior.NormalizarFechaTipeada="True" />
+                            </v2:CampoFormulario>
+
+                            <!-- Opcional: "Sin proyecto" deja la factura sin imputar. Solo ofrece proyectos abiertos. -->
+                            <v2:CampoFormulario x:Name="CampoProyecto" Grid.Row="4" Grid.Column="0" Margin="0,16,0,0" Etiqueta="Proyecto">
+                                <ComboBox x:Name="ComboProyecto" ItemsSource="{Binding ProyectosDisponibles}" SelectedItem="{Binding ProyectoSeleccionado}"
+                                          PlaceholderText="Sin proyecto" HorizontalAlignment="Stretch">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="pry:OpcionProyectoImputacion"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
                             </v2:CampoFormulario>
                         </Grid>
 

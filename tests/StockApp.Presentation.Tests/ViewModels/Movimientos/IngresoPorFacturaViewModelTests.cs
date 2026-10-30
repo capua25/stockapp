@@ -8,6 +8,8 @@ using StockApp.Application.Movimientos;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Presentation.Helpers;
+using StockApp.Application.Proyectos;
+using StockApp.Presentation.Tests.Helpers;
 using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Finanzas;
@@ -22,9 +24,9 @@ public class IngresoPorFacturaViewModelTests
     private static (IngresoPorFacturaViewModel vm,
                     Mock<IIngresoPorFacturaService> svcMock,
                     Mock<INavigationService> navMock)
-        Crear()
+        Crear(OpcionProyectoDto[]? proyectosAbiertos = null)
     {
-        var (vm, svc, nav, _, _) = CrearConDialogos();
+        var (vm, svc, nav, _, _) = CrearConDialogos(null, proyectosAbiertos);
         return (vm, svc, nav);
     }
 
@@ -37,7 +39,7 @@ public class IngresoPorFacturaViewModelTests
                     Mock<INavigationService> navMock,
                     Mock<IAltaProductoRapidaDialogService> altaMock,
                     Mock<IConfirmacionPreciosDialogService> preciosMock)
-        CrearConDialogos(List<FuenteFinanciamiento>? fuentesActivas = null)
+        CrearConDialogos(List<FuenteFinanciamiento>? fuentesActivas = null, OpcionProyectoDto[]? proyectosAbiertos = null)
     {
         var svc = new Mock<IIngresoPorFacturaService>();
         var productos = new Mock<IProductoService>();
@@ -101,7 +103,7 @@ public class IngresoPorFacturaViewModelTests
 
         var vm = new IngresoPorFacturaViewModel(
             svc.Object, productos.Object, categorias.Object, unidades.Object,
-            proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
+            proveedores.Object, fuentes.Object, rubros.Object, lineas.Object, ProyectosDeTest.Servicio(proyectosAbiertos ?? System.Array.Empty<OpcionProyectoDto>()),
             nav.Object, confirm.Object, adjuntosPanel, alta.Object, precios.Object);
 
         return (vm, svc, nav, alta, precios);
@@ -265,7 +267,7 @@ public class IngresoPorFacturaViewModelTests
 
         var vm = new IngresoPorFacturaViewModel(
             svc.Object, productos.Object, categorias.Object, unidades.Object,
-            proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
+            proveedores.Object, fuentes.Object, rubros.Object, lineas.Object, ProyectosDeTest.Servicio(),
             nav.Object, confirm.Object, adjuntosPanel,
             Mock.Of<IAltaProductoRapidaDialogService>(), Mock.Of<IConfirmacionPreciosDialogService>());
 
@@ -298,7 +300,7 @@ public class IngresoPorFacturaViewModelTests
 
         var vm = new IngresoPorFacturaViewModel(
             svc.Object, productos.Object, categorias.Object, unidades.Object,
-            proveedores.Object, fuentes.Object, rubros.Object, lineas.Object,
+            proveedores.Object, fuentes.Object, rubros.Object, lineas.Object, ProyectosDeTest.Servicio(),
             nav.Object, confirm.Object, adjuntosPanel,
             Mock.Of<IAltaProductoRapidaDialogService>(), Mock.Of<IConfirmacionPreciosDialogService>());
 
@@ -947,5 +949,54 @@ public class IngresoPorFacturaViewModelTests
         vm.NotificarPermisosActualizados();
 
         Assert.Contains(avisos, n => string.IsNullOrEmpty(n) || n == nameof(AdjuntosPanelViewModel.PuedeModificar));
+    }
+
+    // ── Proyecto (spec 2026-10-30): combo opcional "Sin proyecto" alimentado por ListarOpcionesAsync ────────
+
+    private static readonly OpcionProyectoDto[] ProyectosAbiertos =
+    {
+        new(10, "Rambla Sur", EstadoProyecto.EnCurso),
+        new(11, "Plaza Nueva", EstadoProyecto.Pendiente),
+    };
+
+    [Fact]
+    public async Task InicializarAsync_CargaProyectosDesdeListarOpciones()
+    {
+        var (vm, _, _) = Crear(ProyectosAbiertos);
+
+        await vm.InicializarAsync();
+
+        Assert.Equal(new int?[] { null, 10, 11 }, vm.ProyectosDisponibles.Select(o => o.Id).ToArray());
+        Assert.Equal("Sin proyecto", vm.ProyectosDisponibles[0].Nombre);
+        Assert.Null(vm.ProyectoSeleccionado!.Id);
+    }
+
+    [Fact]
+    public async Task Guardar_EnviaProyectoId()
+    {
+        var (vm, svc, _) = Crear(ProyectosAbiertos);
+        svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()))
+            .ReturnsAsync(new IngresoPorFacturaResultadoDto(1, new List<int> { 1 }, 10m, 0m));
+        await InicializarYCompletarCabeceraAsync(vm);
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 10m);
+        vm.ProyectoSeleccionado = vm.ProyectosDisponibles.Single(o => o.Id == 11);
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.RegistrarAsync(It.Is<IngresoPorFacturaDto>(d => d.ProyectoId == 11)), Times.Once);
+    }
+
+    [Fact]
+    public async Task Guardar_SinProyecto_EnviaNull()
+    {
+        var (vm, svc, _) = Crear(ProyectosAbiertos);
+        svc.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()))
+            .ReturnsAsync(new IngresoPorFacturaResultadoDto(1, new List<int> { 1 }, 10m, 0m));
+        await InicializarYCompletarCabeceraAsync(vm);
+        AgregarArticulo(vm, vm.ProductosDisponibles[0], cantidad: 1m, precioUnitario: 10m);
+
+        await vm.GuardarCommand.ExecuteAsync(null);
+
+        svc.Verify(s => s.RegistrarAsync(It.Is<IngresoPorFacturaDto>(d => d.ProyectoId == null)), Times.Once);
     }
 }

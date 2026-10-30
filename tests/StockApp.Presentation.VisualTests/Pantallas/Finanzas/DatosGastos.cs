@@ -1,3 +1,4 @@
+using StockApp.Application.Proyectos;
 using Moq;
 using StockApp.ApiClient;
 using StockApp.Application.Authorization;
@@ -154,8 +155,10 @@ public static class DatosGastos
         var panel = new AdjuntosPanelViewModel(adjuntos.Object, Mock.Of<IServicioSeleccionArchivo>(),
             Mock.Of<IServicioAperturaArchivo>(), Mock.Of<IConfirmacionService>(), sesion);
         var (proveedores, fuentes, rubros, lineas) = Maestros();
+        var proyectos = new Mock<IProyectoService>();
+        proyectos.Setup(p => p.ListarOpcionesAsync()).ReturnsAsync(new List<OpcionProyectoDto>());
         return new GastoFormViewModel(servicio ?? Mock.Of<IGastoService>(), sesion, proveedores, fuentes, rubros, lineas,
-            Mock.Of<INavigationService>(), confirmacion ?? Mock.Of<IConfirmacionService>(), panel)
+            proyectos.Object, Mock.Of<INavigationService>(), confirmacion ?? Mock.Of<IConfirmacionService>(), panel)
         {
             FechaSeleccionada = new DateTime(2026, 10, 6),
         };

@@ -68,12 +68,12 @@
   /* Pulgar de la barra vertical del ScrollViewer (Fluent en reposo, sin tema v2): 2 px #7A7A7A a 2 px del borde derecho
      de la vista. Largo y posición MEDIDOS en headless con este formulario. */
   .pulgar { position: absolute; right: 2px; width: 2px; background: #7A7A7A; }
-  .pulgar { top: 255px; height: 421px; }
-  @media (min-width: 1366px) { .pulgar { top: 252px; height: 431px; } }
+  .pulgar { top: 280px; height: 395px; }
+  @media (min-width: 1366px) { .pulgar { top: 279px; height: 405px; } }
   /* Contenido SCROLLEADO al final (offset máximo MEDIDO en headless: el borde inferior de la card queda 24 por
      encima del borde del scroll): se ve el final de la card y el pie pegado al borde. */
-  .pagina { transform: translateY(-392px); }
-  @media (min-width: 1366px) { .pagina { transform: translateY(-384px); } }
+  .pagina { transform: translateY(-463px); }
+  @media (min-width: 1366px) { .pagina { transform: translateY(-455px); } }
 </style>
 </head>
 <body>
@@ -142,6 +142,7 @@
             <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Rubro</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input"><span>Materiales de construcción</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
             <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Caja</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input"><span>Local</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
             <div class="v2-campo"><div class="v2-campo-etiqueta"><span>Fuente de financiamiento</span><span class="v2-campo-requerido">*</span></div><div><div class="v2-input"><span>FIGM Literal B</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
+            <div class="v2-campo" style="grid-column: 2"><div class="v2-campo-etiqueta"><span>Proyecto</span></div><div><div class="v2-input"><span>Sin proyecto</span><svg class="v2-glifo-combo" viewBox="19 486 2010 1095" aria-hidden="true"><path fill="currentColor" d="M1939 486L2029 576L1024 1581L19 576L109 486L1024 1401L1939 486Z"/></svg></div></div></div>
           </div>
           <div class="bloque-linea-huerfana">
             <div class="v2-alerta v2-alerta--advertencia">Este gasto tiene una línea POA que ya no corresponde a su caja. Se conserva tal cual.</div>

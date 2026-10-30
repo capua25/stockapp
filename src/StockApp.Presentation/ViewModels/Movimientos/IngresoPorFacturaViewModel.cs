@@ -10,6 +10,7 @@ using StockApp.ApiClient;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Movimientos;
+using StockApp.Application.Proyectos;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -18,6 +19,7 @@ using StockApp.Presentation.Services;
 using StockApp.Presentation.ViewModels.Finanzas;
 using StockApp.Domain.Formato;
 using StockApp.Presentation.Helpers;
+using StockApp.Presentation.ViewModels.Proyectos;
 
 namespace StockApp.Presentation.ViewModels.Movimientos;
 
@@ -36,6 +38,7 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
     private readonly IFuenteFinanciamientoService _fuenteService;
     private readonly IRubroGastoService           _rubroService;
     private readonly ILineaPoaService             _lineaService;
+    private readonly IProyectoService             _proyectoService;
     private readonly INavigationService           _navigation;
     private readonly IConfirmacionService         _confirmacion;
     private readonly AdjuntosPanelViewModel       _adjuntosPanel;
@@ -93,6 +96,10 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
     private RubroGasto? _rubroSeleccionado;
 
     [ObservableProperty] private LineaPoa? _lineaPoaSeleccionada;
+
+    /// <summary>Proyecto al que se imputa la factura; "Sin proyecto" (Id null) la deja sin imputar. Nunca null una vez
+    /// cargado el combo.</summary>
+    [ObservableProperty] private OpcionProyectoImputacion? _proyectoSeleccionado;
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MostrarCajaYFuente))]
     [NotifyPropertyChangedFor(nameof(MostrarLineaPoa))]
@@ -160,6 +167,7 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
     public IReadOnlyList<Caja> Cajas => CajaExtensions.Todas;
     public ObservableCollection<RubroGasto> RubrosDisponibles { get; } = new();
     public ObservableCollection<LineaPoa> LineasPoaDisponibles { get; } = new();
+    public ObservableCollection<OpcionProyectoImputacion> ProyectosDisponibles { get; } = new();
     public ObservableCollection<ProductoDto> ProductosDisponibles { get; } = new();
     public ObservableCollection<Categoria> CategoriasDisponibles { get; } = new();
     public ObservableCollection<UnidadMedida> UnidadesMedidaDisponibles { get; } = new();
@@ -197,6 +205,7 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
         IFuenteFinanciamientoService fuenteService,
         IRubroGastoService rubroService,
         ILineaPoaService lineaService,
+        IProyectoService proyectoService,
         INavigationService navigation,
         IConfirmacionService confirmacion,
         AdjuntosPanelViewModel adjuntosPanel,
@@ -211,6 +220,7 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
         _fuenteService       = fuenteService;
         _rubroService        = rubroService;
         _lineaService        = lineaService;
+        _proyectoService     = proyectoService;
         _navigation          = navigation;
         _confirmacion        = confirmacion;
         _adjuntosPanel       = adjuntosPanel;
@@ -246,6 +256,14 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
             var lineas = await _lineaService.ListarActivasAsync();
             LineasPoaDisponibles.Clear();
             foreach (var l in lineas) LineasPoaDisponibles.Add(l);
+
+            // Proyectos abiertos (Pendiente/En curso): ListarOpcionesAsync pide solo estar autenticado, no proyectos.ver.
+            // Arranca en "Sin proyecto"; un reintento conserva lo que el usuario había elegido.
+            var proyectos = await _proyectoService.ListarOpcionesAsync();
+            var proyectoElegidoId = ProyectoSeleccionado?.Id;
+            ProyectosDisponibles.Clear();
+            foreach (var o in OpcionProyectoImputacion.Armar(proyectos, null, null)) ProyectosDisponibles.Add(o);
+            ProyectoSeleccionado = ProyectosDisponibles.FirstOrDefault(o => o.Id == proyectoElegidoId) ?? ProyectosDisponibles[0];
 
             var productos = await _productoService.BuscarAsync(null, null, null);
             ProductosDisponibles.Clear();
@@ -476,7 +494,8 @@ public partial class IngresoPorFacturaViewModel : ViewModelBase
             EsCredito && FechaVencimientoSeleccionada is not null
                 ? DateTime.SpecifyKind(FechaVencimientoSeleccionada.Value.Date, DateTimeKind.Utc)
                 : null,
-            Renglones.Select(ARenglonDto).ToList());
+            Renglones.Select(ARenglonDto).ToList(),
+            ProyectoSeleccionado?.Id);
 
         try
         {

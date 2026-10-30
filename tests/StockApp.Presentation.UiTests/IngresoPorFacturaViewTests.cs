@@ -81,7 +81,7 @@ public class IngresoPorFacturaViewTests
 
         var vm = new IngresoPorFacturaViewModel(
             servicio, productoService, categoriaService, unidadService, proveedorService,
-            fuenteService, rubroService, lineaService, nav, confirmacion, adjuntosPanel,
+            fuenteService, rubroService, lineaService, new ProyectoServiceFake(), nav, confirmacion, adjuntosPanel,
             alta ?? new AltaProductoRapidaDialogServiceFake(), precios ?? new ConfirmacionPreciosDialogServiceFake());
 
         var window = AvaloniaRuntimeXamlLoader.Parse<Window>(Xaml, typeof(TestApp).Assembly);

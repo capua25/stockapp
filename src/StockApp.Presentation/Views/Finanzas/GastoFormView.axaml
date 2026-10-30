@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:beh="using:StockApp.Presentation.Behaviors"
              xmlns:vm="using:StockApp.Presentation.ViewModels.Finanzas"
+             xmlns:pry="using:StockApp.Presentation.ViewModels.Proyectos"
              xmlns:e="using:StockApp.Domain.Entities"
              xmlns:en="using:StockApp.Domain.Enums"
              xmlns:conv="using:StockApp.Presentation.Converters"
@@ -150,6 +151,15 @@
                                                   ItemsSource="{Binding LineasPoaDisponibles}" SelectedItem="{Binding LineaPoaSeleccionada}">
                                             <ComboBox.ItemTemplate>
                                                 <DataTemplate x:DataType="e:LineaPoa"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
+                                            </ComboBox.ItemTemplate>
+                                        </ComboBox>
+                                    </v2:CampoFormulario>
+                                    <!-- Opcional: "Sin proyecto" desimputa. Solo ofrece proyectos abiertos (más el actual del gasto). -->
+                                    <v2:CampoFormulario x:Name="CampoProyecto" Grid.Row="2" Grid.Column="2" Margin="0,16,0,0" Etiqueta="Proyecto">
+                                        <ComboBox x:Name="ComboProyecto" HorizontalAlignment="Stretch" PlaceholderText="Sin proyecto"
+                                                  ItemsSource="{Binding ProyectosDisponibles}" SelectedItem="{Binding ProyectoSeleccionado}">
+                                            <ComboBox.ItemTemplate>
+                                                <DataTemplate x:DataType="pry:OpcionProyectoImputacion"><TextBlock Text="{Binding Nombre}" /></DataTemplate>
                                             </ComboBox.ItemTemplate>
                                         </ComboBox>
                                     </v2:CampoFormulario>

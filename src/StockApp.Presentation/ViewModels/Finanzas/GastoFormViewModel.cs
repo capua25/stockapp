@@ -11,6 +11,7 @@ using StockApp.Application.Authorization;
 using StockApp.Application.Catalogo;
 using StockApp.Application.Finanzas;
 using StockApp.Application.Interfaces;
+using StockApp.Application.Proyectos;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
@@ -18,6 +19,7 @@ using StockApp.Presentation.Navigation;
 using StockApp.Presentation.Services;
 using StockApp.Domain.Formato;
 using StockApp.Presentation.Helpers;
+using StockApp.Presentation.ViewModels.Proyectos;
 
 namespace StockApp.Presentation.ViewModels.Finanzas;
 
@@ -36,6 +38,7 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     private readonly IFuenteFinanciamientoService _fuentesService;
     private readonly IRubroGastoService           _rubrosService;
     private readonly ILineaPoaService             _lineasService;
+    private readonly IProyectoService             _proyectosService;
     private readonly INavigationService           _navigation;
     private readonly IConfirmacionService         _confirmacion;
     private readonly AdjuntosPanelViewModel       _adjuntosPanel;
@@ -131,6 +134,10 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     [NotifyPropertyChangedFor(nameof(LineaLegadaHuerfana))]
     private LineaPoa? _lineaPoaSeleccionada;
 
+    /// <summary>Proyecto al que se imputa el gasto; la opción "Sin proyecto" (Id null) lo desimputa. Nunca null una vez
+    /// cargado el combo.</summary>
+    [ObservableProperty] private OpcionProyectoImputacion? _proyectoSeleccionado;
+
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(MostrarCajaYFuente))]
     [NotifyPropertyChangedFor(nameof(MostrarLineaPoa))]
@@ -188,6 +195,7 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
     public IReadOnlyList<Caja> Cajas => CajaExtensions.Todas;
     public ObservableCollection<RubroGasto> RubrosDisponibles { get; } = new();
     public ObservableCollection<LineaPoa> LineasPoaDisponibles { get; } = new();
+    public ObservableCollection<OpcionProyectoImputacion> ProyectosDisponibles { get; } = new();
 
     public const string MensajeProveedorObligatorio = "Elegí el proveedor.";
     public const string MensajeFechaObligatoria = "La fecha del gasto es obligatoria.";
@@ -323,6 +331,7 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
         IFuenteFinanciamientoService fuentesService,
         IRubroGastoService rubrosService,
         ILineaPoaService lineasService,
+        IProyectoService proyectosService,
         INavigationService navigation,
         IConfirmacionService confirmacion,
         AdjuntosPanelViewModel adjuntosPanel)
@@ -333,6 +342,7 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
         _fuentesService     = fuentesService;
         _rubrosService      = rubrosService;
         _lineasService      = lineasService;
+        _proyectosService   = proyectosService;
         _navigation         = navigation;
         _confirmacion       = confirmacion;
         _adjuntosPanel      = adjuntosPanel;
@@ -411,6 +421,19 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
             foreach (var l in lineas)
                 LineasPoaDisponibles.Add(l);
 
+            // Proyectos abiertos (Pendiente/En curso): ListarOpcionesAsync pide solo estar autenticado, no proyectos.ver.
+            // El combo siempre arranca con "Sin proyecto"; en edición se re-elige el del gasto aunque ya esté cerrado
+            // (Terminado/Cancelado) con el título de la nav, para no perder el dato histórico. Un Reintentar conserva lo
+            // que el usuario había elegido.
+            var proyectos = await _proyectosService.ListarOpcionesAsync();
+            var proyectoElegidoId = ProyectoSeleccionado is not null
+                ? ProyectoSeleccionado.Id
+                : _gastoParaEditar?.ProyectoId;
+            ProyectosDisponibles.Clear();
+            foreach (var o in OpcionProyectoImputacion.Armar(proyectos, proyectoElegidoId, _gastoParaEditar?.Proyecto?.Titulo))
+                ProyectosDisponibles.Add(o);
+            ProyectoSeleccionado = ProyectosDisponibles.First(o => o.Id == proyectoElegidoId);
+
             if (_gastoParaEditar is not null)
             {
                 // Resuelve las selecciones por Id contra los combos; si un maestro fue dado de baja después, cae al objeto
@@ -481,6 +504,7 @@ public partial class GastoFormViewModel : ViewModelBase, INotifyDataErrorInfo
             MontoTotal = monto,
             RubroGastoId = RubroSeleccionado!.Id,
             LineaPoaId = LineaPoaSeleccionada?.Id,
+            ProyectoId = ProyectoSeleccionado?.Id,
             CondicionPago = EsCredito ? CondicionPago.Credito : CondicionPago.Contado,
             FechaVencimiento = EsCredito
                 ? DateTime.SpecifyKind(FechaVencimientoSeleccionada!.Value.Date, DateTimeKind.Utc)

@@ -1,3 +1,4 @@
+using StockApp.Application.Proyectos;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
 using Moq;
@@ -88,6 +89,8 @@ public static class DatosIngresoFactura
         rubros.Setup(r => r.ListarActivosAsync()).ReturnsAsync(Rubros);
         var lineas = new Mock<ILineaPoaService>();
         lineas.Setup(l => l.ListarActivasAsync()).ReturnsAsync(Lineas);
+        var proyectos = new Mock<IProyectoService>();
+        proyectos.Setup(p => p.ListarOpcionesAsync()).ReturnsAsync(new List<OpcionProyectoDto>());
 
         var servicio = new Mock<IIngresoPorFacturaService>();
         servicio.Setup(s => s.RegistrarAsync(It.IsAny<IngresoPorFacturaDto>()))
@@ -105,7 +108,7 @@ public static class DatosIngresoFactura
             Mock.Of<IServicioAperturaArchivo>(), Mock.Of<IConfirmacionService>(), sesion.Object);
 
         return new IngresoPorFacturaViewModel(servicio.Object, productos.Object, categorias.Object, unidades.Object,
-            proveedores.Object, fuentes.Object, rubros.Object, lineas.Object, Mock.Of<INavigationService>(),
+            proveedores.Object, fuentes.Object, rubros.Object, lineas.Object, proyectos.Object, Mock.Of<INavigationService>(),
             Mock.Of<IConfirmacionService>(), panel,
             Mock.Of<IAltaProductoRapidaDialogService>(), Mock.Of<IConfirmacionPreciosDialogService>());
     }

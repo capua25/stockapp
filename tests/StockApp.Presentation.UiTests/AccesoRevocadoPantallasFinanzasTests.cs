@@ -128,7 +128,7 @@ public class AccesoRevocadoPantallasFinanzasTests
                 new ProveedorServiceFake(Array.Empty<Proveedor>()),
                 new FuenteFinanciamientoServiceFake(Array.Empty<FuenteFinanciamiento>()),
                 new RubroGastoServiceFake(Array.Empty<RubroGasto>()),
-                new LineaPoaServiceFake(Array.Empty<LineaPoa>()),
+                new LineaPoaServiceFake(Array.Empty<LineaPoa>()), new ProyectoServiceFake(),
                 new NavigationServiceFake(), new ConfirmacionServiceFake(), adjuntos);
             return form;
         });
@@ -199,7 +199,7 @@ public class AccesoRevocadoPantallasFinanzasTests
             new ProveedorServiceFake(Array.Empty<Proveedor>()),
             new FuenteFinanciamientoServiceFake(Array.Empty<FuenteFinanciamiento>()),
             new RubroGastoServiceFake(Array.Empty<RubroGasto>()),
-            new LineaPoaServiceFake(Array.Empty<LineaPoa>()),
+            new LineaPoaServiceFake(Array.Empty<LineaPoa>()), new ProyectoServiceFake(),
             new NavigationServiceFake(), new ConfirmacionServiceFake(), adjuntos);
         form.CargarParaEditar(new Gasto
         {

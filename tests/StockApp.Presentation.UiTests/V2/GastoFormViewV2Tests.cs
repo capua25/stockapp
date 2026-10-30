@@ -38,6 +38,8 @@ public class GastoFormViewV2Tests
     private static readonly LineaPoa Prensa = new() { Id = 5, Nombre = "PRENSA", Programa = "Comunicación", Ejercicio = 2026, Activo = true };
     private static readonly RubroGasto Materiales = new() { Id = 1, Codigo = 10, Nombre = "Materiales de construcción", Activo = true };
 
+    private static readonly Proyecto RamblaSur = new() { Id = 10, Titulo = "Rambla Sur", Estado = EstadoProyecto.EnCurso };
+
     private static Gasto Existente(bool activo = true, CondicionPago condicion = CondicionPago.Contado)
     {
         var gasto = new Gasto
@@ -77,7 +79,7 @@ public class GastoFormViewV2Tests
             new ServicioAperturaArchivoFake(), confirmacion, sesion);
         return new GastoFormViewModel(servicio, sesion, proveedores ?? new ProveedoresFake { Activos = [Barraca] },
             new FuenteFinanciamientoServiceFake(fuentes ?? [Figm, PoaObras]), new RubroGastoServiceFake([Materiales]),
-            new LineaPoaServiceFake([Prensa]), navegacion, confirmacion, panel);
+            new LineaPoaServiceFake([Prensa]), new ProyectoServiceFake(new List<Proyecto> { RamblaSur }), navegacion, confirmacion, panel);
     }
 
     private static Montaje Montar(Action<GastoFormViewModel>? preparar = null, ICurrentSession? sesion = null,
@@ -327,6 +329,27 @@ public class GastoFormViewV2Tests
 
         Assert.Equal(new PagoContadoDto(Caja.Poa, 4), Assert.Single(m.Servicio.PagosContado));
         Assert.Equal(5, Assert.Single(m.Servicio.Altas).LineaPoaId);
+    }
+
+    [AvaloniaFact]
+    public void Proyecto_OperadorSinProyectosVer_ComboExisteEsEditableYGuardaElProyecto()
+    {
+        // ConPermiso(): Operador con finanzas.ver + finanzas.gastos, SIN proyectos.ver: ListarOpciones solo pide sesión.
+        var m = Montar();
+        Completar(m.Vm);
+        var combo = Parte<ComboBox>(m, "ComboProyecto");
+
+        Assert.True(Visible(Parte<CampoFormulario>(m, "CampoProyecto")));
+        Assert.True(combo.IsEffectivelyEnabled);
+        Assert.Equal(new[] { "Sin proyecto", "Rambla Sur" },
+            combo.Items.Cast<StockApp.Presentation.ViewModels.Proyectos.OpcionProyectoImputacion>().Select(o => o.Nombre));
+        Assert.Null(((StockApp.Presentation.ViewModels.Proyectos.OpcionProyectoImputacion)combo.SelectedItem!).Id);
+
+        combo.SelectedItem = m.Vm.ProyectosDisponibles.Single(o => o.Id == 10);
+        Dispatcher.UIThread.RunJobs();
+        Clickear(m.Ventana, Parte<Button>(m, "BotonGuardar"));
+
+        Assert.Equal(10, Assert.Single(m.Servicio.Altas).ProyectoId);
     }
 
     [AvaloniaFact]
