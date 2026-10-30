@@ -145,6 +145,15 @@ public class PermisosEndpointGuardTests : ApiTestBase
         ("DELETE", "/finanzas/rubros/{id}", Permisos.GestionarMaestrosFinanzas),
         ("GET",    "/finanzas/rubros/activos", Permisos.VerFinanzas),
 
+        // GET /proyectos/opciones no figura: exige sesión sin policy concreta (alimenta selectores
+        // de usuarios sin proyectos.ver), así que queda fuera del guardián por diseño.
+        ("POST",   "/proyectos", Permisos.GestionarProyectos),
+        ("PUT",    "/proyectos/{id}", Permisos.GestionarProyectos),
+        ("POST",   "/proyectos/{id}/estado", Permisos.GestionarProyectos),
+        ("POST",   "/proyectos/{id}/notas", Permisos.GestionarProyectos),
+        ("GET",    "/proyectos", Permisos.VerProyectos),
+        ("GET",    "/proyectos/{id}", Permisos.VerProyectos),
+
         ("POST",   "/tareas", Permisos.GestionarTareas),
         ("GET",    "/tareas", Permisos.GestionarTareas),
         ("GET",    "/tareas/{id}", Permisos.GestionarTareas),

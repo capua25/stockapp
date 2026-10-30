@@ -27,6 +27,7 @@ using StockApp.Application.Licenciamiento;
 using StockApp.Application.Logs;
 using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
+using StockApp.Application.Proyectos;
 using StockApp.Application.Tareas;
 using StockApp.Presentation.Actualizaciones;
 using StockApp.Presentation.Navigation;
@@ -249,6 +250,7 @@ public partial class App : AvaloniaApp
 
         // ── Módulo Tareas (independiente de Finanzas, spec 2026-08-01) ────────
         services.AddTransient<ITareaService, TareaApiClient>();
+        services.AddTransient<IProyectoService, ProyectoApiClient>();
 
         // ── Módulo Documentos administrativos (spec 2026-08-11) ────────────────
         services.AddTransient<IDocumentoAdministrativoService, DocumentoApiClient>();

@@ -33,6 +33,7 @@ using StockApp.Application.Licenciamiento;
 using StockApp.Application.Logs;
 using StockApp.Application.Movimientos;
 using StockApp.Application.Reportes;
+using StockApp.Application.Proyectos;
 using StockApp.Application.Tareas;
 using StockApp.Domain.Enums;
 using StockApp.Infrastructure.Auth;
@@ -239,6 +240,10 @@ builder.Services.AddScoped<IFinanzasVistasService, FinanzasVistasService>();
 // Tareas — módulo independiente (spec 2026-08-01)
 builder.Services.AddScoped<ITareaRepository, TareaRepository>();
 builder.Services.AddScoped<ITareaService, TareaService>();
+
+// Proyectos (spec 2026-10-30)
+builder.Services.AddScoped<IProyectoRepository, ProyectoRepository>();
+builder.Services.AddScoped<IProyectoService, ProyectoService>();
 
 // Documentos administrativos — módulo independiente (spec 2026-08-11)
 builder.Services.AddScoped<IDocumentoAdministrativoRepository, DocumentoAdministrativoRepository>();
@@ -695,6 +700,7 @@ app.MapBackupsEndpoints();
 app.MapConfiguracionAlertasEndpoints();
 app.MapLogsEndpoints();
 app.MapTareasEndpoints();
+app.MapProyectosEndpoints();
 app.MapDocumentosEndpoints();
 
 app.Run();
