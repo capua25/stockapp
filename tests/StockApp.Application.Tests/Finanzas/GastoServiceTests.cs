@@ -187,10 +187,12 @@ public class GastoServiceTests
     public async Task ModificarAsync_CambiaProyecto_AuditaDiff()
     {
         var m = Crear();
-        m.Proyectos.Setup(p => p.ObtenerPorIdAsync(6)).ReturnsAsync(UnProyecto(6, EstadoProyecto.Pendiente));
+        m.Proyectos.Setup(p => p.ObtenerPorIdAsync(6)).ReturnsAsync(
+            new Proyecto { Id = 6, Titulo = "Escuela 12", Estado = EstadoProyecto.Pendiente });
         var original = GastoValido();
         original.Id = 1;
         original.ProyectoId = 5;
+        original.Proyecto = new Proyecto { Id = 5, Titulo = "Plaza Central" };
         m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
         var editado = GastoValido();
         editado.Id = 1;
@@ -202,7 +204,7 @@ public class GastoServiceTests
         m.Repo.Verify(r => r.ActualizarAsync(original), Times.Once);
         m.Audit.Verify(a => a.RegistrarAsync(
             It.IsAny<int>(), AccionAuditada.ModificacionGasto, "Gasto", 1,
-            It.Is<string>(d => d.Contains("Proyecto: 5 → 6"))), Times.Once);
+            It.Is<string>(d => d.Contains("Proyecto: Plaza Central → Escuela 12"))), Times.Once);
     }
 
     [Fact]
@@ -253,6 +255,7 @@ public class GastoServiceTests
         var original = GastoValido();
         original.Id = 1;
         original.ProyectoId = 5;
+        original.Proyecto = new Proyecto { Id = 5, Titulo = "Plaza Central" };
         m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
         var editado = GastoValido();
         editado.Id = 1;
@@ -264,7 +267,7 @@ public class GastoServiceTests
         m.Repo.Verify(r => r.ActualizarAsync(original), Times.Once);
         m.Audit.Verify(a => a.RegistrarAsync(
             It.IsAny<int>(), AccionAuditada.ModificacionGasto, "Gasto", 1,
-            It.Is<string>(d => d.Contains("Proyecto: 5 → "))), Times.Once);
+            It.Is<string>(d => d.Contains("Proyecto: Plaza Central → (sin proyecto)"))), Times.Once);
     }
 
     [Fact]

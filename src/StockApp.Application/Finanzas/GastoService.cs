@@ -143,7 +143,10 @@ public class GastoService : IGastoService
         Comparar("Rubro", original.RubroGastoId, gasto.RubroGastoId);
         Comparar("Línea POA", original.LineaPoaId, gasto.LineaPoaId);
         Comparar("Vencimiento", original.FechaVencimiento, gasto.FechaVencimiento);
-        Comparar("Proyecto", original.ProyectoId, gasto.ProyectoId);
+        // El proyecto va por título: un id suelto no le dice nada a quien lee la Auditoría.
+        if (gasto.ProyectoId != original.ProyectoId)
+            Comparar("Proyecto", await TituloProyectoAsync(original.ProyectoId, original.Proyecto),
+                await TituloProyectoAsync(gasto.ProyectoId, null));
 
         // La caja y el literal de un gasto de contado viven en su pago automático (ya validado arriba).
         var automatico = pagoContado is null ? null : original.PagoAutomatico;
@@ -185,6 +188,14 @@ public class GastoService : IGastoService
             string.Join("; ", cambios));
 
         return new ResultadoGastoDto(gasto.Id, advertencia);
+    }
+
+    private async Task<string> TituloProyectoAsync(int? proyectoId, Proyecto? cargado)
+    {
+        if (proyectoId is not int id)
+            return "(sin proyecto)";
+        var proyecto = cargado ?? await _proyectos.ObtenerPorIdAsync(id);
+        return proyecto?.Titulo ?? $"proyecto {id}";
     }
 
     // ── Anulación ────────────────────────────────────────────────────────────

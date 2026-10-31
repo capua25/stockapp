@@ -1,8 +1,10 @@
+using System.Globalization;
 using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
+using StockApp.Domain.Formato;
 
 namespace StockApp.Application.Proyectos;
 
@@ -98,8 +100,9 @@ public class ProyectoService : IProyectoService
         Comparar("Título", proyecto.Titulo, titulo);
         Comparar("Descripción", proyecto.Descripcion, datos.Descripcion);
         Comparar("Prioridad", proyecto.Prioridad, datos.Prioridad);
-        Comparar("Fecha límite", proyecto.FechaLimite, datos.FechaLimite);
-        Comparar("Presupuesto", proyecto.Presupuesto, datos.Presupuesto);
+        // Fechas y montos en es-UY: el detalle lo lee el municipio en la pantalla de Auditoría.
+        Comparar("Fecha límite", TextoFecha(proyecto.FechaLimite), TextoFecha(datos.FechaLimite));
+        Comparar("Presupuesto", TextoMonto(proyecto.Presupuesto), TextoMonto(datos.Presupuesto));
         var zonaActual = proyecto.Zona?.Nombre ?? ConId(proyecto.ZonaId);
         Comparar("Zona", zonaActual, NombreNuevo(datos.ZonaId, proyecto.ZonaId, zonaActual, zona?.Nombre));
         var dimensionActual = proyecto.DimensionTematica?.Nombre ?? ConId(proyecto.DimensionTematicaId);
@@ -133,6 +136,13 @@ public class ProyectoService : IProyectoService
     // Texto del valor anterior cuando la nav no vino cargada pero la FK sí.
     private static string? ConId(int? id) => id?.ToString();
 
+    private static string? TextoFecha(DateTime? fecha) => fecha?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+
+    private static string? TextoMonto(decimal? monto) => monto is decimal m ? FormatoEsUy.Moneda(m) : null;
+
+    /// <summary>Estado tal como lo ve el usuario ("En curso", no "EnCurso") en el detalle de Auditoría.</summary>
+    private static string TextoEstado(EstadoProyecto estado) => estado == EstadoProyecto.EnCurso ? "En curso" : estado.ToString();
+
     public async Task CambiarEstadoAsync(int id, EstadoProyecto destino)
     {
         _auth.Verificar(_session, Permisos.GestionarProyectos);
@@ -147,7 +157,7 @@ public class ProyectoService : IProyectoService
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id, AccionAuditada.CambioEstadoProyecto, "Proyecto", id,
-            $"{anterior} → {proyecto.Estado}");
+            $"{TextoEstado(anterior)} → {TextoEstado(proyecto.Estado)}");
     }
 
     public async Task AgregarNotaAsync(int id, string texto)

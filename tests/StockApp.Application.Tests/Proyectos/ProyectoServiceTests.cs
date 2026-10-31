@@ -139,7 +139,7 @@ public class ProyectoServiceTests
         ctx.Repo.Verify(r => r.ActualizarAsync(proyecto), Times.Once);
         ctx.Audit.Verify(a => a.RegistrarAsync(
             3, AccionAuditada.ModificacionProyecto, "Proyecto", 5,
-            "Título: Plaza → Plaza Central; Presupuesto: 100 → 250"), Times.Once);
+            "Título: Plaza → Plaza Central; Presupuesto: $ 100,00 → $ 250,00"), Times.Once);
     }
 
     [Fact]
@@ -207,6 +207,34 @@ public class ProyectoServiceTests
     // ── CambiarEstadoAsync ────────────────────────────────────────────────────
 
     [Fact]
+    public async Task ModificarAsync_AuditaFechaLimiteYPresupuestoEnFormatoEsUy()
+    {
+        var ctx = Crear(idSesion: 3);
+        var proyecto = Existente(presupuesto: 1000m);
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(proyecto);
+        var datos = Datos("Plaza", presupuesto: null) with { FechaLimite = new DateTime(2026, 12, 15, 0, 0, 0, DateTimeKind.Utc) };
+
+        await ctx.Svc.ModificarAsync(5, datos);
+
+        ctx.Audit.Verify(a => a.RegistrarAsync(
+            3, AccionAuditada.ModificacionProyecto, "Proyecto", 5,
+            "Fecha límite: (sin asignar) → 15/12/2026; Presupuesto: $ 1.000,00 → (sin asignar)"), Times.Once);
+    }
+
+    [Fact]
+    public async Task CambiarEstadoAsync_Reabrir_AuditaTextosLegibles()
+    {
+        var ctx = Crear(idSesion: 2);
+        var proyecto = Existente(EstadoProyecto.Terminado);
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(proyecto);
+
+        await ctx.Svc.CambiarEstadoAsync(5, EstadoProyecto.EnCurso);
+
+        ctx.Audit.Verify(a => a.RegistrarAsync(
+            2, AccionAuditada.CambioEstadoProyecto, "Proyecto", 5, "Terminado → En curso"), Times.Once);
+    }
+
+    [Fact]
     public async Task CambiarEstadoAsync_AuditaEstadoAnteriorYNuevo()
     {
         var ctx = Crear(idSesion: 2);
@@ -218,7 +246,7 @@ public class ProyectoServiceTests
         Assert.Equal(EstadoProyecto.EnCurso, proyecto.Estado);
         ctx.Repo.Verify(r => r.ActualizarAsync(proyecto), Times.Once);
         ctx.Audit.Verify(a => a.RegistrarAsync(
-            2, AccionAuditada.CambioEstadoProyecto, "Proyecto", 5, "Pendiente → EnCurso"), Times.Once);
+            2, AccionAuditada.CambioEstadoProyecto, "Proyecto", 5, "Pendiente → En curso"), Times.Once);
     }
 
     [Fact]
