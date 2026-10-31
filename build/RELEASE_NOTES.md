@@ -1,15 +1,15 @@
 severity: critical
 
-# Gestión Municipal 0.6.0
+# Gestión Municipal 0.7.0
 
 Mejoras:
-- La caja POA ahora está separada de la caja Local y tiene su propio saldo.
-- Al cargar ingresos, gastos al contado, ingresos por factura y pagos, se elige de forma explícita la caja y el literal.
-- El libro de caja tiene un selector de caja, y el PDF indica de qué caja se trata.
-- El listado de gastos muestra la caja de cada gasto.
-- Se eliminó el importador de planillas.
+- Nuevo módulo Proyectos: cada proyecto tiene estado, prioridad, fecha límite, notas, zona, dimensión temática, organismo responsable, origen de financiamiento y un presupuesto opcional.
+- Los gastos (y los ingresos por factura) se pueden imputar a un proyecto; la ficha del proyecto muestra el total gastado, el presupuesto, lo disponible y el sobregiro.
+- Las tareas pueden vincularse a un proyecto y siguen pudiendo vincularse a un expediente. Las tareas ya no llevan zona, dimensión, organismo ni origen de financiamiento: esos datos ahora son del proyecto.
+- La estadística por clasificadores ahora cuenta proyectos.
+- La auditoría muestra nombres, montos y fechas legibles.
 
-Esta actualización es obligatoria: las versiones anteriores ya no pueden guardar ingresos ni pagos.
+Esta actualización es obligatoria: las versiones anteriores no son compatibles con el servidor actualizado.
 
 ---
 <!-- INSTRUCCIONES PARA EL PUBLICADOR — leer antes de empaquetar:
