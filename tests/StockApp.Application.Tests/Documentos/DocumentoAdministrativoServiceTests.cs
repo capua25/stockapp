@@ -324,7 +324,7 @@ public class DocumentoAdministrativoServiceTests
         await ctx.Svc.IniciarProcesoAsync(5);
 
         ctx.Audit.Verify(a => a.RegistrarAsync(
-            1, AccionAuditada.CambioEstadoDocumento, "DocumentoAdministrativo", 5, It.IsAny<string>()), Times.Once);
+            1, AccionAuditada.CambioEstadoDocumento, "DocumentoAdministrativo", 5, "Pendiente → En proceso"), Times.Once);
     }
 
     // ── VolverAPendienteAsync ─────────────────────────────────────────────────

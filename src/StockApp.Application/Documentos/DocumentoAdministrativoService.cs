@@ -92,6 +92,9 @@ public class DocumentoAdministrativoService : IDocumentoAdministrativoService
         return await _repo.ObtenerPorIdAsync(id);
     }
 
+    /// <summary>Estado tal como lo ve el usuario ("En proceso", no "EnProceso") en el detalle de Auditoría.</summary>
+    private static string TextoEstado(EstadoDocumento estado) => estado == EstadoDocumento.EnProceso ? "En proceso" : estado.ToString();
+
     public async Task IniciarProcesoAsync(int id)
     {
         _auth.Verificar(_session, Permisos.GestionarDocumentos);
@@ -116,14 +119,14 @@ public class DocumentoAdministrativoService : IDocumentoAdministrativoService
         documento.CambiarEstado(EstadoDocumento.EnProceso);
 
         documento.AgregarEvento(
-            _session.UsuarioActual!.Id, $"{estadoAnterior} → {documento.Estado}", esAutomatico: true,
+            _session.UsuarioActual!.Id, $"{TextoEstado(estadoAnterior)} → {TextoEstado(documento.Estado)}", esAutomatico: true,
             anterior: estadoAnterior, nuevo: documento.Estado);
 
         await _repo.ActualizarAsync(documento);
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id, AccionAuditada.CambioEstadoDocumento, "DocumentoAdministrativo", id,
-            $"{estadoAnterior} → {documento.Estado}");
+            $"{TextoEstado(estadoAnterior)} → {TextoEstado(documento.Estado)}");
     }
 
     public async Task VolverAPendienteAsync(int id)
@@ -137,14 +140,14 @@ public class DocumentoAdministrativoService : IDocumentoAdministrativoService
         documento.CambiarEstado(EstadoDocumento.Pendiente);
 
         documento.AgregarEvento(
-            _session.UsuarioActual!.Id, $"{estadoAnterior} → {documento.Estado}", esAutomatico: true,
+            _session.UsuarioActual!.Id, $"{TextoEstado(estadoAnterior)} → {TextoEstado(documento.Estado)}", esAutomatico: true,
             anterior: estadoAnterior, nuevo: documento.Estado);
 
         await _repo.ActualizarAsync(documento);
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id, AccionAuditada.CambioEstadoDocumento, "DocumentoAdministrativo", id,
-            $"{estadoAnterior} → {documento.Estado}");
+            $"{TextoEstado(estadoAnterior)} → {TextoEstado(documento.Estado)}");
     }
 
     public async Task FinalizarAsync(int id)
@@ -159,14 +162,14 @@ public class DocumentoAdministrativoService : IDocumentoAdministrativoService
         documento.FechaCierre = DateTime.UtcNow;   // D8: lo sella el servicio, no la entidad.
 
         documento.AgregarEvento(
-            _session.UsuarioActual!.Id, $"{estadoAnterior} → {documento.Estado}", esAutomatico: true,
+            _session.UsuarioActual!.Id, $"{TextoEstado(estadoAnterior)} → {TextoEstado(documento.Estado)}", esAutomatico: true,
             anterior: estadoAnterior, nuevo: documento.Estado);
 
         await _repo.ActualizarAsync(documento);
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id, AccionAuditada.CambioEstadoDocumento, "DocumentoAdministrativo", id,
-            $"{estadoAnterior} → {documento.Estado}");
+            $"{TextoEstado(estadoAnterior)} → {TextoEstado(documento.Estado)}");
     }
 
     public async Task AgregarNotaAsync(int id, string texto)
@@ -209,7 +212,7 @@ public class DocumentoAdministrativoService : IDocumentoAdministrativoService
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id, AccionAuditada.AnulacionDocumento, "DocumentoAdministrativo", id,
-            $"{estadoAnterior} → {documento.Estado}: {motivo.Trim()}");
+            $"{TextoEstado(estadoAnterior)} → {TextoEstado(documento.Estado)}: {motivo.Trim()}");
     }
 
     public async Task ReabrirAsync(int id, string motivo)
@@ -241,7 +244,7 @@ public class DocumentoAdministrativoService : IDocumentoAdministrativoService
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id, AccionAuditada.ReaperturaDocumento, "DocumentoAdministrativo", id,
-            $"{estadoAnterior} → {documento.Estado}: {motivo.Trim()}");
+            $"{TextoEstado(estadoAnterior)} → {TextoEstado(documento.Estado)}: {motivo.Trim()}");
     }
 
     public async Task EditarAsync(int id, DatosEdicionDocumento datos)

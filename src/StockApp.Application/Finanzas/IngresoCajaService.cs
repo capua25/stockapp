@@ -1,8 +1,10 @@
+using System.Globalization;
 using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
 using StockApp.Domain.Enums;
 using StockApp.Domain.Exceptions;
+using StockApp.Domain.Formato;
 
 namespace StockApp.Application.Finanzas;
 
@@ -54,7 +56,8 @@ public class IngresoCajaService : IIngresoCajaService
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id, AccionAuditada.AltaIngresoCaja, "IngresoCaja", id,
-            $"Concepto: {ingreso.Concepto}; Monto: {ingreso.Monto}; Fecha: {ingreso.Fecha:yyyy-MM-dd}; Caja: {ingreso.Caja.Nombre()}; Fuente: {ingreso.FuenteFinanciamientoId}");
+            $"Concepto: {ingreso.Concepto}; Monto: {FormatoEsUy.Moneda(ingreso.Monto)}; Fecha: {TextoFecha(ingreso.Fecha)}; " +
+            $"Caja: {ingreso.Caja.Nombre()}; Fuente: {await NombreFuenteAsync(ingreso.FuenteFinanciamientoId)}");
 
         return id;
     }
@@ -74,13 +77,13 @@ public class IngresoCajaService : IIngresoCajaService
         if (original.Concepto != ingreso.Concepto)
             cambios.Add($"Concepto: {original.Concepto} → {ingreso.Concepto}");
         if (original.Fecha != ingreso.Fecha)
-            cambios.Add($"Fecha: {original.Fecha:yyyy-MM-dd} → {ingreso.Fecha:yyyy-MM-dd}");
+            cambios.Add($"Fecha: {TextoFecha(original.Fecha)} → {TextoFecha(ingreso.Fecha)}");
         if (original.Monto != ingreso.Monto)
-            cambios.Add($"Monto: {original.Monto} → {ingreso.Monto}");
+            cambios.Add($"Monto: {FormatoEsUy.Moneda(original.Monto)} → {FormatoEsUy.Moneda(ingreso.Monto)}");
         if (original.Caja != ingreso.Caja)
             cambios.Add($"Caja: {original.Caja.Nombre()} → {ingreso.Caja.Nombre()}");
         if (original.FuenteFinanciamientoId != ingreso.FuenteFinanciamientoId)
-            cambios.Add($"Fuente: {original.FuenteFinanciamientoId} → {ingreso.FuenteFinanciamientoId}");
+            cambios.Add($"Fuente: {await NombreFuenteAsync(original.FuenteFinanciamientoId)} → {await NombreFuenteAsync(ingreso.FuenteFinanciamientoId)}");
 
         if (cambios.Count == 0)
             return;
@@ -99,6 +102,12 @@ public class IngresoCajaService : IIngresoCajaService
             string.Join("; ", cambios));
     }
 
+    // Detalle legible para la pantalla de Auditoría: fecha es-UY y la fuente por nombre.
+    private static string TextoFecha(DateTime fecha) => fecha.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+
+    private async Task<string> NombreFuenteAsync(int id) =>
+        (await _fuentes.ObtenerPorIdAsync(id))?.Nombre ?? $"fuente {id}";
+
     public async Task BajaLogicaAsync(int id)
     {
         _auth.Verificar(_session, Permisos.RegistrarIngresos);
@@ -113,7 +122,7 @@ public class IngresoCajaService : IIngresoCajaService
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id, AccionAuditada.BajaIngresoCaja, "IngresoCaja", id,
-            $"Baja de '{ingreso.Concepto}' (monto {ingreso.Monto})");
+            $"Baja de '{ingreso.Concepto}' (monto {FormatoEsUy.Moneda(ingreso.Monto)})");
     }
 
     public async Task<IReadOnlyList<IngresoCaja>> ListarTodosAsync()

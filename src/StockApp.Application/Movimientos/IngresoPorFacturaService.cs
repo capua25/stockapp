@@ -285,7 +285,7 @@ public class IngresoPorFacturaService : IIngresoPorFacturaService
 
             await _audit.RegistrarAsync(
                 _session.UsuarioActual!.Id, AccionAuditada.AnulacionPagoGasto, "PagoGasto", pago.Id,
-                $"Gasto: {gastoId}; Monto anulado: {pago.Monto} (anulación automática en cascada)");
+                $"Gasto: {gastoId}; Monto anulado: {FormatoEsUy.Moneda(pago.Monto)} (anulación automática en cascada)");
         }
 
         _version.Invalidar();

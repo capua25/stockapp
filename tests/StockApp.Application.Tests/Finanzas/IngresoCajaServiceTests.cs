@@ -179,7 +179,7 @@ public class IngresoCajaServiceTests
         repo.Verify(r => r.AgregarAsync(It.Is<IngresoCaja>(i => i.Caja == Caja.Poa)), Times.Once);
         audit.Verify(a => a.RegistrarAsync(
             It.IsAny<int>(), AccionAuditada.AltaIngresoCaja, "IngresoCaja", 8,
-            It.Is<string>(d => d.Contains("Caja: POA") && d.Contains("Fuente: 2"))), Times.Once);
+            It.Is<string>(d => d.Contains("Caja: POA") && d.Contains("Fuente: Literal B") && d.Contains("Monto: $ 250.000,00") && d.Contains("Fecha: 16/07/2026"))), Times.Once);
     }
 
     [Fact]

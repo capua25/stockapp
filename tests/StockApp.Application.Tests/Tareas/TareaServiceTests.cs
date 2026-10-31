@@ -484,9 +484,13 @@ public class TareaServiceTests
         var ctx = Crear(idSesion: 1);
         ctx.Repo.Setup(r => r.AgregarAsync(It.IsAny<Tarea>())).ReturnsAsync(9);
 
-        await ctx.Svc.CrearAsync(new Tarea { Titulo = "Reparar bache" });
+        await ctx.Svc.CrearAsync(new Tarea
+        {
+            Titulo = "Reparar bache", FechaLimite = new DateTime(2026, 12, 15, 0, 0, 0, DateTimeKind.Utc),
+        });
 
-        ctx.Audit.Verify(a => a.RegistrarAsync(1, AccionAuditada.AltaTarea, "Tarea", 9, It.IsAny<string>()), Times.Once);
+        ctx.Audit.Verify(a => a.RegistrarAsync(1, AccionAuditada.AltaTarea, "Tarea", 9,
+            It.Is<string>(d => d.Contains("Vence: 15/12/2026"))), Times.Once);
     }
 
     [Fact]
@@ -906,5 +910,18 @@ public class TareaServiceTests
 
         Assert.Equal("Proyecto 9 no encontrado.", ex.Message);
         ctx.Repo.Verify(r => r.ActualizarAsync(It.IsAny<Tarea>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task TomarAsync_AuditaEstadoLegible()
+    {
+        var ctx = Crear(idSesion: 1);
+        var tarea = new Tarea { Id = 5, Titulo = "x", Estado = EstadoTarea.Pendiente };
+        ctx.Repo.Setup(r => r.ObtenerPorIdAsync(5)).ReturnsAsync(tarea);
+
+        await ctx.Svc.TomarAsync(5);
+
+        ctx.Audit.Verify(a => a.RegistrarAsync(
+            1, AccionAuditada.CambioEstadoTarea, "Tarea", 5, "Pendiente → En curso (tomada)"), Times.Once);
     }
 }

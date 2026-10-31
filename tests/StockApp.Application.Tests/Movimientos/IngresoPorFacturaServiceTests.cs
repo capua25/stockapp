@@ -573,7 +573,8 @@ public class IngresoPorFacturaServiceTests
             It.Is<PagoGasto>(p => p.Id == 21 && !p.Activo)), Times.Once);
         movRepo.Verify(m => m.AnularIngresoPorFacturaAtomicoAsync(12, It.IsAny<int>(), It.IsAny<string>()), Times.Once);
         audit.Verify(a => a.RegistrarAsync(
-            It.IsAny<int>(), AccionAuditada.AnulacionPagoGasto, "PagoGasto", 21, It.IsAny<string>()), Times.Once);
+            It.IsAny<int>(), AccionAuditada.AnulacionPagoGasto, "PagoGasto", 21,
+            It.Is<string>(d => d.Contains("Monto anulado: $ 500,00"))), Times.Once);
     }
 
     [Fact]

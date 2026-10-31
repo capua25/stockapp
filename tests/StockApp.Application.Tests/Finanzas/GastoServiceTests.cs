@@ -634,7 +634,7 @@ public class GastoServiceTests
         m.Repo.Verify(r => r.ActualizarAsync(original), Times.Once);
         m.Audit.Verify(a => a.RegistrarAsync(
             It.IsAny<int>(), AccionAuditada.ModificacionGasto, "Gasto", 1,
-            It.Is<string>(d => d.Contains("Caja: Local → POA") && d.Contains("Fuente: 2 → 3"))), Times.Once);
+            It.Is<string>(d => d.Contains("Caja: Local → POA") && d.Contains("Fuente: Fuente 2 → Literal B"))), Times.Once);
     }
 
     [Fact]
@@ -802,7 +802,7 @@ public class GastoServiceTests
         Assert.Equal(21, pagoId);
         m.Audit.Verify(a => a.RegistrarAsync(
             It.IsAny<int>(), AccionAuditada.AltaPagoGasto, "PagoGasto", 21,
-            It.Is<string>(d => d.Contains("1000"))), Times.Once);
+            It.Is<string>(d => d.Contains("Monto: $ 1.000,00") && d.Contains("Fecha: 16/07/2026"))), Times.Once);
     }
 
     [Fact]
@@ -862,7 +862,7 @@ public class GastoServiceTests
 
         m.Audit.Verify(a => a.RegistrarAsync(
             It.IsAny<int>(), AccionAuditada.AltaPagoGasto, "PagoGasto", 21,
-            It.Is<string>(d => d.Contains("Caja: Local") && d.Contains("Fuente: 2"))), Times.Once);
+            It.Is<string>(d => d.Contains("Caja: Local") && d.Contains("Fuente: Fuente 2"))), Times.Once);
     }
 
     [Fact]
@@ -1215,5 +1215,68 @@ public class GastoServiceTests
 
         Assert.Single(result);
         m.Repo.Verify(r => r.ListarAsync(filtro), Times.Once);
+    }
+
+    // ── Auditoría legible (nombres en vez de ids, montos y fechas es-UY) ──────
+
+    [Fact]
+    public async Task AltaAsync_Contado_AuditaNombresYMontoEsUy()
+    {
+        var m = Crear();
+        m.Repo.Setup(r => r.AgregarAsync(It.IsAny<Gasto>())).ReturnsAsync(7);
+
+        await m.Svc.AltaAsync(GastoValido(CondicionPago.Contado), ContadoLocal());
+
+        m.Audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.AltaGasto, "Gasto", 7,
+            It.Is<string>(d => d.Contains("Proveedor: Proveedor 1") && d.Contains("Monto: $ 1.000,00")
+                && d.Contains("Condición: Contado") && d.Contains("Fuente: Fuente 2"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task ModificarAsync_AuditaProveedorRubroLineaPorNombreYMontoFechaEsUy()
+    {
+        var m = Crear();
+        m.LineasPoa.Setup(l => l.ObtenerPorIdAsync(5)).ReturnsAsync(
+            new LineaPoa { Id = 5, Nombre = "PRENSA", Programa = "Com", Ejercicio = 2026, Activo = true });
+        var original = GastoValido();
+        original.Id = 1;
+        original.Proveedor = new Proveedor { Id = 1, Nombre = "Barraca Sur" };
+        original.RubroGasto = new RubroGasto { Id = 3, Nombre = "Materiales" };
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(original);
+        var editado = GastoValido();
+        editado.Id = 1;
+        editado.ProveedorId = 4;
+        editado.RubroGastoId = 6;
+        editado.MontoTotal = 1500m;
+        editado.Fecha = new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc);
+        editado.FechaVencimiento = null;
+        editado.CondicionPago = CondicionPago.Credito;
+        editado.FechaVencimiento = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+
+        await m.Svc.ModificarAsync(editado, null);
+
+        m.Audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.ModificacionGasto, "Gasto", 1,
+            It.Is<string>(d => d.Contains("Proveedor: Barraca Sur → Proveedor 4")
+                && d.Contains("Rubro: Materiales → Rubro 6")
+                && d.Contains("Fecha: 16/07/2026 → 20/07/2026")
+                && d.Contains("Monto: $ 1.000,00 → $ 1.500,00")
+                && d.Contains("Vencimiento: 15/08/2026 → 01/09/2026"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task AnularPagoAsync_AuditaMontoEsUy()
+    {
+        var m = Crear();
+        var gasto = ContadoPersistido();
+        gasto.Pagos[0].Id = 30;
+        m.Repo.Setup(r => r.ObtenerPorIdAsync(1)).ReturnsAsync(gasto);
+
+        await m.Svc.AnularPagoAsync(1, 30);
+
+        m.Audit.Verify(a => a.RegistrarAsync(
+            It.IsAny<int>(), AccionAuditada.AnulacionPagoGasto, "PagoGasto", 30,
+            It.Is<string>(d => d.Contains("Monto anulado: $ 1.000,00"))), Times.Once);
     }
 }

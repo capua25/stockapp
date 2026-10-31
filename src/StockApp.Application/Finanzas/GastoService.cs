@@ -1,3 +1,4 @@
+using System.Globalization;
 using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
 using StockApp.Application.Reportes;
@@ -82,9 +83,10 @@ public class GastoService : IGastoService
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id, AccionAuditada.AltaGasto, "Gasto", id,
-            $"Proveedor: {gasto.ProveedorId}; Factura: {gasto.NumeroFactura ?? "(sin factura)"}; " +
-            $"Monto: {gasto.MontoTotal}; Condición: {gasto.CondicionPago}" +
-            (pagoContado is null ? string.Empty : $"; Caja: {pagoContado.Caja.Nombre()}; Fuente: {pagoContado.FuenteFinanciamientoId}") +
+            $"Proveedor: {await NombreProveedorAsync(gasto.ProveedorId, null)}; Factura: {gasto.NumeroFactura ?? "(sin factura)"}; " +
+            $"Monto: {FormatoEsUy.Moneda(gasto.MontoTotal)}; Condición: {TextoCondicion(gasto.CondicionPago)}" +
+            (pagoContado is null ? string.Empty
+                : $"; Caja: {pagoContado.Caja.Nombre()}; Fuente: {await NombreFuenteAsync(pagoContado.FuenteFinanciamientoId, null)}") +
             (movimientoIds is { Count: > 0 } ? $"; Movimientos vinculados: {movimientoIds.Count}" : string.Empty));
 
         return new ResultadoGastoDto(id, advertencia);
@@ -130,19 +132,26 @@ public class GastoService : IGastoService
         void Comparar<T>(string campo, T viejo, T nuevo)
         {
             if (!EqualityComparer<T>.Default.Equals(viejo, nuevo))
-                cambios.Add($"{campo}: {viejo} → {nuevo}");
+                cambios.Add($"{campo}: {viejo?.ToString() ?? "(sin asignar)"} → {nuevo?.ToString() ?? "(sin asignar)"}");
         }
 
-        Comparar("Proveedor", original.ProveedorId, gasto.ProveedorId);
+        // Detalle legible para la pantalla de Auditoría: nombres en vez de ids, montos y fechas es-UY.
+        if (gasto.ProveedorId != original.ProveedorId)
+            Comparar("Proveedor", await NombreProveedorAsync(original.ProveedorId, original.Proveedor),
+                await NombreProveedorAsync(gasto.ProveedorId, null));
         Comparar("Factura", original.NumeroFactura, gasto.NumeroFactura);
         Comparar("Orden", original.NumeroOrden, gasto.NumeroOrden);
         Comparar("Detalle", original.Detalle, gasto.Detalle);
         Comparar("Destino", original.Destino, gasto.Destino);
-        Comparar("Fecha", original.Fecha, gasto.Fecha);
-        Comparar("Monto", original.MontoTotal, gasto.MontoTotal);
-        Comparar("Rubro", original.RubroGastoId, gasto.RubroGastoId);
-        Comparar("Línea POA", original.LineaPoaId, gasto.LineaPoaId);
-        Comparar("Vencimiento", original.FechaVencimiento, gasto.FechaVencimiento);
+        Comparar("Fecha", TextoFecha(original.Fecha), TextoFecha(gasto.Fecha));
+        Comparar("Monto", FormatoEsUy.Moneda(original.MontoTotal), FormatoEsUy.Moneda(gasto.MontoTotal));
+        if (gasto.RubroGastoId != original.RubroGastoId)
+            Comparar("Rubro", await NombreRubroAsync(original.RubroGastoId, original.RubroGasto),
+                await NombreRubroAsync(gasto.RubroGastoId, null));
+        if (gasto.LineaPoaId != original.LineaPoaId)
+            Comparar("Línea POA", await NombreLineaPoaAsync(original.LineaPoaId, original.LineaPoa),
+                await NombreLineaPoaAsync(gasto.LineaPoaId, null));
+        Comparar("Vencimiento", TextoFecha(original.FechaVencimiento), TextoFecha(gasto.FechaVencimiento));
         // El proyecto va por título: un id suelto no le dice nada a quien lee la Auditoría.
         if (gasto.ProyectoId != original.ProyectoId)
             Comparar("Proyecto", await TituloProyectoAsync(original.ProyectoId, original.Proyecto),
@@ -153,7 +162,9 @@ public class GastoService : IGastoService
         if (automatico is not null)
         {
             Comparar("Caja", automatico.Caja.Nombre(), pagoContado!.Caja.Nombre());
-            Comparar("Fuente", automatico.FuenteFinanciamientoId, pagoContado.FuenteFinanciamientoId);
+            if (automatico.FuenteFinanciamientoId != pagoContado.FuenteFinanciamientoId)
+                Comparar("Fuente", await NombreFuenteAsync(automatico.FuenteFinanciamientoId, automatico.FuenteFinanciamiento),
+                    await NombreFuenteAsync(pagoContado.FuenteFinanciamientoId, null));
         }
 
         if (cambios.Count == 0)
@@ -189,6 +200,24 @@ public class GastoService : IGastoService
 
         return new ResultadoGastoDto(gasto.Id, advertencia);
     }
+
+    private static string? TextoFecha(DateTime? fecha) => fecha?.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
+
+    private static string TextoCondicion(CondicionPago condicion) =>
+        condicion == CondicionPago.Credito ? "Crédito" : condicion.ToString();
+
+    private async Task<string> NombreProveedorAsync(int id, Proveedor? cargado) =>
+        (cargado?.Id == id ? cargado : await _proveedores.ObtenerPorIdAsync(id))?.Nombre ?? $"proveedor {id}";
+
+    private async Task<string> NombreRubroAsync(int id, RubroGasto? cargado) =>
+        (cargado?.Id == id ? cargado : await _rubros.ObtenerPorIdAsync(id))?.Nombre ?? $"rubro {id}";
+
+    private async Task<string> NombreLineaPoaAsync(int? id, LineaPoa? cargada) => id is not int lineaId
+        ? "(sin línea)"
+        : (cargada?.Id == lineaId ? cargada : await _lineasPoa.ObtenerPorIdAsync(lineaId))?.Nombre ?? $"línea {lineaId}";
+
+    private async Task<string> NombreFuenteAsync(int id, FuenteFinanciamiento? cargada) =>
+        (cargada?.Id == id ? cargada : await _fuentes.ObtenerPorIdAsync(id))?.Nombre ?? $"fuente {id}";
 
     private async Task<string> TituloProyectoAsync(int? proyectoId, Proyecto? cargado)
     {
@@ -268,7 +297,7 @@ public class GastoService : IGastoService
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id, AccionAuditada.AnulacionGasto, "Gasto", id,
-            $"Anulación de '{gasto.Detalle}' (factura {gasto.NumeroFactura ?? "s/n"}, monto {gasto.MontoTotal})");
+            $"Anulación de '{gasto.Detalle}' (factura {gasto.NumeroFactura ?? "s/n"}, monto {FormatoEsUy.Moneda(gasto.MontoTotal)})");
     }
 
     /// <summary>
@@ -287,7 +316,7 @@ public class GastoService : IGastoService
 
             await _audit.RegistrarAsync(
                 _session.UsuarioActual!.Id, AccionAuditada.AnulacionPagoGasto, "PagoGasto", pago.Id,
-                $"Gasto: {gastoId}; Monto anulado: {pago.Monto} (anulación automática en cascada)");
+                $"Gasto: {gastoId}; Monto anulado: {FormatoEsUy.Moneda(pago.Monto)} (anulación automática en cascada)");
         }
     }
 
@@ -319,8 +348,8 @@ public class GastoService : IGastoService
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id, AccionAuditada.AltaPagoGasto, "PagoGasto", pagoId,
-            $"Gasto: {pago.GastoId}; Monto: {pago.Monto}; Fecha: {pago.Fecha:yyyy-MM-dd}; " +
-            $"Caja: {pago.Caja.Nombre()}; Fuente: {pago.FuenteFinanciamientoId}");
+            $"Gasto: {pago.GastoId}; Monto: {FormatoEsUy.Moneda(pago.Monto)}; Fecha: {TextoFecha(pago.Fecha)}; " +
+            $"Caja: {pago.Caja.Nombre()}; Fuente: {await NombreFuenteAsync(pago.FuenteFinanciamientoId, null)}");
 
         return pagoId;
     }
@@ -342,7 +371,7 @@ public class GastoService : IGastoService
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id, AccionAuditada.AnulacionPagoGasto, "PagoGasto", pagoId,
-            $"Gasto: {gastoId}; Monto anulado: {pago.Monto}");
+            $"Gasto: {gastoId}; Monto anulado: {FormatoEsUy.Moneda(pago.Monto)}");
     }
 
     // ── Vínculo con movimientos de stock ─────────────────────────────────────

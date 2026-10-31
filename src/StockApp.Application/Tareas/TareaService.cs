@@ -1,3 +1,4 @@
+using System.Globalization;
 using StockApp.Application.Authorization;
 using StockApp.Application.Interfaces;
 using StockApp.Domain.Entities;
@@ -68,7 +69,7 @@ public class TareaService : ITareaService
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id, AccionAuditada.AltaTarea, "Tarea", id,
             $"Título: {tarea.Titulo}" +
-            (tarea.FechaLimite is not null ? $"; Vence: {tarea.FechaLimite:yyyy-MM-dd}" : string.Empty));
+            (tarea.FechaLimite is not null ? $"; Vence: {tarea.FechaLimite.Value.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture)}" : string.Empty));
 
         return id;
     }
@@ -134,7 +135,7 @@ public class TareaService : ITareaService
 
         await _audit.RegistrarAsync(
             _session.UsuarioActual!.Id, AccionAuditada.CambioEstadoTarea, "Tarea", id,
-            $"{estadoAnterior} → {tarea.Estado} (tomada)");
+            $"{TextoEstado(estadoAnterior)} → {TextoEstado(tarea.Estado)} (tomada)");
     }
 
     public async Task SoltarAsync(int id)
@@ -160,7 +161,7 @@ public class TareaService : ITareaService
 
         await _audit.RegistrarAsync(
             actorId, AccionAuditada.CambioEstadoTarea, "Tarea", id,
-            $"{estadoAnterior} → {tarea.Estado} (soltada)");
+            $"{TextoEstado(estadoAnterior)} → {TextoEstado(tarea.Estado)} (soltada)");
     }
 
     public async Task TerminarAsync(int id)
@@ -185,7 +186,7 @@ public class TareaService : ITareaService
 
         await _audit.RegistrarAsync(
             actorId, AccionAuditada.CambioEstadoTarea, "Tarea", id,
-            $"{estadoAnterior} → {tarea.Estado}");
+            $"{TextoEstado(estadoAnterior)} → {TextoEstado(tarea.Estado)}");
     }
 
     /// <summary>
@@ -210,6 +211,9 @@ public class TareaService : ITareaService
             EsAutomatica = true,
         };
     }
+
+    /// <summary>Estado tal como lo ve el usuario ("En curso", no "EnCurso") en el detalle de Auditoría.</summary>
+    private static string TextoEstado(EstadoTarea estado) => estado == EstadoTarea.EnCurso ? "En curso" : estado.ToString();
 
     public async Task CancelarAsync(int id)
     {
